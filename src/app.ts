@@ -12,65 +12,77 @@ export default app
 const sha256Prefix = '/blob/sha256/'
 
 app.use(async function (ctx) {
-    if (ctx.path.startsWith(sha256Prefix)) {
-        if (ctx.path === sha256Prefix) {
-            if (ctx.method == 'POST') {
-                await receiveFile(ctx)
-                return
-            }
-        } else {
-            const hashPart = ctx.path.slice(sha256Prefix.length)
-            if (hashPart.length == 32 * 2) {
-                try {
-                    const hashBuffer = Buffer.from(hashPart, 'hex')
-                    // Normalize the string
-                    const hashCode = hashBuffer.toString('hex')
-                    const hashPath = toHashPath(hashCode)
-                    switch (ctx.method) {
-                        case 'GET':
-                            if (await fileExists(hashPath)) {
-                                ctx.body = createReadStream(hashPath, { })
-                                return
+    try {
+        if (ctx.path.startsWith(sha256Prefix)) {
+            if (ctx.path === sha256Prefix) {
+                if (ctx.method == 'POST') {
+                    await receiveFile(ctx)
+                    return
+                }
+            } else {
+                const hashPart = ctx.path.slice(sha256Prefix.length)
+                if (hashPart.length == 32 * 2) {
+                    try {
+                        const hashBuffer = Buffer.from(hashPart, 'hex')
+                        // Normalize the string
+                        const hashCode = hashBuffer.toString('hex')
+                        const hashPath = toHashPath(hashCode)
+                        switch (ctx.method) {
+                            case 'GET':
+                                if (await fileExists(hashPath)) {
+                                    ctx.response.type = 'application/octet-stream'
+                                    ctx.body = createReadStream(hashPath, { })
+                                    ctx.etag = hashCode
+                                    ctx.set('cache-control', 'immutable')
+                                    return
+                                }
+                                break
+                            case 'HEAD': {
+                                const size = await fileSize(hashPath)
+                                if (size !== undefined) {
+                                    ctx.response.status = 200
+                                    ctx.response.type = 'application/octet-stream'
+                                    ctx.response.length = size
+                                    ctx.response.etag = hashCode
+                                    return
+                                }
+                                break
                             }
-                            break
-                        case 'HEAD':
-                            if (await fileExists(hashPart)) {
-                                ctx.body = ''
-                                return
-                            }
-                            break
-                        case 'PUT':
-                            if (await receiveFile(ctx, receivedCode => receivedCode == hashCode)) {
-                                return
-                            }
-                            break
-                    }
-                } catch(e) { console.error((e as any).message) }
+                            case 'PUT':
+                                if (await receiveFile(ctx, receivedCode => receivedCode == hashCode)) {
+                                    return
+                                }
+                                break
+                        }
+                    } catch(e) { console.error((e as any).message) }
+                }
             }
         }
-    }
+    } catch { }
 })
 
 async function receiveFile(
     ctx: Koa.ParameterizedContext<Koa.DefaultContext, Koa.DefaultState, any>,
-    validate: (hashCode: string) => boolean = () => true 
+    validate: (hashCode: string) => boolean = () => true
 ) {
-    const hasher = createHash('sha256')
-    const hx = hashTransform(hasher)
-    const name = await tmpName()
-    await pipeline([ctx.request.req, hx, createWriteStream(name, { })])
-    const result = hasher.digest()
-    const hashCode = result.toString('hex')
-    if (validate(hashCode)) {
-        ctx.body = `${sha256Prefix}${hashCode}`
-        const hashPath = toHashPath(hashCode)
-        if (!await fileExists(hashPath)) {
-            await moveFile(name, hashPath)
-        } else {
-            await unlink(name)
+    try {
+        const hasher = createHash('sha256')
+        const hx = hashTransform(hasher)
+        const name = await tmpName()
+        await pipeline([ctx.request.req, hx, createWriteStream(name, { })])
+        const result = hasher.digest()
+        const hashCode = result.toString('hex')
+        if (validate(hashCode)) {
+            ctx.body = `${sha256Prefix}${hashCode}`
+            const hashPath = toHashPath(hashCode)
+            if (!await fileExists(hashPath)) {
+                await moveFile(name, hashPath)
+            } else {
+                await unlink(name)
+            }
+            return true
         }
-        return true
-    }
+    } catch { }
     return false
 }
 
@@ -88,6 +100,15 @@ async function fileExists(file: string): Promise<boolean> {
 
     }
     return false
+}
+
+async function fileSize(file: string): Promise<number | undefined> {
+    try {
+        const fstat = await stat(file);
+        return fstat.size
+    } catch {
+        return undefined
+    }
 }
 
 function toHashPath(hashCode: string): string {
@@ -116,14 +137,21 @@ async function tmpName(): Promise<string> {
     }
 }
 
+const limit = 1024 * 1024
 
 function hashTransform(hasher: Hash) {
+    let size = 0
     return new Transform({
         transform(chunk, encoding, callback) {
+            size += chunk.length
+            if (size > limit) {
+                callback(Error("Limit exceeded"))
+                return
+            }
             this.push(chunk)
             hasher.update(chunk)
             callback()
-        }        
+        }
     })
 }
 
