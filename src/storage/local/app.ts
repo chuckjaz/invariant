@@ -1,8 +1,8 @@
 import Koa from 'koa';
-import { createReadStream, createWriteStream, WriteStream } from 'fs'
+import { createReadStream, createWriteStream } from 'fs'
 import { Transform } from 'node:stream'
-import { createHash, Hash } from 'node:crypto'
-import { stat, mkdir, rename, unlink, writeFile } from 'node:fs/promises'
+import { createHash, Hash, randomBytes } from 'node:crypto'
+import { stat, mkdir, rename, unlink, writeFile, readFile } from 'node:fs/promises'
 import { pipeline } from 'node:stream/promises'
 import * as path from 'node:path'
 
@@ -10,10 +10,30 @@ const app = new Koa()
 export default app
 
 const sha256Prefix = '/blob/sha256/'
+let id: string | undefined = undefined
 
 app.use(async function (ctx) {
     try {
-        if (ctx.path.startsWith(sha256Prefix)) {
+        if (ctx.path === '/id/') {
+            if (!id) {
+                const idFile = path.join(__dirname, '.id')
+                if (await fileExists(idFile)) {
+                    const idBytes = await readFile(idFile, 'utf8')
+                    const idCode = normalizeCode(idBytes)
+                    if (idCode) {
+                        id = idCode
+                        ctx.body = idCode
+                        return
+                    }
+                }
+                const idBytes = randomBytes(32)
+                const idCode = idBytes.toString('hex')
+                await writeFile(idFile, idCode,  'utf8')
+                id = idCode
+            }
+            ctx.body = id
+            return
+        } else if (ctx.path.startsWith(sha256Prefix)) {
             if (ctx.path === sha256Prefix) {
                 if (ctx.method == 'POST') {
                     await receiveFile(ctx)
@@ -21,11 +41,9 @@ app.use(async function (ctx) {
                 }
             } else {
                 const hashPart = ctx.path.slice(sha256Prefix.length)
-                if (hashPart.length == 32 * 2) {
+                const hashCode = normalizeCode(hashPart)
+                if (hashCode !== undefined) {
                     try {
-                        const hashBuffer = Buffer.from(hashPart, 'hex')
-                        // Normalize the string
-                        const hashCode = hashBuffer.toString('hex')
                         const hashPath = toHashPath(hashCode)
                         switch (ctx.method) {
                             case 'GET':
@@ -60,6 +78,16 @@ app.use(async function (ctx) {
         }
     } catch { }
 })
+
+function normalizeCode(hexBytes: string): string | undefined {
+    if (hexBytes.length == 32 * 2) {
+        try {
+            const hashBytes = Buffer.from(hexBytes, 'hex')
+            return hashBytes.toString('hex')
+        } catch { }
+    }
+    return undefined
+}
 
 async function receiveFile(
     ctx: Koa.ParameterizedContext<Koa.DefaultContext, Koa.DefaultState, any>,
@@ -112,7 +140,7 @@ async function fileSize(file: string): Promise<number | undefined> {
 }
 
 function toHashPath(hashCode: string): string {
-    return  path.join(__dirname, 'sha256', hashCode.slice(0, 2), hashCode.slice(2, 4), hashCode.slice(5))
+    return  path.join(__dirname, 'sha256', hashCode.slice(0, 2), hashCode.slice(2, 4), hashCode.slice(4))
 }
 
 async function tmpName(): Promise<string> {
