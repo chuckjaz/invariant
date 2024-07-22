@@ -5,35 +5,19 @@ import { createHash, Hash, randomBytes } from 'node:crypto'
 import { stat, mkdir, rename, unlink, writeFile, readFile } from 'node:fs/promises'
 import { pipeline } from 'node:stream/promises'
 import * as path from 'node:path'
+import { idMiddle } from '../../common/id';
 
 const app = new Koa()
 export default app
 
-const sha256Prefix = '/blob/sha256/'
-let id: string | undefined = undefined
+const sha256Prefix = '/storage/sha256/'
 
-app.use(async function (ctx) {
+const id = idMiddle(__dirname, false, async () => ({ id: randomBytes(32) }))
+
+app.use(id.fn)
+app.use(async function (ctx,  next) {
     try {
-        if (ctx.path === '/id/') {
-            if (!id) {
-                const idFile = path.join(__dirname, '.id')
-                if (await fileExists(idFile)) {
-                    const idBytes = await readFile(idFile, 'utf8')
-                    const idCode = normalizeCode(idBytes)
-                    if (idCode) {
-                        id = idCode
-                        ctx.body = idCode
-                        return
-                    }
-                }
-                const idBytes = randomBytes(32)
-                const idCode = idBytes.toString('hex')
-                await writeFile(idFile, idCode,  'utf8')
-                id = idCode
-            }
-            ctx.body = id
-            return
-        } else if (ctx.path.startsWith(sha256Prefix)) {
+        if (ctx.path.startsWith(sha256Prefix)) {
             if (ctx.path === sha256Prefix) {
                 if (ctx.method == 'POST') {
                     await receiveFile(ctx)
@@ -76,6 +60,7 @@ app.use(async function (ctx) {
                 }
             }
         }
+        await next()
     } catch { }
 })
 
