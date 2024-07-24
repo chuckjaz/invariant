@@ -5,17 +5,17 @@ import { createHash, Hash, randomBytes } from 'node:crypto'
 import { stat, mkdir, rename, unlink, writeFile, readFile } from 'node:fs/promises'
 import { pipeline } from 'node:stream/promises'
 import * as path from 'node:path'
-import { idMiddle } from '../../common/id';
+import { idMiddle, idOnly } from '../../common/id';
+import { registerWithBroker } from '../../common/register';
 
 const app = new Koa()
 export default app
+const port = 3000
 
 const sha256Prefix = '/storage/sha256/'
 
-const id = idMiddle(__dirname, false, async () => ({ id: randomBytes(32) }))
-
-app.use(id.fn)
 app.use(async function (ctx,  next) {
+    console.log(ctx.method, ctx.path)
     try {
         if (ctx.path.startsWith(sha256Prefix)) {
             if (ctx.path === sha256Prefix) {
@@ -168,7 +168,16 @@ function hashTransform(hasher: Hash) {
     })
 }
 
+async function startup() {
+    const myId = await idOnly(__dirname, async () => ({ id: randomBytes(32) }))
+    const idText = myId.id.toString('hex')
+    app.use(idMiddle(idText))
+
+    await registerWithBroker(idText, 'storage')
+    console.log(`Storage: ${idText} listening on localhost:${port}}`)
+}
+
 if (!module.parent) {
-    app.listen(3000)
-    console.log("Listening on localhost:3000")
+    app.listen(port)
+    startup().catch(e => console.error(e))
 }

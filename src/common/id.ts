@@ -8,85 +8,56 @@ type KoaCtx = Koa.ParameterizedContext<Koa.DefaultState, Koa.DefaultContext, any
 
 const idPrefix = '/id/'
 
-export interface Result {
-    fn: (ctx: KoaCtx) => Promise<void>
-    id?: Buffer
-    privateKey?: Buffer
-}
-
-export interface GenResult {
+export interface IdResult {
     id: Buffer
     privateKey?: Buffer
 }
 
-export function idMiddle(directory: string, key: boolean, gen: () => Promise<GenResult>): Result  {
-    const result: any = { }
-
-    async function id(ctx: KoaCtx, next: Koa.Next) {
+export function idMiddle(id: string): (ctx: KoaCtx, next: Koa.Next) => Promise<void> {
+    async function getId(ctx: KoaCtx, next: Koa.Next) {
         await next()
         if (ctx.path == idPrefix) {
-            const id = result.id
-            if (!id) {
-                const response = await (key ? idAndPrivate(directory, result, gen) : idOnly(directory, result, gen))
-                if (!response) return
-            }
-            ctx.body = result.id.toString('hex')
+            ctx.body = id
         }
     }
 
-    result.fn = id
-
-    return result as any as Result
+    return getId
 }
 
-export async function idAndPrivate(
-    directory: string, 
-    result: GenResult,
-    gen: () => Promise<GenResult>
-): Promise<string | undefined> {
+export async function idAndPrivate(directory: string, gen: () => Promise<IdResult>): Promise<IdResult> {
     const idFile = join(directory, '.id')
     const keyFile = join(directory, '.id.private')
     if (await fileExists(idFile) && await fileExists(keyFile)) {
         const idText = await readFile(idFile, 'utf8')
         const id = Buffer.from(idText, 'hex')
         const keyText = await readFile(keyFile, 'utf8')
-        const key = Buffer.from(keyText, 'hex')
-        result.id = id
-        result.privateKey = key
-        return id.toString('hex')
+        const privateKey  = Buffer.from(keyText, 'hex')
+        return { id, privateKey }
     }
-    const { id: idBytes, privateKey } = await gen()
-    const idText = idBytes.toString('hex')
+    const { id, privateKey } = await gen()
+    const idText = id.toString('hex')
     await writeFile(idFile, idText,  'utf8')
     const keyText = privateKey?.toString('hex') ?? '0'
     await writeFile(keyFile, keyText, 'utf8')
-    result.id = idBytes
-    result.privateKey = privateKey
-    return idText
+    return  { id, privateKey }
 }
 
-async function idOnly(
-    directory: string, 
-    result: GenResult,
-    gen: () => Promise<GenResult>
-): Promise<string | undefined> {
+export async function idOnly(directory: string, gen: () => Promise<IdResult>): Promise<IdResult> {
     const idFile = join(directory, '.id')
     if (await fileExists(idFile) ) {
         const idText = await readFile(idFile, 'utf8')
         const id = Buffer.from(idText, 'hex')
-        result.id = id
-        return id.toString('hex')
+        return { id }
     }
-    const { id: idBytes } = await gen()
-    const idText = idBytes.toString('hex')
+    const { id } = await gen()
+    const idText = id.toString('hex')
     await writeFile(idFile, idText,  'utf8')
-    result.id = idBytes
-    return idText
+    return { id }
 }
 
 export async function fetchIdFrom(url: string): Promise<string | undefined> {
     try {
-        const response = await fetch(`${url}/id/`)
+        const response = await fetch(new URL('/id/', url))
         if (response.status == 200) {
             const text = await response.text()
             return normalizeCode(text)

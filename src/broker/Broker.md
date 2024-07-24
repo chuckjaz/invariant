@@ -30,7 +30,7 @@ The number of milliseconds the given `:url` is expected to respond to requests (
 
 The base url to use as prefix for server requests to the service with the given `:id`
 
-# `GET /broker/:id`
+# `GET /broker/location/:id`
 
 Retrieve the access information for a server with the given `:id`. The response is either a `text/plain` or an `application/json` response, depending on the type requested by the client.
 
@@ -79,9 +79,9 @@ Once a known `:id` has been requested of a broker then the broker should, in par
 
 The `:id` of a service should be the public key of an HMAC pair which can then be used by registered servers to validate any `:token` values provided the broker as they will be signed with the private key of the HMAC pair.
 
-# `GET /broker/brokers/`
+# `GET /broker/servers/:kind/`
 
-Get a list of other brokers that are registered with this broker.
+Get a list of servers that are registered with this broker by kind. If a service  is regisgtered annonmously (e.g. without a `:kind`) then it cannot be queried.
 
 The response is either a `text/plain` or an `application/json` response, depending on the type requested by the client.
 
@@ -112,7 +112,7 @@ The format of the JSON response is an array of `:id` values.
 The TypeScript type for the response is,
 
 ```
-type BrokerBrokerResponse = string[]
+type BrokerQueryResponse = string[]
 ```
 
 # `POST /broker/register/`
@@ -164,5 +164,4 @@ interface BrokerRegisterResponse {
     minnonce?: number;
 }
 ```
-
 
