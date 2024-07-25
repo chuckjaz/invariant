@@ -14,7 +14,11 @@ The content hash of the content which is of the from &lt;`algorithm`&gt;`/`&lt;`
 
 A server ID which is a 32 byte hex encoded value.
 
-# GET `/blob/find/:hashId`
+# GET `/id/`
+
+Determine the `:id` of the server.
+
+# GET `/find/sha256/:hashId`
 
 Find the blob with the given `:hashId`.
 
@@ -33,11 +37,3 @@ Requesting a blob will immedately return with the best effort by the server to d
 If the previously unknown blob is found in a registered storage the server, in parallel, should register the storage server with the find servers that are closer to the blob that it is if it is unknown if the server knows about the storage server or if it has been longer than 30 minutes since the last time the find server has been notified about the storage.
 
 Once a response is returned the server, in parallel, should validate that all the find servers are still functioning and that all the storage servers have the blob. It should unregister any servers that have not responded within the last 30 minuts and remove any HAS information for storage servers that no longer report as having the blob.
-
-# `PUT /blob/find/register/storage/:id`
-
-Register a storage server with `id` with the find server.
-
-# `PUT /blob/find/register/find/:id`
-
-Register a find server with `:id` with the find server
