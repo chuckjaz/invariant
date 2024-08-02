@@ -56,7 +56,7 @@ app.use(async function (ctx,  next) {
         const entry = JSON.parse(infoText)
         if (
             'id' in entry && typeof entry.id == 'string' &&
-            'url' in entry && typeof entry.url == 'string' && 
+            'url' in entry && typeof entry.url == 'string' &&
             (!('kind' in entry) || typeof entry.kind == 'string')
         ) {
             const normalId = normalizeCode(entry.id)
@@ -118,7 +118,7 @@ async function save() {
         lastSaved = Date.now()
     } finally {
         saving = false
-    } 
+    }
 }
 
 async function restore() {
@@ -148,7 +148,7 @@ function validateId(id: string) {
 }
 
 async function verifyIds() {
-    // Every 5 to 10 seconds validate an id that has not been validated in the last 60 seconds 
+    // Every 5 to 10 seconds validate an id that has not been validated in the last 60 seconds
     while (true) {
         await delay(nextInt(5000, 5000))
         const ids = Array.from(info.keys())
@@ -201,7 +201,7 @@ async function startup() {
                     type: 'pkcs8',
                     format: 'der',
                 },
-            }    
+            }
         )
         const id = Buffer.from(result.publicKey, result.publicKey.length - 32)
         const privateKey  = Buffer.from(result.privateKey, result.privateKey.length - 32)

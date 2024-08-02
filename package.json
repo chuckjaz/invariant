@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jasmine"
   },
   "author": "",
   "license": "ISC",
@@ -11,12 +11,14 @@
   "dependencies": {
     "co-body": "^6.2.0",
     "hex": "^0.1.0",
+    "jasmine": "^5.2.0",
     "koa": "^2.15.3",
     "koa-body": "^6.0.1"
   },
   "devDependencies": {
     "@tsconfig/node20": "^20.1.4",
     "@types/inflation": "^2.0.4",
+    "@types/jasmine": "^5.1.4",
     "@types/koa": "^2.15.0",
     "typescript": "^5.5.3"
   }

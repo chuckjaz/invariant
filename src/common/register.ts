@@ -1,10 +1,17 @@
 import { delay } from "./delay"
 import { BrokerRegisterResponse } from "./types"
 
-const BROKER_URL = 'INVARIANT_BROKER'
-const SERVER_URL = 'INVARIANT_SERVER_URL'
+export const BROKER_URL = 'INVARIANT_BROKER'
+export const SERVER_URL = 'INVARIANT_SERVER_URL'
 
-export async function registerWithBroker(id: string, kind?: string): Promise<BrokerRegisterResponse | undefined> {
+export interface Broker {
+    id: string
+    salt?: string
+    minnonce?: number
+    url: string
+}
+
+export async function registerWithBroker(id: string, kind?: string): Promise<Broker | undefined> {
     const brokerUrl = process.env[BROKER_URL]
     const serverUrl = process.env[SERVER_URL]
     try {
@@ -16,7 +23,12 @@ export async function registerWithBroker(id: string, kind?: string): Promise<Bro
             if (response.status == 200) {
                 const responseText = await response.text()
                 const responseObject = JSON.parse(responseText) as BrokerRegisterResponse
-                return { id: responseObject.id, salt: responseObject.salt, minnonce: responseObject.minnonce }
+                return {
+                    id: responseObject.id,
+                    salt: responseObject.salt,
+                    minnonce: responseObject.minnonce,
+                    url: serverUrl,
+                }
             } else {
                 console.log('Unexpected broker response:', response)
             }

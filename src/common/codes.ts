@@ -4,6 +4,6 @@ export function normalizeCode(hexBytes: string): string | undefined {
             const hashBytes = Buffer.from(hexBytes, 'hex')
             return hashBytes.toString('hex')
         } catch { }
-    } 
+    }
     return undefined
 }

@@ -2,13 +2,9 @@
 
 A find server must implement the find. The protocol is a set of HTML Requests.
 
-A find server allows finding the storage server of a blob using a hash of the content of the blob.
+A find server allows finding an id container for an id. Example id containers include storage servers that may contain the blob with `:id` and broker servers that may contain information about a server with `:id`.
 
 # Values
-
-## `:hashId` 
-
-The content hash of the content which is of the from &lt;`algorithm`&gt;`/`&lt;`hashCode`&gt;.
 
 # `:id`
 
@@ -18,22 +14,53 @@ A server ID which is a 32 byte hex encoded value.
 
 Determine the `:id` of the server.
 
-# GET `/find/sha256/:hashId`
+# GET `/find/:id`
 
-Find the blob with the given `:hashId`.
+Find a server that knows about `:id`.
 
-The response is a `text/plan` `\n` delimited text that contains one line per entry which is either a `HAS` entry or a `CLOSER` entry.
+Returns an array of entries
 
-## `HAS :id`
+The TypeScript type of the response is,
 
-A entry indicating that the server with `:id` may of the blob.
+```
+type FindResponseEntry = FindHasResponseEntry | FindCloserResponseEntry
+type FindResponse = FindResponseEntry[]
+```
 
-## `CLOSER :id`
+### `{ "kind": "HAS", "id": ":id" }`
 
-A entry indicating that the find server with `:id` may have better information about this blob. This find server is "closer" to the blob given a Kademlia definition of closer.
+A `HAS` entry indicating that the server with `:id` may know of the blob or broker at `:id` may know about the server.
 
-Requesting a blob will immedately return with the best effort by the server to determine its location. Once an unknown blob has been requested the server, in parallel, should make an effort to local the blob among the storage servers knows as well as any find servers that are futher than it is from the blob. It is up to the client to poll the find server perodically to determine if the server has more up-to-date information about the blob. The server is free to place a limit over the interval and frequency such requests are allowed.
+The TypeScript type of the HAS responce entry is,
 
-If the previously unknown blob is found in a registered storage the server, in parallel, should register the storage server with the find servers that are closer to the blob that it is if it is unknown if the server knows about the storage server or if it has been longer than 30 minutes since the last time the find server has been notified about the storage.
+```
+interface FindHasResponseEntry {
+    kind: "HAS"
+    id: string
+}
+```
+
+### `{ "kind": "CLOSER", "id", ":id" }`
+
+A `CLOSER` indicating that the find server with `:id` may have better information about this blob.
+
+The TypeScript type ofthe CLOSER response entry is,
+
+```
+interface FindCloserResponseEntry {
+    kind: "CLOSER"
+    id: string
+}
+```
+
+# Closer
+
+A find server is "closer" to the blob given a Kademlia definition of closer.
+
+# Implementation notes
+
+Finding an id should return with a best effort by the server to determine its location. Once an unknown id has been requested the server should , in parallel, make an effort to local the id among the find servers it knows that are closer to the id well as any find servers that are futher than it is from the server or id. It is up to the client to poll the find server perodically to determine if the server has more up-to-date information about the id. The server is free to place a limit over the interval and frequency such requests are allowed.
+
+If the previously id is found the server, in parallel, should register the id (or storage the blob is in) with the find servers that are closer to the blob that it is if it is unknown if the server knows about the storage server or if it has been longer than 30 minutes since the last time the find server has been notified about the storage.
 
 Once a response is returned the server, in parallel, should validate that all the find servers are still functioning and that all the storage servers have the blob. It should unregister any servers that have not responded within the last 30 minuts and remove any HAS information for storage servers that no longer report as having the blob.
