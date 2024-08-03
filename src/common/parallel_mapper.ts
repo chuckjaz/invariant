@@ -16,11 +16,13 @@ export class ParallelMapper<C, R> {
         this.mapper = mapper
     }
 
-    add(item: C) {
-        if (this.parallel > 0) {
-            this.schedule(item)
-        } else {
-            this.pending.push(item)
+    add(...items: C[]) {
+        for (const item of items) {
+            if (this.parallel > 0) {
+                this.schedule(item)
+            } else {
+                this.pending.push(item)
+            }
         }
     }
 

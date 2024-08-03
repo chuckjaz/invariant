@@ -10,12 +10,15 @@ import { normalizeCode } from '../../common/codes';
 import { BrokerGetResponse, BrokerServiceQueryResponse, FindResponse } from '../../common/types';
 import { safeaParseJson as safeParseJson } from '../../common/parseJson'
 import { WorkQueue } from '../../common/work_queue'
+import { ParallelMapper } from '../../common/parallel_mapper'
 
 const findPath = path.join(__dirname, '.find')
 const app = new Koa()
 export default app
+
 const port = 3002
 let myId: Buffer
+let idText: string
 let broker: Broker
 
 interface Container {
@@ -32,6 +35,9 @@ interface PersistentInformation {
 
 const info = new Map<string, Container>()
 const has = new Map<string, Set<string>>()
+const lastChecked = new Map<string, number>()
+const delayValidationTime = 60 * 1000
+
 const finders: string[][] = []
 
 const findGetPrefix = '/find/'
@@ -212,14 +218,73 @@ class Broker {
     }
 }
 
-
+const validateQueue = new WorkQueue<string>()
 const findQueue = new WorkQueue<string>()
 
-// async function find(idToFind: string): Promise<string[]> {
-//     const checked = new Set<string>()
-//     const toCheck = findServersCloserTo(idToFind)
-//     let found = false
-// }
+async function storageServerHas(serverId: string,  id: string): Promise<boolean> {
+    const serverUrl = await broker.urlOf(serverId)
+    const requestUrl = new URL(`/storage/sha256/${id}`, serverUrl)
+    const response = await fetch(requestUrl, { method: 'HEAD' })
+    return response.status == 200
+}
+
+async function find(idToFind: string): Promise<string[]> {
+    const checked = new Set<string>()
+    const toCheck = findServersCloserTo(idToFind)
+    let found = false
+    checked.add(myId.toString('hex'))
+    const findMapper = new ParallelMapper<string, string[]>(
+        async (findServer, schedule) => {
+            const result: string[] = []
+            if (!checked.has(findServer) && !found) {
+                checked.add(findServer)
+                const serverUrl = await broker.urlOf(findServer)
+                const request = new URL(`/find/${findServer}`, serverUrl)
+                const response = await fetch(request)
+                if (response.status == 200) {
+                    const responseText = await response.text()
+                    const responseJson = safeParseJson(responseText) as FindResponse
+                    if (responseJson) {
+                        for (const entry of responseJson) {
+                            switch (entry.kind) {
+                                case "HAS":
+                                    result.push(entry.id)
+                                    recordHas(idToFind, entry.id)
+                                    validateQueue.push(entry.id)
+                                    found = true
+                                    break
+                                case "CLOSER":
+                                    if (!checked.has(entry.id)) {
+                                        addFindServer(entry.id)
+                                        schedule(entry.id)
+                                    }
+                                    break
+                            }
+                        }
+                    }
+                }
+            }
+            return result
+        }
+    )
+    findMapper.add(...toCheck)
+    const results = await findMapper.collect()
+    const result = results.flat()
+    if (result.length > 0) {
+        // Try finding
+        const storageServers = await broker.findServers('storage')
+        const storageMapper = new ParallelMapper<string, void>(async serverId => {
+            if (!found && await storageServerHas(serverId, idToFind)) {
+                recordHas(idToFind, serverId)
+                found = true
+                result.push(serverId)
+            }
+        })
+        storageMapper.add(...storageServers.map(s => s.id))
+        await storageMapper.collect()
+    }
+    return result
+}
 
 async function backgroundResolver() {
     while (true) {
@@ -229,57 +294,36 @@ async function backgroundResolver() {
             continue
         }
 
-        // See if any closer servers we know know about this.
-        const closer = findServersCloserTo(idToFind)
-        const checked = new Set<string>()
-        var found = false
+        // Update table
+        await find(idToFind)
+    }
+}
 
-        for (const server of closer) {
-            if (checked.has(server)) continue
-            checked.add(server)
-            const serverUrl = await broker.urlOf(server)
-            const requestUrl = new URL(`/find:${idToFind}`, serverUrl)
-            const response = await fetch(requestUrl)
-            if (response.status == 200) {
-                const responseText = await response.text()
-                const json = safeParseJson(responseText) as FindResponse
-                if (json) {
-                    for (const item of json) {
-                        switch (item.kind) {
-                            case "HAS":
-                                recordHas(idToFind, item.id)
-                                found = true
-                                break
-                            case "CLOSER":
-                                addFindServer(item.id)
-                                closer.push(item.id)
-                                break
-                        }
-                    }
+async function backgroundValidate() {
+    while (true) {
+        const id = await validateQueue.pop()
+        const existing = has.get(id)
+        if (existing) {
+            const results: string[] = []
+            const mapper = new ParallelMapper<string, void>(async serverId => {
+                if (await storageServerHas(serverId, id)) {
+                    results.push(serverId)
                 }
-            }
-        }
-        if (found) continue
-
-        // Check the broker registered storage servers directly
-        const storageServers = await broker.findServers('storage')
-        const responses = storageServers.map(server => {
-            const requestUrl = new URL(`/storage/sha256/${idToFind}`)
-            return { promise: fetch(requestUrl, { method: 'HEAD' }), id: server.id}
-        })
-        for (const responsePromise of responses) {
-            const response = await responsePromise.promise
-            if (response.status == 200) {
-                recordHas(idToFind, responsePromise.id)
+            })
+            mapper.add(...results.values())
+            await mapper.collect()
+            const newSet = new Set<string>(...results)
+            if (newSet.size > 0) {
+                has.set(id, newSet)
             }
         }
     }
 }
+
 async function startup() {
     await restore()
     myId = (await idAndPrivate(__dirname, async () => ({ id: randomBytes(32) }))).id
-
-    const idText = myId.toString('hex')
+    idText = myId.toString('hex')
     app.use(idMiddle(idText))
     const brokerResponse = await registerWithBroker(idText, 'find')
     if (!brokerResponse) {
@@ -295,6 +339,9 @@ async function startup() {
             addFindServer(findServer.id)
         }
     }
+
+    backgroundResolver()
+    backgroundValidate()
 
     // Start the verify ids loop
     console.log("Fully started")
