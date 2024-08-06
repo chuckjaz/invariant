@@ -15,5 +15,5 @@ export interface FindClient {
     id: string
     ping(): Promise<boolean>
     find(id: string): Promise<FindResult>
-    has(container: string, id: string[]): Promise<void>
+    has(container: string, ids: string[]): Promise<void>
 }
