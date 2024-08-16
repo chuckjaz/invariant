@@ -62,11 +62,11 @@ export class Channel<T> {
             [Symbol.asyncIterator]() {
                 return {
                     next() {
-                        return me.receive() 
+                        return me.receive()
                     },
                     return() {
                         me._closed = true
-                        return me.receive() 
+                        return me.receive()
                     },
                     async throw(e?: any): Promise<IteratorResult<T>> {
                         me._closed = true

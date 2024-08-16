@@ -27,6 +27,9 @@ export class ParallelMapper<C, R> {
     }
 
     collect(): Promise<R[]> {
+        if (this.running.size == 0 && this.pending.length == 0) {
+            this.resolve([])
+        }
         return this.promise.then(a => a)
     }
 

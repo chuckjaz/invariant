@@ -3,6 +3,7 @@ import { normalizeCode } from "../../common/codes";
 import { FindClient } from "../../find/client";
 import { StorageClient } from "../../storage/client";
 import { BrokerClient } from "../client";
+import { ParallelMapper } from '../../common/parallel_mapper';
 
 export interface MockBrokerClient extends BrokerClient {
     registerBroker(broker: BrokerClient): Promise<void>
@@ -22,22 +23,18 @@ export function mockBroker(): MockBrokerClient {
         return true
     }
 
-    async function broker(id: string): Promise<BrokerClient> {
+    async function broker(id: string): Promise<BrokerClient | undefined> {
         const client = brokers.get(normalizeCode(id) ?? '')
         if (client) return client
-        throw new Error('Not found')
+        return await findBroker(id, ...brokers.values())
     }
 
-    async function find(id: string): Promise<FindClient> {
-        const client = finds.get(normalizeCode(id) ?? '')
-        if (client) return client
-        throw new Error('Not found')
+    async function find(id: string): Promise<FindClient | undefined> {
+        return finds.get(normalizeCode(id) ?? '')
     }
 
-    async function storage(id: string): Promise<StorageClient> {
-        const client = storages.get(normalizeCode(id) ?? '')
-        if (client) return client
-        throw new Error('Not found')
+    async function storage(id: string): Promise<StorageClient | undefined> {
+        return storages.get(normalizeCode(id) ?? '')
     }
 
     async function registered(kind: string): Promise<AsyncIterable<string>> {
@@ -74,4 +71,21 @@ export function mockBroker(): MockBrokerClient {
         registerFind,
         registerStorage,
     }
+}
+
+async function findBroker(id: string, ...brokers: BrokerClient[]): Promise<BrokerClient | undefined> {
+    let brokerClient: BrokerClient | undefined = undefined
+    const mapper = new ParallelMapper<BrokerClient, void>(
+        async broker => {
+            if (brokerClient) return
+            try {
+                brokerClient = await broker.broker(id)
+            } catch {
+
+            }
+        }
+    )
+    mapper.add(...brokers)
+    await mapper.collect()
+    return brokerClient
 }

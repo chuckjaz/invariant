@@ -9,11 +9,16 @@ export interface FindServerOptions {
     channelSize?: number
     queryDelay?: number
     now?: () => number
+    startAwaiter: (promise: Promise<void>) => Promise<void>
 }
 
-const defaultOptions = { parallelism: 20, queryDelay: 60 * 1000, now: Date.now }
+async function defaultStartAwaiter(promise: Promise<void>): Promise<void> {
+    promise.catch(e => console.error('findServer:start', e))
+}
 
-export function findServer(broker: BrokerClient, _options?: FindServerOptions): FindClient {
+const defaultOptions = { parallelism: 20, queryDelay: 60 * 1000, now: Date.now, startAwaiter: defaultStartAwaiter }
+
+export async function findServer(broker: BrokerClient, _options?: FindServerOptions): Promise<FindClient> {
     const options = { ...defaultOptions, ...(_options ?? { }) }
     const myId = randomBytes(32)
     const textId = myId.toString('hex')
@@ -28,75 +33,61 @@ export function findServer(broker: BrokerClient, _options?: FindServerOptions): 
     async function find(id: string): Promise<FindResult> {
         const channel = new Channel<FindResultItem>(options.channelSize)
         async function doFind() {
-            const known = have.get(id)
-            if (known) {
-                for (const container of known.values()) {
-                    await channel.send({ kind: "HAS", container })
+            try {
+                const known = have.get(id)
+                if (known) {
+                    for (const container of known.values()) {
+                        await channel.send({ kind: "HAS", container })
+                        if (channel.closed) return
+                    }
+                    return
                 }
-                return
-            }
 
-            // Collect find servers know about the 
-            const now = options.now()
-            if (lastBrokerQuery + options.queryDelay < now) {
-                lastBrokerQuery = now
-                const findServerIds = await broker.registered('find')
-                for await (const findId of findServerIds) {
-                    addFindServer(findId)   
-                }
-            }
-
-            // Check other find servers
-            const checked = new Set(textId)
-            const sent = new Set<string>()
-            const map = new ParallelMapper<string, void>(async (findId, schedule) => {
-                if (channel.closed || checked.has(findId)) return
-                checked.add(findId)
-                const findServer = await broker.find(findId)
-                if (findServer) {
-                    const results = await findServer.find(id)
-                    if (channel.closed) return
-                    for await (const result of results) {
-                        if (channel.closed) break
-                        switch (result.kind) {
-                            case "HAS":
-                                if (!sent.has(result.container)) {
-                                    sent.add(result.container)
-                                    await channel.send(result)
-                                }
-                                break
-                            case "CLOSER":
-                                if (!checked.has(result.find)) {
-                                    addFindServer(result.find)
-                                    schedule(result.find)
-                                    await channel.send(result)
-                                }
-                                break
-                        }
+                // Collect find servers know about the
+                const now = options.now()
+                if (lastBrokerQuery + options.queryDelay < now) {
+                    lastBrokerQuery = now
+                    const findServerIds = await broker.registered('find')
+                    for await (const findId of findServerIds) {
+                        addFindServer(findId)
                     }
                 }
-            })
-            map.add(...findServersCloserTo(id))
-            await map.collect()            
+
+                if (channel.closed) return
+
+                const closer = findServersCloserTo(id)
+                for (const find of closer) {
+                    await channel.send({ kind: 'CLOSER', find })
+                    if (channel.closed) return
+                }
+            } finally {
+                channel.close()
+            }
         }
         doFind()
         return channel.all()
     }
 
     async function has(container: string, ids: string[]): Promise<void> {
-        recordHas(container, ...ids)
-        const map = new ParallelMapper<{ findId: string, id: string }, void>(async ({ findId, id }) => {
-            const findServer = await broker.find(findId)
-            if (findServer)
-                await findServer.has(container, [id])
-        })
-        for (const id of ids) {
-            const closer = findServersCloserTo(id)
-            for (const findId of closer) {
-                map.add({ findId, id})
+        const newIds = recordHas(container, ...ids)
+        if (newIds.length > 0) {
+            const map = new ParallelMapper<{ findId: string, id: string }, void>(async ({ findId, id }) => {
+                const findServer = await broker.find(findId)
+                if (findServer)
+                    await findServer.has(container, [id])
+            })
+            for (const id of newIds) {
+                const closer = findServersCloserTo(id)
+                for (const findId of closer) {
+                    map.add({ findId, id})
+                }
             }
+            await map.collect()
         }
-        await map.collect()
+    }
+
+    async function notify(find: string): Promise<void> {
+        addFindServer(find)
     }
 
     function addFindServer(id: string) {
@@ -119,7 +110,7 @@ export function findServer(broker: BrokerClient, _options?: FindServerOptions): 
             const bucket = finds[currentIndex++]
             if (!bucket) continue
             const effectiveLength = bucket.length > count ? count : bucket.length
-            const needed = result.length - count
+            const needed = count - result.length
             const adding = needed > effectiveLength ? effectiveLength : needed
             result.push(...bucket.slice(0, adding))
         }
@@ -128,29 +119,89 @@ export function findServer(broker: BrokerClient, _options?: FindServerOptions): 
             const bucket = finds[currentIndex--]
             if (!bucket) continue
             const effectiveLength = bucket.length > count ? count : bucket.length
-            const needed = result.length - count
+            const needed = count - result.length
             const adding = needed > effectiveLength ? effectiveLength : needed
             result.push(...bucket.slice(0, adding))
         }
         return result
     }
 
-    function recordHas(container: string, ...ids: string[]) {
+    function recordHas(container: string, ...ids: string[]): string[] {
+        const newIds: string[] = []
         for (const id of ids) {
             let bucket = have.get(id)
             if (!bucket) {
                 bucket = new Set<string>()
                 have.set(id, bucket)
             }
-            bucket.add(container)
+            if (!bucket.has(container)) {
+                bucket.add(container)
+                newIds.push(id)
+            }
+        }
+        return newIds
+    }
+
+    async function containerOf(id: string): Promise<string | undefined> {
+        for await (const entry of await find(id)) {
+            if (entry.kind == "HAS") return entry.container
         }
     }
+
+    async function start(): Promise<void> {
+        // Record that our broker has us.
+        recordHas(broker.id, textId)
+
+        async function initializeFindServerInfo(): Promise<void> {
+            lastBrokerQuery = options.now()
+
+            // Get the find servers from our broker
+            let find: FindClient | undefined = undefined
+            for await (const entry of await broker.registered('find')) {
+                if (entry == textId) continue
+                addFindServer(entry)
+                if (!find) {
+                    find = await broker.find(entry)
+                }
+                recordHas(broker.id, entry)
+            }
+
+            if (find) {
+                await find.notify(textId)
+                // Ask the first find server for the closes find servers to us.
+                for await (const entry of await find.find(textId)) {
+                    if (entry.kind == "CLOSER") {
+                        addFindServer(entry.find)
+                        // Tell the other find server about this server
+                        const find = await broker.find(entry.find)
+                        if (find) {
+                            await find.notify(textId)
+                        }
+                    }
+                }
+            }
+        }
+
+        async function initializeStorageServerInfo(): Promise<void> {
+            for await (const entry of await broker.registered('storage')) {
+                recordHas(broker.id, entry)
+            }
+        }
+
+        const findInit = initializeFindServerInfo()
+        const storageInit = initializeStorageServerInfo()
+        await findInit
+        await storageInit
+    }
+
+    await options.startAwaiter(start())
 
     return {
         id: textId,
         ping,
         find,
         has,
+        notify,
     }
 }
 
