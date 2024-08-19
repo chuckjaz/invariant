@@ -32,20 +32,7 @@ The base url to use as prefix for server requests to the server with the given `
 
 # `GET /broker/location/:id`
 
-Retrieve the access information for a server with the given `:id`. The response is either a `text/plain` or an `application/json` response, depending on the type requested by the client.
-
-## `text/plain` format
-
-```
-ID: :id
-URL: :url
-TTL: :ttl
-TOKEN: :token
-```
-
-where the `TTL` and `TOKEN` lines are optional.
-
-## `application/json`
+Retrieve the access information for a server with the given `:id`. The response is an `application/json` response.
 
 The JSON response is,
 
@@ -63,7 +50,7 @@ where the `"ttl"` and `"token"` fields are optional.
 The TypeScript type for the JSON is,
 
 ```
-interface BrokerGetResponse {
+interface BrokerLocationResponse {
     id: string;
     url: string;
     ttl?: number;
@@ -89,37 +76,7 @@ Determine the `:id` of the server.
 
 Get a list of servers that are registered with this broker by kind. If a server  is regisgtered annonmously (e.g. without a `:kind`) then it cannot be queried.
 
-The response is either a `text/plain` or an `application/json` response, depending on the type requested by the client.
-
-## `text/plain`
-
-The format for the response is a `\n` delimited list of `:id` values such as,
-
-```
-:id
-:id
-:id
-...
-```
-
-## `application/json`
-
-The format of the JSON response is an array of `:id` values.
-
-```
-[
-    ":id",
-    ":id",
-    ":id",
-    ...
-]
-```
-
-The TypeScript type for the response is,
-
-```
-type BrokerQueryResponse = string[]
-```
+The response is either a `text/plain` response which is a list of ids separated by line-feeds.
 
 # `POST /broker/register/`
 

@@ -1,4 +1,4 @@
-export interface BrokerGetResponse {
+export interface BrokerLocationResponse {
     id: string;
     url: string;
     ttl?: number;
@@ -18,6 +18,11 @@ export interface BrokerRegisterResponse {
 }
 
 export type BrokerServiceQueryResponse = string[]
+
+export interface FindHasRequest {
+    container: string
+    ids: string[]
+}
 
 export interface FindHasResponseEntry {
     kind: "HAS"

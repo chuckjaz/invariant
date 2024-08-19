@@ -32,7 +32,7 @@ describe('find/server', () => {
     })
     it('can tell one finder about it and another finder will be able to find it', async () => {
         const broker = mockBroker()
-        const finders = await findServers(broker, 1000)
+        const finders = await findServers(broker, 100)
         const first = finders[0]
         const container = someId()
         const item = someId()

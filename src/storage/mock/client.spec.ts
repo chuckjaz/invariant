@@ -28,7 +28,8 @@ describe('storage/mock/client', () => {
         const code = codeOf(value)
         await client.put(code, value)
         const getResult = await client.get(code)
-        const textResult = await getResult.text()
+        expect(getResult).toBeDefined()
+        const textResult = await getResult!!.text()
         expect(textResult).toEqual(value)
     })
     it('can post and receive a value', async () => {
@@ -36,7 +37,8 @@ describe('storage/mock/client', () => {
         const value = 'This is a test'
         const code = await client.post(value)
         const getResult = await client.get(code)
-        const textResult = await getResult.text()
+        expect(getResult).toBeDefined()
+        const textResult = await getResult!!.text()
         expect(textResult).toEqual(value)
     })
     it('can post a value and report has value', async () => {

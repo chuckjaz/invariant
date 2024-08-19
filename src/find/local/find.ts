@@ -7,7 +7,7 @@ import { idAndPrivate, idMiddle } from '../../common/id'
 import { BROKER_URL, registerWithBroker, SERVER_URL } from '../../common/register'
 import { delay } from '../../common/delay';
 import { normalizeCode } from '../../common/codes';
-import { BrokerGetResponse, BrokerServiceQueryResponse, FindResponse } from '../../common/types';
+import { BrokerLocationResponse, BrokerServiceQueryResponse, FindResponse } from '../../common/types';
 import { safeaParseJson as safeParseJson } from '../../common/parseJson'
 import { WorkQueue } from '../../common/work_queue'
 import { ParallelMapper } from '../../common/parallel_mapper'
@@ -195,7 +195,7 @@ class Broker {
         if (this.infoCache.has(id)) {
             return this.infoCache.get(id)
         }
-        const info = await this.reqJson(`/broker/location`) as BrokerGetResponse
+        const info = await this.reqJson(`/broker/location`) as BrokerLocationResponse
         if (info) {
             this.infoCache.set(id, { id, url: info.url, token: info.token, ttl: info.ttl })
             return info

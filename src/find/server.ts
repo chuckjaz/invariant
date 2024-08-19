@@ -142,12 +142,6 @@ export async function findServer(broker: BrokerClient, _options?: FindServerOpti
         return newIds
     }
 
-    async function containerOf(id: string): Promise<string | undefined> {
-        for await (const entry of await find(id)) {
-            if (entry.kind == "HAS") return entry.container
-        }
-    }
-
     async function start(): Promise<void> {
         // Record that our broker has us.
         recordHas(broker.id, textId)
@@ -208,9 +202,13 @@ export async function findServer(broker: BrokerClient, _options?: FindServerOpti
 function bucketIndexOf(myId: Buffer, id: string): number {
     const idBits = Buffer.from(id, 'hex')
     for (let index = 0; index < 256; index++) {
-        const myBit =  myId.at(index >> 3)!! >> index % 8
-        const idBit = idBits.at(index >> 3)!! >> index % 8
+        const myBit = bitOf(myId, index)
+        const idBit = bitOf(idBits, index)
         if (myBit != idBit) return index
     }
     return 256
+}
+
+function bitOf(buffer: Buffer, index: number): number {
+    return (buffer.at(index >> 3)!! >> (7 - index % 8)) & 1
 }

@@ -18,38 +18,46 @@ Determine the `:id` of the server.
 
 Find a server that knows about `:id`.
 
-Returns an array of entries
+Find returns a plain text response with the prefix HAS or CLOSER a space `:id` follwed by a line-feed. Plain text is used instead of JSON to allow response to be partially read. That is, the client can stop reading and close the conntection if the information has the information it needs.
 
-The TypeScript type of the response is,
+### HAS
 
-```
-type FindResponseEntry = FindHasResponseEntry | FindCloserResponseEntry
-type FindResponse = FindResponseEntry[]
-```
-
-### `{ "kind": "HAS", "id": ":id" }`
-
-A `HAS` entry indicating that the server with `:id` may know of the blob or broker at `:id` may know about the server.
-
-The TypeScript type of the HAS responce entry is,
+A has response indicates that the container with `:id` has the `:id` in the request.
 
 ```
-interface FindHasResponseEntry {
-    kind: "HAS"
-    id: string
+HAS :id
+```
+
+### CLOSER
+
+```
+CLOSER :id
+```
+
+A `CLOSER` indicating that the find server with `:id` may have better information about `:id`.
+
+# PUT '/find/has/
+
+Notify the find server that a container has the following items.
+
+The request has the TypeScript type of
+
+```
+interface FindHasRequest {
+    container: string
+    items: string[]
 }
 ```
 
-### `{ "kind": "CLOSER", "id", ":id" }`
+# PUT '/find/notify/
 
-A `CLOSER` indicating that the find server with `:id` may have better information about this blob.
+Notify the find server the presence of another find server.
 
-The TypeScript type ofthe CLOSER response entry is,
+The request has the TypeScript type of
 
 ```
-interface FindCloserResponseEntry {
-    kind: "CLOSER"
-    id: string
+interface FindNotifyRequest {
+    find: string
 }
 ```
 

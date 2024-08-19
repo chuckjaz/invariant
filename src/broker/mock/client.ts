@@ -4,6 +4,7 @@ import { FindClient } from "../../find/client";
 import { StorageClient } from "../../storage/client";
 import { BrokerClient } from "../client";
 import { ParallelMapper } from '../../common/parallel_mapper';
+import { BrokerRegisterResponse } from '../../common/types';
 
 export interface MockBrokerClient extends BrokerClient {
     registerBroker(broker: BrokerClient): Promise<void>
@@ -60,6 +61,10 @@ export function mockBroker(): MockBrokerClient {
         storages.set(storage.id, storage)
     }
 
+    async function register(id: string, url: URL, kind?: string): Promise<BrokerRegisterResponse | undefined> {
+        return undefined
+    }
+
     return {
         id,
         ping,
@@ -70,6 +75,7 @@ export function mockBroker(): MockBrokerClient {
         registerBroker,
         registerFind,
         registerStorage,
+        register,
     }
 }
 
