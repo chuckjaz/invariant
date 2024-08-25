@@ -10,10 +10,10 @@ import { fileExists } from '../../common/files'
 import { verifyLive } from '../../common/verify'
 import { registerWithBroker } from '../../common/register'
 import { delay } from '../../common/delay'
+import { BROKER_URL, brokerUrl } from '../../common/config'
 
 const app = new Koa()
 export default app
-const port = 3001
 
 const brokerPrefix = '/broker/'
 const brokerLocationPrefx = brokerPrefix + 'location/'
@@ -216,8 +216,13 @@ async function startup() {
     console.log("Fully started")
 }
 
-if (!module.parent) {
+if (require.main === module) {
+    const url = brokerUrl()
+    const port = parseInt(url.port)
+    if (!port) {
+        console.error(`${BROKER_URL}=${url} should have a port`)
+    }
     app.listen(port)
     startup().catch(e => console.error(e))
-    console.log(`Broker listening on localhost:${port}`)
+    console.log(`Broker listening on ${url}`)
 }

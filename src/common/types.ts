@@ -24,6 +24,10 @@ export interface FindHasRequest {
     ids: string[]
 }
 
+export interface FindNotifyRequest {
+    find: string
+}
+
 export interface FindHasResponseEntry {
     kind: "HAS"
     id: string

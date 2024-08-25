@@ -7,6 +7,7 @@ import { pipeline } from 'node:stream/promises'
 import * as path from 'node:path'
 import { idMiddle, idOnly } from '../../common/id';
 import { registerWithBroker } from '../../common/register';
+import { normalizeCode } from '../../common/codes';
 
 const app = new Koa()
 export default app
@@ -64,16 +65,6 @@ app.use(async function (ctx,  next) {
     } catch { }
 })
 
-function normalizeCode(hexBytes: string): string | undefined {
-    if (hexBytes.length == 32 * 2) {
-        try {
-            const hashBytes = Buffer.from(hexBytes, 'hex')
-            return hashBytes.toString('hex')
-        } catch { }
-    }
-    return undefined
-}
-
 async function receiveFile(
     ctx: Koa.ParameterizedContext<Koa.DefaultContext, Koa.DefaultState, any>,
     validate: (hashCode: string) => boolean = () => true
@@ -101,7 +92,7 @@ async function receiveFile(
 
 async function moveFile(source: string, dest: string) {
     const dir = path.dirname(dest)
-    await mkdir(dir, { recursive: true})
+    await mkdir(dir, { recursive: true })
     await rename(source, dest)
 }
 
