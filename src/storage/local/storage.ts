@@ -6,12 +6,12 @@ import { stat, mkdir, rename, unlink, writeFile, readFile } from 'node:fs/promis
 import { pipeline } from 'node:stream/promises'
 import * as path from 'node:path'
 import { idMiddle, idOnly } from '../../common/id';
-import { registerWithBroker } from '../../common/register';
 import { normalizeCode } from '../../common/codes';
+import { brokerUrl, STORAGE_URL, storageUrl } from '../../common/config';
+import { Broker } from '../../broker/web/broker_client';
 
 const app = new Koa()
 export default app
-const port = 3000
 
 const sha256Prefix = '/storage/sha256/'
 
@@ -159,16 +159,27 @@ function hashTransform(hasher: Hash) {
     })
 }
 
-async function startup() {
+async function startup(storageUrl: URL, brokerURL: URL) {
     const myId = await idOnly(__dirname, async () => ({ id: randomBytes(32) }))
     const idText = myId.id.toString('hex')
     app.use(idMiddle(idText))
-
-    await registerWithBroker(idText, 'storage')
-    console.log(`Storage: ${idText} listening on localhost:${port}}`)
+    const broker = new Broker('', brokerURL)
+    console.log(`Registering with ${storageUrl}`)
+    await broker.register(idText, storageUrl, 'storage')
+    console.log(`Fully started: storage: ${idText}: ${storageUrl}}`)
 }
 
-if (!module.parent) {
+if (require.main === module) {
+    const broker = brokerUrl()
+    const storage = storageUrl()
+    if (!storage.port) {
+        throw new Error(`${STORAGE_URL} should contain a port`)
+    }
+    const port = parseInt(storage.port)
     app.listen(port)
-    startup().catch(e => console.error(e))
+    console.log('Listening')
+    startup(storage, broker).catch(e => {
+        console.error(e)
+        process.exit(1)
+    })
 }

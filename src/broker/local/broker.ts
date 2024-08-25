@@ -8,9 +8,9 @@ import { text } from 'co-body'
 import { normalizeCode } from '../../common/codes'
 import { fileExists } from '../../common/files'
 import { verifyLive } from '../../common/verify'
-import { registerWithBroker } from '../../common/register'
 import { delay } from '../../common/delay'
-import { BROKER_URL, brokerUrl } from '../../common/config'
+import { BROKER_URL, brokerUrl, optionalParentBrokerUrl } from '../../common/config'
+import { Broker } from '../web/broker_client'
 
 const app = new Koa()
 export default app
@@ -209,7 +209,11 @@ async function startup() {
     })
     const idText = myId.id.toString('hex')
     app.use(idMiddle(idText))
-    await registerWithBroker(idText, 'broker')
+    const parentBrokerUrl = optionalParentBrokerUrl()
+    if (parentBrokerUrl) {
+        const parentBroker = new Broker('', parentBrokerUrl)
+        await parentBroker.register(idText, parentBrokerUrl, 'broker')
+    }
 
     // Start the verify ids loop
     verifyIds().catch(e => console.error('verifyIds', e))
