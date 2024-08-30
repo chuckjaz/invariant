@@ -52,7 +52,7 @@ export class Broker extends PingableClient implements BrokerClient {
     }
 
     register(id: string, url: URL, kind?: string): Promise<BrokerRegisterResponse | undefined> {
-        return this.post<BrokerRegisterResponse>({ id, url: url.toString(), kind }, brokerRegisterPrefix)
+        return this.postJson<BrokerRegisterResponse>({ id, url: url.toString(), kind }, brokerRegisterPrefix)
     }
 
     private async client<T>(id: string, factory: ClientFactory<T>): Promise<T | undefined> {

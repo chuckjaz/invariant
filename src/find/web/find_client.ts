@@ -47,10 +47,10 @@ export class Find  extends PingableClient implements FindClient {
     }
 
     has(container: string, ids: string[]): Promise<void> {
-        return this.put({ container, ids }, findHasPrefix)
+        return this.putJson({ container, ids }, findHasPrefix)
     }
 
     notify(find: string): Promise<void> {
-        return this.put({ find }, findNotifyPrefix)
+        return this.putJson({ find }, findNotifyPrefix)
     }
 }

@@ -14,7 +14,7 @@ describe('storage/mock/client', () => {
         const client = mockStorage()
         const value = 'This is a test'
         const id = await client.post(value)
-        expect(id).toEqual(codeOf(value))
+        expect(id).toEqual(`sha256/${codeOf(value)}`)
     })
     it('can put a value', async () => {
         const client = mockStorage()
@@ -35,17 +35,28 @@ describe('storage/mock/client', () => {
     it('can post and receive a value', async () => {
         const client = mockStorage()
         const value = 'This is a test'
-        const code = await client.post(value)
-        const getResult = await client.get(code)
-        expect(getResult).toBeDefined()
-        const textResult = await getResult!!.text()
-        expect(textResult).toEqual(value)
+        const url = await client.post(value)
+        expect(url).toBeDefined()
+        if (url) {
+            const urlPrefix = 'sha256/'
+            expect(url.startsWith(urlPrefix)).toBeTrue()
+            const code = url.substring(urlPrefix.length)
+            const getResult = await client.get(code)
+            expect(getResult).toBeDefined()
+            const textResult = await getResult!!.text()
+            expect(textResult).toEqual(value)
+        }
     })
     it('can post a value and report has value', async () => {
         const client = mockStorage()
         const value = 'This is a test'
-        const code = await client.post(value)
-        expect(await client.has(code)).toBeTrue()
+        const url = await client.post(value)
+        if (url) {
+            const urlPrefix = 'sha256/'
+            expect(url.startsWith(urlPrefix)).toBeTrue()
+            const code = url.substring(urlPrefix.length)
+            expect(await client.has(code)).toBeTrue()
+        }
     })
     it('can detect an invalid put', async () => {
         const client = mockStorage()

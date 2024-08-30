@@ -101,7 +101,7 @@ export class FileTree {
         const contentText = await contentBlob.text()
         const entries = safeParseJson(contentText) as (Entry[] | undefined)
         if (!entries) return
-        return new FileTreeDirectory(this, entries) 
+        return new FileTreeDirectory(this, entries)
     }
 
     private async ensureRootDirectory(): Promise<FileTreeDirectory | undefined> {

@@ -1,15 +1,10 @@
 import { ReadableStream } from 'node:stream/web'
 import { createHash, randomBytes } from 'node:crypto'
 
-import { StorageClient } from "../client";
+import { Data, StorageClient } from "../client";
 import { normalizeCode } from '../../common/codes';
 
-export interface MockStorageClient extends StorageClient {
-    post(data: ReadableStream | string, algorithm?: string): Promise<string>
-    put(code: string, data: ReadableStream | string, algorithm?: string): Promise<void>
-}
-
-export function mockStorage(): MockStorageClient {
+export function mockStorage(): StorageClient {
     const store = new Map<string, Uint8Array>()
     const idBytes = randomBytes(32)
     const id = idBytes.toString('hex')
@@ -40,7 +35,7 @@ export function mockStorage(): MockStorageClient {
         return normalCode != undefined && store.has(normalCode)
     }
 
-    async function post(data: ReadableStream | string, algorithm?: string): Promise<string> {
+    async function post(data: Data, algorithm?: string): Promise<string | undefined> {
         validateAlgorithm(algorithm)
         if (typeof data == 'string') {
             const encoder = new TextEncoder()
@@ -49,13 +44,13 @@ export function mockStorage(): MockStorageClient {
             hash.update(u8Array)
             const id = hash.digest().toString('hex')
             store.set(id, u8Array)
-            return id
+            return `sha256/${id}`
         } else {
             throw new Error('Not supported yet')
         }
     }
 
-    async function put(code: string, data: ReadableStream | string, algorithm?: string): Promise<void> {
+    async function put(code: string, data: Data, algorithm?: string): Promise<boolean> {
         validateAlgorithm(algorithm)
         if (typeof data == 'string') {
             const encoder = new TextEncoder()
@@ -64,12 +59,12 @@ export function mockStorage(): MockStorageClient {
             hash.update(u8Array)
             const id = hash.digest().toString('hex')
             if (code != id) throw Error('Content/id mismatch')
-            store.set(id, u8Array)
+            store.set(id, u8Array);
+            return true
         } else {
-            throw new Error('NOt supported yet')
+            throw new Error('Not supported yet')
         }
     }
-
 
     return {
         id,
