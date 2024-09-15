@@ -9,7 +9,7 @@ describe('broker/mock/client', () => {
   })
   it('can ping the broker', async () => {
     const broker = mockBroker()
-    expect(await broker.ping())
+    expect(await broker.ping()).toEqual(broker.id)
   })
   it('can add a broker to the broker', async () => {
     const broker = mockBroker()

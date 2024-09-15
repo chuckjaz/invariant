@@ -3,23 +3,26 @@
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
-    "test": "jasmine"
+    "test": "node --enable-source-maps node_modules/jasmine/bin/jasmine.js"
   },
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@koa/router": "^13.1.0",
     "co-body": "^6.2.0",
     "hex": "^0.1.0",
     "jasmine": "^5.2.0",
     "koa": "^2.15.3",
-    "koa-body": "^6.0.1"
+    "koa-body": "^6.0.1",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@tsconfig/node20": "^20.1.4",
     "@types/inflation": "^2.0.4",
     "@types/jasmine": "^5.1.4",
     "@types/koa": "^2.15.0",
+    "@types/koa__router": "^12.0.4",
     "typescript": "^5.5.3"
   }
 }

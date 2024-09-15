@@ -46,11 +46,11 @@ export class Find  extends PingableClient implements FindClient {
         return channel.all()
     }
 
-    has(container: string, ids: string[]): Promise<void> {
+    has(container: string, ids: string[]): Promise<boolean> {
         return this.putJson({ container, ids }, findHasPrefix)
     }
 
-    notify(find: string): Promise<void> {
+    notify(find: string): Promise<boolean> {
         return this.putJson({ find }, findNotifyPrefix)
     }
 }

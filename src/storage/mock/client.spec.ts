@@ -8,7 +8,7 @@ describe('storage/mock/client', () => {
     })
     it('can ping', async () => {
         const client = mockStorage()
-        expect(await client.ping()).toBeTrue()
+        expect(await client.ping()).toEqual(client.id)
     })
     it('can post a value', async () => {
         const client = mockStorage()

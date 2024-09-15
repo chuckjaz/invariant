@@ -9,6 +9,7 @@ export class Channel<T> {
     private sendWaiters: ((value: undefined | PromiseLike<undefined>) => void)[] = []
     private _closed: boolean = false
     private size?: number
+    private failure?: any
 
     constructor(size?: number) {
         this.size = size
@@ -40,6 +41,9 @@ export class Channel<T> {
     }
 
     receive(): Promise<IteratorResult<T>> {
+        if (this.failure) {
+            return new Promise<IteratorResult<T>>((_, reject) => reject(this.failure))
+        }
         if (this.buffer.length > 0) {
             const value = this.buffer.shift()!!
             if (this.sendWaiters.length > 0) {
@@ -56,6 +60,15 @@ export class Channel<T> {
         }
     }
 
+    fail(reason: any) {
+        this.failure = reason
+        this._closed = true
+        for (const pair of this.receivePairs) {
+            pair.reject(reason)
+        }
+        this.receivePairs.length = 0
+    }
+
     all(): AsyncIterable<T> {
         const me = this
         return {
@@ -69,11 +82,7 @@ export class Channel<T> {
                         return me.receive()
                     },
                     async throw(e?: any): Promise<IteratorResult<T>> {
-                        me._closed = true
-                        for (const pair of me.receivePairs) {
-                            pair.reject(e)
-                        }
-                        me.receivePairs.length = 0
+                        me.fail(e ?? new Error())
                         return { done: true, value: undefined }
                     }
                 }

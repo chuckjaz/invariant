@@ -26,8 +26,8 @@ export async function findServer(broker: BrokerClient, _options?: FindServerOpti
     const have = new Map<string, Set<string>>()
     let lastBrokerQuery = 0
 
-    async function ping(): Promise<boolean> {
-        return true
+    async function ping(): Promise<string> {
+        return textId
     }
 
     async function find(id: string): Promise<FindResult> {
@@ -68,7 +68,7 @@ export async function findServer(broker: BrokerClient, _options?: FindServerOpti
         return channel.all()
     }
 
-    async function has(container: string, ids: string[]): Promise<void> {
+    async function has(container: string, ids: string[]): Promise<boolean> {
         const newIds = recordHas(container, ...ids)
         if (newIds.length > 0) {
             const map = new ParallelMapper<{ findId: string, id: string }, void>(async ({ findId, id }) => {
@@ -84,10 +84,12 @@ export async function findServer(broker: BrokerClient, _options?: FindServerOpti
             }
             await map.collect()
         }
+        return true
     }
 
-    async function notify(find: string): Promise<void> {
+    async function notify(find: string): Promise<boolean> {
         addFindServer(find)
+        return true
     }
 
     function addFindServer(id: string) {

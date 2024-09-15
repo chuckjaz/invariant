@@ -9,7 +9,7 @@ import { normalizeCode } from '../../common/codes'
 import { fileExists } from '../../common/files'
 import { verifyLive } from '../../common/verify'
 import { delay } from '../../common/delay'
-import { BROKER_URL, brokerUrl, optionalParentBrokerUrl } from '../../common/config'
+import { BROKER_URL, getBrokerUrl, optionalParentBrokerUrl } from '../../common/config'
 import { Broker } from '../web/broker_client'
 
 const app = new Koa()
@@ -221,7 +221,7 @@ async function startup() {
 }
 
 if (require.main === module) {
-    const url = brokerUrl()
+    const url = getBrokerUrl()
     const port = parseInt(url.port)
     if (!port) {
         console.error(`${BROKER_URL}=${url} should have a port`)

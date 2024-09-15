@@ -20,8 +20,8 @@ export function mockBroker(): MockBrokerClient {
     const finds = new Map<string, FindClient>()
     const storages = new Map<string, StorageClient>()
 
-    async function ping(): Promise<boolean> {
-        return true
+    async function ping(): Promise<string> {
+        return id
     }
 
     async function broker(id: string): Promise<BrokerClient | undefined> {

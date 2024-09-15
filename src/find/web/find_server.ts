@@ -2,8 +2,8 @@ import { text } from 'co-body'
 import Koa from 'koa'
 import { Broker } from '../../broker/web/broker_client'
 import { normalizeCode } from '../../common/codes'
-import { brokerUrl, FIND_URL, findUrl } from '../../common/config'
-import { safeaParseJson as safeParseJson } from '../../common/parseJson'
+import { getBrokerUrl, FIND_URL, getFindUrl } from '../../common/config'
+import { safeParseJson as safeParseJson } from '../../common/parseJson'
 import { FindHasRequest, FindNotifyRequest } from '../../common/types'
 import { FindClient } from '../client'
 import { findServer } from '../server'
@@ -78,8 +78,8 @@ async function startup(find: URL, brokerUrl: URL) {
 }
 
 if (require.main === module) {
-    const broker = brokerUrl()
-    const find = findUrl()
+    const broker = getBrokerUrl()
+    const find = getFindUrl()
     if (!find.port) {
         throw new Error(`${FIND_URL} should contain a port`)
     }

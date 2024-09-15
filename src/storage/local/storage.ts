@@ -7,7 +7,7 @@ import { pipeline } from 'node:stream/promises'
 import * as path from 'node:path'
 import { idMiddle, idOnly } from '../../common/id';
 import { normalizeCode } from '../../common/codes';
-import { brokerUrl, STORAGE_URL, storageUrl } from '../../common/config';
+import { getBrokerUrl, STORAGE_URL, getStorageUrl } from '../../common/config';
 import { Broker } from '../../broker/web/broker_client';
 
 const app = new Koa()
@@ -170,8 +170,8 @@ async function startup(storageUrl: URL, brokerURL: URL) {
 }
 
 if (require.main === module) {
-    const broker = brokerUrl()
-    const storage = storageUrl()
+    const broker = getBrokerUrl()
+    const storage = getStorageUrl()
     if (!storage.port) {
         throw new Error(`${STORAGE_URL} should contain a port`)
     }

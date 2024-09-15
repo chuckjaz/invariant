@@ -13,8 +13,8 @@ export type FindResult = AsyncIterable<FindResultItem>
 
 export interface FindClient {
     id: string
-    ping(): Promise<boolean>
+    ping(): Promise<string | undefined>
     find(id: string): Promise<FindResult>
-    has(container: string, ids: string[]): Promise<void>
-    notify(find: string): Promise<void>
+    has(container: string, ids: string[]): Promise<boolean>
+    notify(find: string): Promise<boolean>
 }
