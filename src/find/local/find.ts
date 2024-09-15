@@ -8,7 +8,7 @@ import { BROKER_URL, registerWithBroker, SERVER_URL } from '../../common/registe
 import { delay } from '../../common/delay';
 import { normalizeCode } from '../../common/codes';
 import { BrokerLocationResponse, BrokerServiceQueryResponse, FindResponse } from '../../common/types';
-import { safeaParseJson as safeParseJson } from '../../common/parseJson'
+import { safeParseJson as safeParseJson } from '../../common/parseJson'
 import { WorkQueue } from '../../common/work_queue'
 import { ParallelMapper } from '../../common/parallel_mapper'
 

@@ -1,5 +1,5 @@
 import { BrokerClient } from "../broker/client"
-import { safeaParseJson as safeParseJson } from "../common/parseJson"
+import { safeParseJson } from "../common/parseJson"
 import { FindClient } from "../find/client"
 import { StorageClient } from "../storage/client"
 import { Blob } from 'node:buffer'
@@ -8,8 +8,6 @@ import * as path from 'node:path/posix'
 export enum EntryKind {
     File = "File",
     Directory = "Directory",
-    FileSlot = "File Slot",
-    DirectorySlot = "Directory Slot",
 }
 
 export interface BaseEntry {
@@ -32,15 +30,11 @@ export interface DirectoryEntry extends BaseEntry {
     size: number
 }
 
-export interface SlotEntry extends BaseEntry {
-    kind: EntryKind.FileSlot | EntryKind.DirectorySlot
-    address: string
-}
-
-export type Entry = FileEntry | DirectoryEntry | SlotEntry
+export type Entry = FileEntry | DirectoryEntry
 
 export interface ContentLink {
     address: string
+    slot?: boolean
     key?: string
     hash?: string
     algorithm?: string

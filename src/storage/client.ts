@@ -9,7 +9,7 @@ export type Data =
 
 export interface StorageClient {
     id: string
-    ping(): Promise<boolean>
+    ping(): Promise<string | undefined>
     get(code: string, algorithm?: string): Promise<Blob | undefined>
     has(code: string, algorithm?: string): Promise<boolean>
     put(code: string, data: Data, algorithm?: string): Promise<boolean>

@@ -15,7 +15,7 @@ export function mockStorage(): StorageClient {
         }
     }
 
-    async function ping() { return true }
+    async function ping(): Promise<string | undefined> { return id }
 
     async function get(code: string, algorithm?: string): Promise<Blob> {
         validateAlgorithm(algorithm)

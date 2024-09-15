@@ -15,7 +15,6 @@ const brokerRegisterPrefix = '/broker/register/'
 type ClientFactory<T> = (id: string, url: URL) => Promise<T>
 
 export class Broker extends PingableClient implements BrokerClient {
-
     constructor(id: string, url: URL) {
         super(id, url)
     }

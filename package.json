@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
-    "test": "jasmine"
+    "test": "node --enable-source-maps node_modules/jasmine/bin/jasmine.js"
   },
   "author": "",
   "license": "ISC",
