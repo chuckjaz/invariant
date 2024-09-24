@@ -1,6 +1,5 @@
-import { jsonStream } from "../../common/parseJson";
 import { PingableClient } from "../../common/pingable_client";
-import { SlotsGetResponse, SlotsPutRequest, SlotsRegisterRequest } from "../../common/types";
+import { SlotConfiguration, SlotsGetResponse, SlotsPutRequest, SlotsRegisterRequest } from "../../common/types";
 import { SlotsClient } from "../slot_client";
 
 export class SlotsWebClient extends PingableClient implements SlotsClient {
@@ -18,6 +17,10 @@ export class SlotsWebClient extends PingableClient implements SlotsClient {
 
     async history(id: string): Promise<AsyncIterable<SlotsGetResponse>> {
         return super.getJsonStream<SlotsGetResponse>(`/slots/history/${id}`)
+    }
+
+    async config(id: string): Promise<SlotConfiguration> {
+        return super.getJson<SlotConfiguration>(`/slots/configuration/${id}`)
     }
 
     register(request: SlotsRegisterRequest): Promise<boolean> {

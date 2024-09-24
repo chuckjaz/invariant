@@ -1,4 +1,4 @@
-import { SlotsGetResponse, SlotsPutRequest, SlotsRegisterRequest } from "../../common/types";
+import { SlotConfiguration, SlotsGetResponse, SlotsPutRequest, SlotsRegisterRequest } from "../../common/types";
 import { SlotsClient } from "../slot_client";
 import * as path from 'node:path'
 import * as fs from 'node:fs/promises'
@@ -54,8 +54,17 @@ export class LocalSlots implements SlotsClient {
 
     async history(id: string): Promise<AsyncIterable<SlotsGetResponse>> {
         const historyFile = this.toHashPath(id) + '.json.history'
-        const textStream = await textStreamFromFileBackward(historyFile)
-        return jsonBackwardStream(textStream)
+        if (await fileExists(historyFile)) {
+            const textStream = await textStreamFromFileBackward(historyFile)
+            return jsonBackwardStream(textStream)
+
+        } else {
+            throw new Error(`Not found: ${id}`)
+        }
+    }
+
+    config(id: string): Promise<SlotConfiguration> {
+        return this.readConfiguration(id)
     }
 
     async register(request: SlotsRegisterRequest): Promise<boolean> {
@@ -64,14 +73,16 @@ export class LocalSlots implements SlotsClient {
         if (request.proof) return false
         let signature: SignatureAlgorithm = { kind: SignatureAlgorithmKind.None }
         if (request.signature && request.signature.kind == SignatureAlgorithmKind.Sha256_Rsa) {
-            createPublicKey(request.signature.key)
+            // verify that the key is a valid key
+            const key = createPublicKey(request.signature.key)
+            if (!key || key.type != "public") return false
             signature = {
                 kind: SignatureAlgorithmKind.Sha256_Rsa,
                 key: request.signature.key
             }
         }
         if (typeof request.address != 'string') return false
-        const config: SlotConfiguration = {
+        const config: LocalSlotConfiguration = {
             signature,
             proof: ProofAlgorithm.None
         }
@@ -111,14 +122,14 @@ export class LocalSlots implements SlotsClient {
         await fs.mkdir(dir, { recursive: true })
     }
 
-    private async readConfiguration(id: string): Promise<SlotConfiguration> {
+    private async readConfiguration(id: string): Promise<LocalSlotConfiguration> {
         const configurationPath = this.toHashPath(id) + '.configuration.json'
         const configurationText = await fs.readFile(configurationPath, 'utf-8')
         const configuration = JSON.parse(configurationText)
         return configuration
     }
 
-    private async writeConfiguration(id: string, config: SlotConfiguration): Promise<void> {
+    private async writeConfiguration(id: string, config: LocalSlotConfiguration): Promise<void> {
         const configurationPath = this.toHashPath(id) + '.configuration.json'
         const configurationText = JSON.stringify(config)
         return fs.writeFile(configurationPath, configurationText, 'utf-8')
@@ -128,7 +139,6 @@ export class LocalSlots implements SlotsClient {
         return path.join(this.directory, 'sha256', hashCode.slice(0, 2), hashCode.slice(2, 4), hashCode.slice(4))
     }
 }
-
 
 enum SignatureAlgorithmKind {
     None = "none",
@@ -151,7 +161,7 @@ interface SignatureAlgorithmSha256Rsa {
 
 type SignatureAlgorithm = SignatureAlgorithmNone | SignatureAlgorithmSha256Rsa
 
-interface SlotConfiguration {
+interface LocalSlotConfiguration {
     signature: SignatureAlgorithm
     proof: ProofAlgorithm
 }

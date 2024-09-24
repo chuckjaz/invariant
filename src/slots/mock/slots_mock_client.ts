@@ -1,4 +1,4 @@
-import { SlotsGetResponse, SlotsPutRequest, SlotsRegisterRequest } from "../../common/types";
+import { SlotConfiguration, SlotsGetResponse, SlotsPutRequest, SlotsRegisterRequest } from "../../common/types";
 import { SlotsClient } from "../slot_client";
 import { randomBytes } from 'node:crypto'
 
@@ -38,6 +38,10 @@ export class MockSlotsServer implements SlotsClient {
             return true
         }
         return false
+    }
+
+    async config(id: string): Promise<SlotConfiguration> {
+        return { }
     }
 
     private required(id: string): SlotsGetResponse[] {

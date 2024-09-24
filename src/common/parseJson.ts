@@ -1,5 +1,6 @@
 import { Channel } from "./channel"
 import { ReadableStreamDefaultReader, ReadableStream } from "node:stream/web"
+import { Readable } from 'node:stream'
 import * as fss from 'node:fs'
 import * as fs from 'node:fs/promises'
 
@@ -21,6 +22,19 @@ export async function textStreamFromFile(file: string | fss.ReadStream): Promise
     stream.on('error', e => channel.fail(e))
     stream.resume()
     return channel.all()
+}
+
+export function textToStream(stream: AsyncIterable<string>): Readable {
+    const readable = new Readable()
+    async function readAll() {
+        for await (const text of stream) {
+            if (readable.closed) return
+            readable.push(text)
+        }
+        readable.push(null)
+    }
+    readAll()
+    return readable
 }
 
 export async function textStreamFromFileBackward(file: string): Promise<AsyncIterable<string>> {
@@ -90,6 +104,12 @@ export async function textStreamFromWeb(urlOrStream: URL | ReadableStreamDefault
     }
     readAll(stream).catch(e => channel.fail(e))
     return channel.all()
+}
+
+export async function *jsonStreamToText<T>(stream: AsyncIterable<T>): AsyncIterable<string> {
+    for await (const item of stream) {
+        yield JSON.stringify(item)
+    }
 }
 
 export async function jsonStream<T>(

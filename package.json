@@ -9,6 +9,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@koa/router": "^13.1.0",
     "co-body": "^6.2.0",
     "hex": "^0.1.0",
     "jasmine": "^5.2.0",
@@ -20,6 +21,7 @@
     "@types/inflation": "^2.0.4",
     "@types/jasmine": "^5.1.4",
     "@types/koa": "^2.15.0",
+    "@types/koa__router": "^12.0.4",
     "typescript": "^5.5.3"
   }
 }
