@@ -1,7 +1,7 @@
 import type Koa from 'koa'
 import { SlotsClient } from '../slot_client';
 import { text } from 'co-body'
-import { jsonStreamToText, safeParseJson, textToStream } from '../../common/parseJson';
+import { jsonStreamToText, safeParseJson, textToReadable } from '../../common/parseJson';
 import { z } from 'zod'
 import { SignatureAlgorithmKind } from '../local/slots_local';
 
@@ -114,7 +114,7 @@ export function slotsHandler(client: SlotsClient): ResponseFunc {
             }
             if (await id("GET", slotsHistoryPrefix, ctx, async id => {
                 const result = await client.history(id)
-                ctx.body = textToStream(jsonStreamToText(result))
+                ctx.body = textToReadable(jsonStreamToText(result))
             }))
             if (await id("GET", slotsConfigPrefix, ctx, async id => {
                 ctx.body = await client.config(id)

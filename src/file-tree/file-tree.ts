@@ -1,7 +1,7 @@
 import { BrokerClient } from "../broker/client"
-import { safeParseJson } from "../common/parseJson"
+import { dataToString, safeParseJson } from "../common/parseJson"
 import { FindClient } from "../find/client"
-import { StorageClient } from "../storage/client"
+import { Data, StorageClient } from "../storage/client"
 import { Blob } from 'node:buffer'
 import * as path from 'node:path/posix'
 
@@ -63,39 +63,45 @@ export class FileTree {
         this.storage = storage
     }
 
-    async directory(dirPath: string): Promise<FileTreeDirectory | undefined> {
-        return (await this.ensureRootDirectory())?.directory(dirPath)
+    async directory(dirPath: string): Promise<FileTreeDirectory | false> {
+        return (await this.ensureRootDirectory())?.directory(dirPath) ?? false
     }
 
-    async file(dirPath: string): Promise<Blob | undefined> {
-        return (await this.ensureRootDirectory())?.file(dirPath)
+    async file(dirPath: string): Promise<Data | false> {
+        return (await this.ensureRootDirectory())?.file(dirPath) ?? false
     }
 
-    async readFile(content: ContentLink): Promise<Blob | undefined> {
+    async readFile(content: ContentLink): Promise<Data | false> {
         if (content.blockTree) {
-            const block = await this.readBlock(content.address)
+            const block = await this.readBlocks(content.address)
             if (block) {
-                const text = await block.text()
+                const text = await dataToString(block)
                 const blocks = safeParseJson(text) as BlockTree
                 if (blocks) {
-                    const blobs = await Promise.all(blocks.map(block => this.readFile(block.content)))
-                    if (blobs.every(i => i)) {
-                        return new Blob(blobs as Blob[])
-                    }
+                    return this.flatten(blocks)
                 }
             }
         } else {
-            return this.readBlock(content.address)
+            return this.readBlocks(content.address)
         }
+        return false
     }
 
-    async readDirectory(content: ContentLink): Promise<FileTreeDirectory | undefined> {
-        const contentBlob = await this.readFile(content)
-        if (!contentBlob) return
-        const contentText = await contentBlob.text()
+    async readDirectory(content: ContentLink): Promise<FileTreeDirectory | false> {
+        const contentData = await this.readFile(content)
+        if (!contentData) return false
+        const contentText = await dataToString(contentData)
         const entries = safeParseJson(contentText) as (Entry[] | undefined)
-        if (!entries) return
+        if (!entries) return false
         return new FileTreeDirectory(this, entries)
+    }
+
+    private async *flatten(blocks: BlockTree): Data {
+        for (const block of blocks) {
+            const part = await this.readFile(block.content)
+            if (part) yield *part
+            else throw new Error(`Missing file content link ${block.content.address}`)
+        }
     }
 
     private async ensureRootDirectory(): Promise<FileTreeDirectory | undefined> {
@@ -109,14 +115,15 @@ export class FileTree {
         return dir
     }
 
-    private async readBlock(address: string): Promise<Blob | undefined> {
+    private async readBlocks(address: string): Promise<Data | false> {
         const storage = await this.findStorage(address)
         if (storage) {
             return storage.get(address)
         }
+        return false
     }
 
-    private async findStorage(address: string): Promise<StorageClient | undefined> {
+    private async findStorage(address: string): Promise<StorageClient | false> {
         if (this.storage && await this.storage.has(address)) {
             return this.storage
         }
@@ -138,6 +145,7 @@ export class FileTree {
                 }
             }
         }
+        return false
     }
 }
 
@@ -150,15 +158,15 @@ export class FileTreeDirectory {
         this.entries = new Map(entries.map(entry => [entry.name, entry]))
     }
 
-    async file(dirPath: string): Promise<Blob | undefined> {
+    async file(dirPath: string): Promise<Data | false> {
         const content = await this.contentAt(dirPath)
-        if (!content) return
+        if (!content) return false
         return this.fileTree.readFile(content)
     }
 
-    async directory(dirPath: string): Promise<FileTreeDirectory | undefined> {
+    async directory(dirPath: string): Promise<FileTreeDirectory | false> {
         const content = await this.contentAt(dirPath)
-        if (!content) return
+        if (!content) return false
         return this.fileTree.readDirectory(content)
     }
 
@@ -176,19 +184,20 @@ export class FileTreeDirectory {
         return this.entries.get(name)
     }
 
-    private async contentAt(contentPath: string): Promise<ContentLink | undefined> {
+    private async contentAt(contentPath: string): Promise<ContentLink | false> {
         const normalPath = path.normalize(contentPath)
         const parsedPath = path.parse(normalPath)
-        let dir: FileTreeDirectory | undefined = this
+        let dir: FileTreeDirectory | false = this
         for (const name of parsedPath.dir.split(path.delimiter)) {
-            if (!name) return
+            if (!name) return false
             dir = await dir.directory(name)
-            if (!dir) return
+            if (!dir) return false
         }
         const entry = dir.entry(parsedPath.base)
-        if (!entry) return
+        if (!entry) return false
         if (entry.kind == EntryKind.Directory || entry.kind == EntryKind.File) {
             return entry.content
         }
+        return false
     }
 }

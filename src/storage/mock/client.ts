@@ -1,11 +1,10 @@
-import { ReadableStream } from 'node:stream/web'
 import { createHash, randomBytes } from 'node:crypto'
-
 import { Data, StorageClient } from "../client";
 import { normalizeCode } from '../../common/codes';
+import { hashTransform } from '../../common/data';
 
 export function mockStorage(): StorageClient {
-    const store = new Map<string, Uint8Array>()
+    const store = new Map<string, Buffer[]>()
     const idBytes = randomBytes(32)
     const id = idBytes.toString('hex')
 
@@ -15,18 +14,18 @@ export function mockStorage(): StorageClient {
         }
     }
 
-    async function ping(): Promise<string | undefined> { return id }
+    async function ping(): Promise<string> { return id }
 
-    async function get(code: string, algorithm?: string): Promise<Blob> {
+    async function get(code: string, algorithm?: string): Promise<Data | false> {
         validateAlgorithm(algorithm)
         const normalCode = normalizeCode(code)
         if (normalCode) {
-            const buffer = store.get(normalCode)
-            if (buffer) {
-                return new Blob([buffer])
+            const buffers = store.get(normalCode)
+            if (buffers) {
+                return dataOf(buffers)
             }
         }
-        throw new Error('Not found')
+        return false
     }
 
     async function has(code: string, algorithm?: string): Promise<boolean> {
@@ -35,35 +34,23 @@ export function mockStorage(): StorageClient {
         return normalCode != undefined && store.has(normalCode)
     }
 
-    async function post(data: Data, algorithm?: string): Promise<string | undefined> {
+    async function post(data: Data, algorithm?: string): Promise<string | false> {
         validateAlgorithm(algorithm)
-        if (typeof data == 'string') {
-            const encoder = new TextEncoder()
-            const u8Array = encoder.encode(data)
-            const hash = createHash('sha256')
-            hash.update(u8Array)
-            const id = hash.digest().toString('hex')
-            store.set(id, u8Array)
-            return `sha256/${id}`
-        } else {
-            throw new Error('Not supported yet')
-        }
+        const hash = createHash('sha256')
+        const buffers = await buffersOfData(hashTransform(data, hash))
+        const id = hash.digest().toString('hex')
+        store.set(id, buffers)
+        return `sha256/${id}`
     }
 
     async function put(code: string, data: Data, algorithm?: string): Promise<boolean> {
         validateAlgorithm(algorithm)
-        if (typeof data == 'string') {
-            const encoder = new TextEncoder()
-            const u8Array = encoder.encode(data)
-            const hash = createHash('sha256')
-            hash.update(u8Array)
-            const id = hash.digest().toString('hex')
-            if (code != id) throw Error('Content/id mismatch')
-            store.set(id, u8Array);
-            return true
-        } else {
-            throw new Error('Not supported yet')
-        }
+        const hash = createHash('sha256')
+        const buffers = await buffersOfData(hashTransform(data, hash))
+        const id = hash.digest().toString('hex')
+        if (code != id) return false
+        store.set(id, buffers)
+        return true
     }
 
     return {
@@ -74,4 +61,16 @@ export function mockStorage(): StorageClient {
         post,
         put,
     }
+}
+
+async function *dataOf(buffers: Buffer[]): Data {
+    yield *buffers
+}
+
+async function buffersOfData(data: Data): Promise<Buffer[]> {
+    const buffers: Buffer[] = []
+    for await (const buffer of data) {
+        buffers.push(buffer)
+    }
+    return buffers
 }

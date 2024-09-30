@@ -24,7 +24,19 @@ export async function textStreamFromFile(file: string | fss.ReadStream): Promise
     return channel.all()
 }
 
-export function textToStream(stream: AsyncIterable<string>): Readable {
+export async function *dataFromFile(file: string | fss.ReadStream): AsyncIterable<Buffer> {
+    const stream = typeof file == "string" ? fss.createReadStream(file, 'binary') : file
+    stream.pause()
+    const channel = new Channel<Buffer>()
+    stream.on('data', data => channel.send(data as Buffer))
+    stream.on('close', () => channel.close())
+    stream.on('end', () => channel.close())
+    stream.on('error', e => channel.fail(e))
+    stream.resume()
+    yield *channel.all()
+}
+
+export function textToReadable(stream: AsyncIterable<string>): Readable {
     const readable = new Readable()
     async function readAll() {
         for await (const text of stream) {
@@ -35,6 +47,27 @@ export function textToStream(stream: AsyncIterable<string>): Readable {
     }
     readAll()
     return readable
+}
+
+export function dataToReadable(data: AsyncIterable<Buffer>): Readable {
+    const readable = new Readable()
+    async function readAll() {
+        for await (const item of data) {
+            if (readable.closed) return
+            readable.push(item)
+        }
+        readable.push(null)
+    }
+    readAll()
+    return readable
+}
+
+export async function dataToString(data: AsyncIterable<Buffer>): Promise<string> {
+    let buffer = Buffer.of()
+    for await (const value of data) {
+        buffer = Buffer.concat([buffer, value])
+    }
+    return new TextDecoder().decode(buffer)
 }
 
 export async function textStreamFromFileBackward(file: string): Promise<AsyncIterable<string>> {
