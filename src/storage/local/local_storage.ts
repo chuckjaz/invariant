@@ -62,34 +62,32 @@ export class LocalStorage implements StorageClient {
                 await writeFile(name, '', { flag: 'wx' })
                 return name
             } catch(e) {
-
+                console.log('failure in tmpName', e)
             }
         }
     }
 
     private async receiveFile(data: Data, expected?: string): Promise<string | false> {
-        try {
-            if (expected) {
-                const fileName = this.toHashPath(expected)
-                if (await fileExists(fileName)) return expected
+        if (expected) {
+            const fileName = this.toHashPath(expected)
+            if (await fileExists(fileName)) return expected
+        }
+        const hasher = createHash('sha256')
+        const name = await this.tmpName()
+        const hashStream = hashTransform(data, hasher)
+        const readable = dataToReadable(hashStream)
+        await pipeline([readable, createWriteStream(name, { })])
+        const result = hasher.digest()
+        const hashCode = result.toString('hex')
+        if (!expected || expected == hashCode) {
+            const hashPath = this.toHashPath(hashCode)
+            if (!await fileExists(hashPath)) {
+                await moveFile(name, hashPath)
+            } else {
+                await unlink(name)
             }
-            const hasher = createHash('sha256')
-            const name = await this.tmpName()
-            const hashStream = hashTransform(data, hasher)
-            const readable = dataToReadable(hashStream)
-            await pipeline([readable, createWriteStream(name, { })])
-            const result = hasher.digest()
-            const hashCode = result.toString('hex')
-            if (!expected || expected == hashCode) {
-                const hashPath = this.toHashPath(hashCode)
-                if (!await fileExists(hashPath)) {
-                    await moveFile(name, hashPath)
-                } else {
-                    await unlink(name)
-                }
-                return hashCode
-            }
-        } catch { }
+            return hashCode
+        }
         return false
     }
 
@@ -115,4 +113,3 @@ async function fileExists(file: string): Promise<boolean> {
     }
     return false
 }
-

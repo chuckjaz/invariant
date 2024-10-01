@@ -1,5 +1,5 @@
 import { Channel } from "./channel"
-import { ReadableStreamDefaultReader, ReadableStream } from "node:stream/web"
+import { ReadableStreamDefaultReader } from "node:stream/web"
 import { Readable } from 'node:stream'
 import * as fss from 'node:fs'
 import * as fs from 'node:fs/promises'
@@ -36,8 +36,14 @@ export async function *dataFromFile(file: string | fss.ReadStream): AsyncIterabl
     yield *channel.all()
 }
 
+export async function *dataFromString(text: string): AsyncIterable<Buffer> {
+    const encoded = new TextEncoder().encode(text)
+    yield Buffer.from(encoded)
+}
+
 export function textToReadable(stream: AsyncIterable<string>): Readable {
     const readable = new Readable()
+    readable._read = () => {}
     async function readAll() {
         for await (const text of stream) {
             if (readable.closed) return
@@ -51,6 +57,7 @@ export function textToReadable(stream: AsyncIterable<string>): Readable {
 
 export function dataToReadable(data: AsyncIterable<Buffer>): Readable {
     const readable = new Readable()
+    readable._read = () => {}
     async function readAll() {
         for await (const item of data) {
             if (readable.closed) return

@@ -2,7 +2,6 @@ import { BrokerClient } from "../broker/client"
 import { dataToString, safeParseJson } from "../common/parseJson"
 import { FindClient } from "../find/client"
 import { Data, StorageClient } from "../storage/client"
-import { Blob } from 'node:buffer'
 import * as path from 'node:path/posix'
 
 export enum EntryKind {
@@ -27,7 +26,6 @@ export interface FileEntry extends BaseEntry {
 export interface DirectoryEntry extends BaseEntry {
     kind: EntryKind.Directory
     content: ContentLink
-    size: number
 }
 
 export type Entry = FileEntry | DirectoryEntry
@@ -96,6 +94,7 @@ export class FileTree {
         return new FileTreeDirectory(this, entries)
     }
 
+
     private async *flatten(blocks: BlockTree): Data {
         for (const block of blocks) {
             const part = await this.readFile(block.content)
@@ -151,11 +150,11 @@ export class FileTree {
 
 export class FileTreeDirectory {
     private fileTree: FileTree
-    private entries: Map<string, Entry>
+    private _entries: Map<string, Entry>
 
     constructor(fileTree: FileTree, entries: Entry[]) {
         this.fileTree = fileTree
-        this.entries = new Map(entries.map(entry => [entry.name, entry]))
+        this._entries = new Map(entries.map(entry => [entry.name, entry]))
     }
 
     async file(dirPath: string): Promise<Data | false> {
@@ -165,35 +164,38 @@ export class FileTreeDirectory {
     }
 
     async directory(dirPath: string): Promise<FileTreeDirectory | false> {
+        if (dirPath === '/') return this
         const content = await this.contentAt(dirPath)
         if (!content) return false
         return this.fileTree.readDirectory(content)
     }
 
-    find(regex: RegExp): string[] {
-        const result: string[] = []
-        for (const [name, _] of this.entries) {
+    async *find(regex: RegExp): AsyncIterable<string> {
+        for (const [name, _] of this._entries) {
             if (name.match(regex)) {
-                result.push(name)
+                yield name
             }
         }
-        return result
     }
 
-    entry(name: string): Entry | undefined {
-        return this.entries.get(name)
+    async entry(name: string): Promise<Entry | false> {
+        return this._entries.get(name) ?? false
+    }
+
+    async *entries(): AsyncIterable<Entry> {
+        yield *this._entries.values()
     }
 
     private async contentAt(contentPath: string): Promise<ContentLink | false> {
         const normalPath = path.normalize(contentPath)
         const parsedPath = path.parse(normalPath)
         let dir: FileTreeDirectory | false = this
-        for (const name of parsedPath.dir.split(path.delimiter)) {
+        for (const name of parsedPath.dir.split(path.sep)) {
             if (!name) return false
             dir = await dir.directory(name)
             if (!dir) return false
         }
-        const entry = dir.entry(parsedPath.base)
+        const entry = await dir.entry(parsedPath.base)
         if (!entry) return false
         if (entry.kind == EntryKind.Directory || entry.kind == EntryKind.File) {
             return entry.content

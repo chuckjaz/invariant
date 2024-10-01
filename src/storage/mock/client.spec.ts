@@ -17,7 +17,7 @@ describe('storage/mock/client', () => {
         const value = 'This is a test'
         const data = dataOf(value)
         const id = await client.post(data)
-        expect(id).toEqual(`sha256/${codeOf(value)}`)
+        expect(id).toEqual(codeOf(value))
     })
     it('can put a value', async () => {
         const client = mockStorage()
@@ -45,12 +45,9 @@ describe('storage/mock/client', () => {
         const client = mockStorage()
         const value = 'This is a test'
         const data = dataOf(value)
-        const url = await client.post(data)
-        expect(url).toBeDefined()
-        if (url) {
-            const urlPrefix = 'sha256/'
-            expect(url.startsWith(urlPrefix)).toBeTrue()
-            const code = url.substring(urlPrefix.length)
+        const code = await client.post(data)
+        expect(code).not.toBeFalsy()
+        if (code) {
             const getResult = await client.get(code)
             expect(getResult).not.toBeFalse()
             if (getResult) {
@@ -63,11 +60,8 @@ describe('storage/mock/client', () => {
         const client = mockStorage()
         const value = 'This is a test'
         const data = dataOf(value)
-        const url = await client.post(data)
-        if (url) {
-            const urlPrefix = 'sha256/'
-            expect(url.startsWith(urlPrefix)).toBeTrue()
-            const code = url.substring(urlPrefix.length)
+        const code = await client.post(data)
+        if (code) {
             expect(await client.has(code)).toBeTrue()
         }
     })

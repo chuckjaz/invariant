@@ -1,51 +1,51 @@
-import { generateKeyPair as gkp, randomBytes, sign as sgn, verify as vfy, createPublicKey } from 'node:crypto'
-import { promisify } from 'node:util'
 import * as fs from 'node:fs/promises'
+import * as path from 'node:path'
+import { LocalStorage } from '../storage/local/local_storage'
+import { DirectoryEntry, Entry, EntryKind, FileEntry } from '../file-tree/file-tree'
+import { dataFromFile, dataFromString } from '../common/parseJson'
 
-/* */
-const generateKeyPair = promisify(gkp)
-const sign = promisify(sgn)
-const verify = promisify(vfy)
-async function gen() {
-    const result = await generateKeyPair("rsa", { modulusLength: 2048 })
+const storage = new LocalStorage('/tmp/storage')
 
-    const exportedKey = result.publicKey.export({ type: 'pkcs1', format: 'pem' })
-    const jwt = result.publicKey.export({ format: 'jwk' })
-    console.log('jwt', jwt)
-    console.log('exported', exportedKey.length, exportedKey)
-
-    // generate some signed bytes
-    const data = randomBytes(32)
-    console.log('data', data)
-
-    const signature = await sign("sha256", data, result.privateKey)
-    console.log(signature)
-
-    const verfied = await verify("sha256", data, result.publicKey, signature)
-    console.log('verified', verfied)
-
-    const importedKey = createPublicKey(exportedKey)
-    console.log(importedKey)
-    const verifiedImport = await verify("sha256", data, importedKey, signature)
-    console.log('verifiedImport', verifiedImport)
+async function readDirectory(directory: string): Promise<string> {
+    const entries = await fs.opendir(directory)
+    let total = 0
+    const treeEntries: Entry[] = []
+    for await (const entry of entries) {
+        const fullName = path.join(directory, entry.name)
+        if (entry.isFile()) {
+            const stat = await fs.stat(fullName)
+            const data = dataFromFile(fullName)
+            const address = await storage.post(data)
+            if (!address) throw new Error(`Could not read ${fullName}`)
+            const treeEntry: FileEntry = {
+                kind: EntryKind.File,
+                name: entry.name,
+                createTime: Math.floor(stat.ctimeMs),
+                modifyTime: Math.floor(stat.mtimeMs),
+                content: { address },
+                size: stat.size
+            }
+            treeEntries.push(treeEntry)
+            continue
+        }
+        if (entry.isDirectory()) {
+            const address = await readDirectory(fullName)
+            const stat = await fs.stat(fullName)
+            const treeEntry: DirectoryEntry = {
+                kind: EntryKind.Directory,
+                name: entry.name,
+                createTime: Math.floor(stat.ctimeMs),
+                modifyTime: Math.floor(stat.mtimeMs),
+                content: { address }
+            }
+            treeEntries.push(treeEntry)
+        }
+    }
+    const directoryJson = JSON.stringify(treeEntries)
+    const directoryData = dataFromString(directoryJson)
+    const address = await storage.post(directoryData)
+    if (!address) throw new Error(`Could not post directory ${directory}`)
+    return address
 }
 
-gen()
-/*/
-
-async function tryConflict() {
-    const filename = '/tmp/test.dat'
-
-    let f1: fs.FileHandle | undefined
-    let f2: fs.FileHandle | undefined
-    try { f1 = await fs.open(filename, 'wx') } catch(e) { console.error('error', e) }
-    try { f2 = await fs.open(filename, "wx") } catch(e) { console.error('error', e) }
-    console.log('f1', f1, 'f2', f2)
-    if (f1) await f1.close();
-    if (f2) await f2.close();
-    console.log("Files close")
-    await fs.rm(filename)
-}
-
-tryConflict().catch(e => console.error(e))
-/* */
+readDirectory("dist").catch(e => console.error(e)).then(s => console.log('root', s))

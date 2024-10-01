@@ -40,7 +40,7 @@ export function mockStorage(): StorageClient {
         const buffers = await buffersOfData(hashTransform(data, hash))
         const id = hash.digest().toString('hex')
         store.set(id, buffers)
-        return `sha256/${id}`
+        return id
     }
 
     async function put(code: string, data: Data, algorithm?: string): Promise<boolean> {
