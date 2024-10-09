@@ -11,7 +11,7 @@ export class ParallelMapper<C, R> {
         this.reject = reject
     })
 
-    constructor(mapper: (value: C, schedule: (item: C) => void) => Promise<R>, parallel: number = 20) {
+    constructor(mapper: (value: C, schedule: (...items: C[]) => void) => Promise<R>, parallel: number = 20) {
         this.parallel = parallel
         this.mapper = mapper
     }

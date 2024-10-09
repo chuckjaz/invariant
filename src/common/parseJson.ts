@@ -28,7 +28,13 @@ export async function *dataFromFile(file: string | fss.ReadStream): AsyncIterabl
     const stream = typeof file == "string" ? fss.createReadStream(file, 'binary') : file
     stream.pause()
     const channel = new Channel<Buffer>()
-    stream.on('data', data => channel.send(data as Buffer))
+    stream.on('data', data => {
+        if (typeof data == 'string') {
+            const encoded = new TextEncoder().encode(data)
+            data = Buffer.from(encoded)
+        }
+        channel.send(data as Buffer)
+    })
     stream.on('close', () => channel.close())
     stream.on('end', () => channel.close())
     stream.on('error', e => channel.fail(e))
@@ -125,7 +131,7 @@ export async function textStreamFromWeb(urlOrStream: URL | ReadableStreamDefault
         const response = await fetch(urlOrStream)
         if (!response.ok) throw new Error(`Unable to fetch stream: ${response.status}`);
         if (!response.body) throw new Error("Expected a body to be returned by fetch")
-        stream = response.body.getReader()
+        stream = response.body.getReader() as ReadableStreamDefaultReader<any>
     } else {
         stream = urlOrStream
     }
