@@ -163,7 +163,7 @@ async function startup(storageUrl: URL, brokerURL: URL) {
     const myId = await idOnly(__dirname, async () => ({ id: randomBytes(32) }))
     const idText = myId.id.toString('hex')
     app.use(idMiddle(idText))
-    const broker = new Broker('', brokerURL)
+    const broker = new Broker(brokerURL)
     console.log(`Registering with ${storageUrl}`)
     await broker.register(idText, storageUrl, 'storage')
     console.log(`Fully started: storage: ${idText}: ${storageUrl}}`)

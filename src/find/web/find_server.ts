@@ -17,11 +17,13 @@ const findHasPrefx = '/find/has/'
 const findNotifyPrefix = '/find/notify/'
 
 let server: FindClient
+let serverId: string
 
 app.use(async function (ctx, next) {
+
     if (ctx.path == idPrefix) {
         ctx.status = 200
-        ctx.body = server.id
+        ctx.body = serverId
         return
     } else if (ctx.path.startsWith(findHasPrefx) && ctx.method == 'PUT') {
         const requestText = await text(ctx)
@@ -68,12 +70,15 @@ app.use(async function (ctx, next) {
 
 async function startup(find: URL, brokerUrl: URL) {
     // Create the broker
-    const broker = new Broker('', brokerUrl)
+    const broker = new Broker(brokerUrl)
     server = await findServer(broker)
-    try {
-        await broker.register(server.id, find, 'find')
-    } catch {
-        console.log('WARNING: could not register with broker')
+    serverId = (await server.ping())!!
+    if (serverId) {
+        try {
+            await broker.register(serverId, find, 'find')
+        } catch {
+            console.log('WARNING: could not register with broker')
+        }
     }
 }
 

@@ -211,7 +211,7 @@ async function startup() {
     app.use(idMiddle(idText))
     const parentBrokerUrl = optionalParentBrokerUrl()
     if (parentBrokerUrl) {
-        const parentBroker = new Broker('', parentBrokerUrl)
+        const parentBroker = new Broker(parentBrokerUrl)
         await parentBroker.register(idText, parentBrokerUrl, 'broker')
     }
 

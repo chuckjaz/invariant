@@ -3,8 +3,8 @@ import { SlotConfiguration, SlotsGetResponse, SlotsPutRequest, SlotsRegisterRequ
 import { SlotsClient } from "../slot_client";
 
 export class SlotsWebClient extends PingableClient implements SlotsClient {
-    constructor(id: string, url: URL) {
-        super(id, url)
+    constructor(url: URL, id?: string) {
+        super(url, id)
     }
 
     async get(id: string): Promise<SlotsGetResponse> {

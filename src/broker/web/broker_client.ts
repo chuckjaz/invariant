@@ -15,20 +15,20 @@ const brokerRegisterPrefix = '/broker/register/'
 type ClientFactory<T> = (id: string, url: URL) => Promise<T>
 
 export class Broker extends PingableClient implements BrokerClient {
-    constructor(id: string, url: URL) {
-        super(id, url)
+    constructor(url: URL, id?: string) {
+        super(url, id)
     }
 
     broker(id: string): Promise<BrokerClient | undefined> {
-        return this.client(id, async (id, url) => new Broker(id, url))
+        return this.client(id, async (id, url) => new Broker(url, id))
     }
 
     find(id: string): Promise<FindClient | undefined> {
-        return this.client(id, async (id, url) => new Find(id, url))
+        return this.client(id, async (id, url) => new Find(url, id))
     }
 
     storage(id: string): Promise<StorageClient | undefined> {
-        return this.client(id, async (id, url) => new Storage(id, url))
+        return this.client(id, async (id, url) => new Storage(url, id))
     }
 
     async registered(kind: string): Promise<AsyncIterable<string>> {

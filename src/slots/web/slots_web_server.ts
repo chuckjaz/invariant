@@ -13,7 +13,7 @@ const slotsUrl = getSlotsUrl()
 
 async function startup() {
     // Create the broker
-    const broker = new Broker('', brokerUrl)
+    const broker = new Broker(brokerUrl)
     try {
         await broker.register(client.id, slotsUrl, 'slots')
     } catch(e: any) {

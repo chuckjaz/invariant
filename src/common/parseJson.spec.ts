@@ -1,5 +1,5 @@
 import { ReadableStreamDefaultReadResult } from "stream/web"
-import { jsonBackwardStream, jsonStream, safeParseJson, textStreamFromFile, textStreamFromFileBackward, textStreamFromWeb } from "./parseJson"
+import { jsonBackwardStream, jsonStream, jsonStreamToText, safeParseJson, textStreamFromFile, textStreamFromFileBackward, textStreamFromWeb } from "./parseJson"
 import { ReadableStreamDefaultReader } from "node:stream/web"
 import { withTempFile } from "./test_tmp"
 
@@ -105,6 +105,15 @@ describe("common/parseJson", () => {
             }
             expect(count).toEqual(5)
         })
+        it("can stream strings", async () => {
+            const strings = stream<string>(30, i => `Item ${i}`)
+            const textStream = jsonStreamToText(strings)
+            const dataStream = await jsonStream<string>(textStream)
+            let i = 0
+            for await (const item of dataStream) {
+                expect(item).toEqual(`Item ${i++}`)
+            }
+        })
     })
     describe("textStreamFromFileBackward", () => {
         it("can a file backwards", async () => {
@@ -164,4 +173,21 @@ describe("common/parseJson", () => {
             })
         })
     })
+    describe("jsonStreamToText", () => {
+        it("can stream objects", async () => {
+            const objects = stream(30, i => ({ a: i, b: i * 2 }))
+            let i = 0
+            for await (const item of jsonStreamToText(objects)) {
+                let n = i++
+                expect(item).toEqual(`{"a":${n},"b":${n*2}}`)
+            }
+        })
+    })
 })
+
+async function *stream<T>(size: number, init: (index: number) => T): AsyncIterable<T> {
+    for (let i = 0; i < size; i++) {
+        yield init(i)
+    }
+}
+

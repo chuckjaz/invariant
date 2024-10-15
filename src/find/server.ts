@@ -145,8 +145,11 @@ export async function findServer(broker: BrokerClient, _options?: FindServerOpti
     }
 
     async function start(): Promise<void> {
+        const brokerId = (await broker.ping())!!
+        if (!brokerId) return
+
         // Record that our broker has us.
-        recordHas(broker.id, textId)
+        recordHas(brokerId, textId)
 
         async function initializeFindServerInfo(): Promise<void> {
             lastBrokerQuery = options.now()
@@ -159,7 +162,7 @@ export async function findServer(broker: BrokerClient, _options?: FindServerOpti
                 if (!find) {
                     find = await broker.find(entry)
                 }
-                recordHas(broker.id, entry)
+                recordHas(brokerId, entry)
             }
 
             if (find) {
@@ -180,7 +183,7 @@ export async function findServer(broker: BrokerClient, _options?: FindServerOpti
 
         async function initializeStorageServerInfo(): Promise<void> {
             for await (const entry of await broker.registered('storage')) {
-                recordHas(broker.id, entry)
+                recordHas(brokerId, entry)
             }
         }
 
@@ -193,7 +196,6 @@ export async function findServer(broker: BrokerClient, _options?: FindServerOpti
     await options.startAwaiter(start())
 
     return {
-        id: textId,
         ping,
         find,
         has,

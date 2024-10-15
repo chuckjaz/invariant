@@ -1,7 +1,7 @@
 import { BrokerClient } from "../broker/client"
 import { mockBroker, MockBrokerClient } from "../broker/mock/client"
 import { delay } from "../common/delay"
-import { FindClient, FindResult } from "./client"
+import { FindClient } from "./client"
 import { findServer as rawFindServer } from "./server"
 import { randomBytes } from 'node:crypto'
 
@@ -18,8 +18,12 @@ describe('find/server', () => {
     it('a find server can find itself', async () => {
         const broker = mockBroker()
         const find = await findServer(broker)
-        const servers = (await allOf(await find.find(find.id))).filter(e => e.kind == "HAS")
-        expect(servers).toContain({ kind: "HAS", container: broker.id})
+        const findId = await find.ping()
+        if (!findId) throw new Error('Id expected')
+        const servers = (await allOf(await find.find(findId))).filter(e => e.kind == "HAS");
+        const brokerId = await broker.ping()
+        if (!brokerId) throw new Error('Id expected')
+        expect(servers).toContain({ kind: "HAS", container: brokerId})
     })
     it('can tell a find server about a container and item', async () => {
         const broker = mockBroker()
@@ -73,7 +77,9 @@ async function findFirst(broker: BrokerClient, find: FindClient, id: string): Pr
 
     while (toTry.length > 0) {
         const find = toTry.shift()!!
-        tried.add(find.id)
+        const findId = await find.ping()
+        if (!findId) throw new Error('Id expected')
+        tried.add(findId)
         for await (const entry of await find.find(id)) {
             switch (entry.kind) {
                 case "CLOSER": {

@@ -1,13 +1,13 @@
 import { writeDataToFile } from "../common/data"
 import { ParallelMapper } from "../common/parallel_mapper"
 import { dataToString, safeParseJson } from "../common/parseJson"
-import { Entry, EntryKind, FileTree, FileTreeDirectory } from "../file-tree/file-tree"
+import { Entry, EntryKind } from "../common/types"
 import { Storage } from "../storage/web/storage_client"
 import * as path from 'node:path'
 
 const storage = new Storage(
-    "f73a47de81b1fec87c98259284a496debf849021aaf6b03352da68526ea249c3",
     new URL("https://storage.chuckjaz.workers.dev"),
+    undefined,
     (_, init) => {
         if (init?.method == 'PUT') {
             init.headers = [["X-Custom-Auth-Key", process.env.STORAGE_AUTH as string]]

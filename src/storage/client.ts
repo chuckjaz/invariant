@@ -3,7 +3,6 @@ import { Blob } from 'node:buffer'
 export type Data = AsyncIterable<Buffer>
 
 export interface StorageClient {
-    id: string
     ping(): Promise<string | undefined>
     get(code: string, algorithm?: string): Promise<Data | false>
     has(code: string, algorithm?: string): Promise<boolean>

@@ -7,8 +7,8 @@ import { streamBlob } from "../../common/blob";
 export class Storage extends PingableClient implements StorageClient {
     private hook: (url: URL, init?: RequestInit) => RequestInit | undefined
 
-    constructor(id: string, url: URL, hook?: (url: URL, init?: RequestInit) => RequestInit | undefined) {
-        super(id, url)
+    constructor(url: URL, id?: string, hook?: (url: URL, init?: RequestInit) => RequestInit | undefined) {
+        super(url, id)
         this.hook = hook ?? ((_, i) => i)
     }
 

@@ -1,8 +1,9 @@
 import { mockBroker } from "../broker/mock/client"
+import { ContentLink } from "../common/types"
 import { findServer } from "../find/server"
 import { Data } from "../storage/client"
 import { mockStorage } from "../storage/mock"
-import { ContentLink, FileTree } from "./file-tree"
+import {  FileTree } from "./file-tree"
 
 describe("file-tree", () => {
     it("can create an empty file tree", async () => {
@@ -14,7 +15,8 @@ describe("file-tree", () => {
         const emptyDirectory = await storage.post(dataOf("[]"))
         expect(emptyDirectory).not.toBeFalsy()
         if (emptyDirectory) {
-            await find.has(storage.id, [emptyDirectory])
+            const storageId = (await storage.ping())!!
+            await find.has(storageId, [emptyDirectory])
             const emptyDirectoryLink: ContentLink = {
                 address: emptyDirectory
             }

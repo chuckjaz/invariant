@@ -9,8 +9,8 @@ const findNotifyPrefix = '/find/noify/'
 
 export class Find  extends PingableClient implements FindClient {
 
-    constructor(id: string, url: URL) {
-        super(id, url)
+    constructor(url: URL, id?: string) {
+        super(url, id)
     }
 
     async find(id: string): Promise<FindResult> {

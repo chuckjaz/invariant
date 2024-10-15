@@ -1,7 +1,6 @@
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { createHash } from 'node:crypto'
-import { DirectoryEntry, Entry, EntryKind, FileEntry } from '../file-tree/file-tree'
 import { dataFromFile, dataFromString } from '../common/parseJson'
 import { Storage } from '../storage/web'
 import { Data } from '../storage/client'
@@ -9,10 +8,11 @@ import { dataFromBuffers, readAllData } from '../common/data'
 import { ParallelContext } from '../common/parallel_context'
 import ignore from 'ignore'
 import { fileExists } from '../common/files'
+import { DirectoryEntry, Entry, EntryKind, FileEntry } from '../common/types'
 
 const storage = new Storage(
-    "f73a47de81b1fec87c98259284a496debf849021aaf6b03352da68526ea249c3",
     new URL("https://storage.chuckjaz.workers.dev"),
+    undefined,
     (_, init) => {
         if (init?.method == 'PUT') {
             init.headers = [["X-Custom-Auth-Key", process.env.STORAGE_AUTH as string]]

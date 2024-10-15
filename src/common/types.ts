@@ -67,3 +67,65 @@ export interface SlotConfiguration {
     signature?: any
     proof?: any
 }
+
+export enum EntryKind {
+    File = "File",
+    Directory = "Directory",
+}
+
+export interface BaseEntry {
+    kind: EntryKind
+    name: string
+    content: ContentLink
+    createTime?: number
+    modifyTime?: number
+}
+
+export interface FileEntry extends BaseEntry {
+    kind: EntryKind.File
+    size?: number
+    type?: string
+    mode?: string
+}
+
+export interface DirectoryEntry extends BaseEntry {
+    kind: EntryKind.Directory
+}
+
+export type Entry = FileEntry | DirectoryEntry
+
+export interface ContentLink {
+    address: string
+    slot?: boolean
+    key?: string
+    algorithm?: string
+    salt?: string
+    blockTree?: boolean
+    offset?: number
+    length?: number
+    primary?: string
+}
+
+export interface Block {
+    content: ContentLink
+    size: number
+}
+
+export type BlockTree = Block[]
+
+export type DistributorPutPinRequest = AsyncIterable<string>
+
+export type DistributorPutUnpinRequest = AsyncIterable<string>
+
+export type DistributorPutRegisterStorage = AsyncIterable<string>
+
+export type DistributorPutUnregisterStorage = AsyncIterable<string>
+
+export type DistributorPostBlocksRequest = AsyncIterable<string>
+
+export interface DistributorPostBlocksResponseItem {
+    block: string
+    storages: string[]
+}
+
+export type DistributorPostBlocksResponse = AsyncIterable<DistributorPostBlocksResponseItem>

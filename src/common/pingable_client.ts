@@ -1,12 +1,12 @@
-import { jsonStream, safeParseJson } from "./parseJson"
+import { dataToReadable, jsonStream, jsonStreamToText, safeParseJson, textStreamFromWeb, textToReadable } from "./parseJson"
 
 const idPrefix = '/id/'
 
 export class PingableClient {
     url: URL
-    id: string
+    id?: string
 
-    constructor(id: string, url: URL) {
+    constructor(url: URL, id?: string) {
         this.url = url
         this.id = id
     }
@@ -16,6 +16,7 @@ export class PingableClient {
             const result = await fetch(new URL(idPrefix, this.url))
             if (result.status == 200) {
                 const id = await result.text()
+                this.id = id
                 return id
             }
         } catch {}
@@ -67,5 +68,27 @@ export class PingableClient {
         else {
             throw new Error(`Invalid response: ${response.status}`)
         }
+    }
+
+    protected async putJsonStream<A>(stream: AsyncIterable<A>, prefix: string): Promise<void> {
+        const request = {
+            method: 'POST',
+            header: { 'Content-Type': 'application/json' },
+            body: textToReadable(jsonStreamToText(stream))
+        }
+        const response = await fetch(new URL(prefix, this.url), request)
+        if (!response) throw new Error('Invalid request');
+    }
+
+    protected async postJsonStreams<A, R>(stream: AsyncIterable<A>, prefix: string): Promise<AsyncIterable<R>> {
+        const request = {
+            method: 'POST',
+            header: { 'Content-Type': 'application/json' },
+            body: textToReadable(jsonStreamToText(stream))
+        }
+        const response = await fetch(new URL(prefix, this.url), request)
+        if (!response || !response.body) throw new Error('Invalid request')
+        const textStream = await textStreamFromWeb(response.body.getReader())
+        return jsonStream<R>(textStream)
     }
 }

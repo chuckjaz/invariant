@@ -3,7 +3,11 @@ import { Data, StorageClient } from "../client";
 import { normalizeCode } from '../../common/codes';
 import { hashTransform } from '../../common/data';
 
-export function mockStorage(): StorageClient {
+export interface MockStorageClient extends StorageClient {
+    id: string
+}
+
+export function mockStorage(): MockStorageClient {
     const store = new Map<string, Buffer[]>()
     const idBytes = randomBytes(32)
     const id = idBytes.toString('hex')

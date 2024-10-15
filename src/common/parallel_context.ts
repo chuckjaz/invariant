@@ -26,6 +26,14 @@ export class ParallelContext {
         }
     }
 
+    run<T>(task: () => Promise<T>): Promise<T> {
+        let resolve: (value: T) => void = () => {}
+        let reject: (value: any) => void = () => {}
+        let promise = new Promise<T>((rs, rj) => { resolve = rs; reject = rj })
+        this.add(async () => task().then(resolve).catch(reject))
+        return promise
+    }
+
     async map<E, R>(items: Iterable<E> | AsyncIterable<E>, cb: (item: E, index: number, schedule: (...items: E[]) => void) => Promise<R>): Promise<R[]> {
         const result: (R | undefined)[] = []
         let resolve: (value: R[]) => void = () => {}

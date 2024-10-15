@@ -180,6 +180,7 @@ export async function jsonStream<T>(
         let arrayNested = 0
         let i = 0
         let start = 0
+
         for await (const text of data) {
             buffer += text
             if (buffer.length > limit) throw Error(`Exceeded buffer limit of ${limit}`);
@@ -212,9 +213,17 @@ export async function jsonStream<T>(
                         if (!inString) {
                             inString = true
                             inDoubleString = true
+                            if (braceNesting == 0) start = i - 1
                         } else if (inDoubleString) {
                             inString = false
                             inDoubleString = false
+                            if (braceNesting == 0) {
+                                const jsonText = buffer.slice(start, i)
+                                yield JSON.parse(jsonText)
+                                buffer = buffer.slice(i)
+                                i = 0
+                                len = buffer.length
+                            }
                         }
                         break
                     }
@@ -222,9 +231,17 @@ export async function jsonStream<T>(
                         if (!inString) {
                             inString = true
                             inSingleString = true
+                            if (braceNesting == 0) start = i - 1
                         } else if (inSingleString) {
                             inString = false
                             inSingleString = false
+                            if (braceNesting == 0) {
+                                const jsonText = buffer.slice(start, i)
+                                yield JSON.parse(jsonText)
+                                buffer = buffer.slice(i)
+                                i = 0
+                                len = buffer.length
+                            }
                         }
                         break
                     }
@@ -333,3 +350,4 @@ export async function jsonBackwardStream<T>(
     }
     return readAll()
 }
+

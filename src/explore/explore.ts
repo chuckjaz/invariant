@@ -1,8 +1,8 @@
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { LocalStorage } from '../storage/local/local_storage'
-import { DirectoryEntry, Entry, EntryKind, FileEntry } from '../file-tree/file-tree'
 import { dataFromFile, dataFromString } from '../common/parseJson'
+import { DirectoryEntry, Entry, EntryKind, FileEntry } from '../common/types'
 
 const storage = new LocalStorage('/tmp/storage')
 
