@@ -277,14 +277,16 @@ export class Distribute implements DistributeClient {
         for (const destinationStorage of dest) {
             const sourceStorage = source[sourceIndex++]; sourceIndex = sourceIndex % source.length
             promises.push(this.parallel.run(async () => {
-                const sourceClient = sourceStorage[1]
-                const data = await sourceClient.get(id)
-                if (!data) {
-                    console.log(`Storage ${sourceStorage[0]} said it had ${id} but return false to get`)
-                    return
-                }
                 const destinationClient = destinationStorage[1]
-                await destinationClient.put(id, data)
+                if (!await destinationClient.fetch(id, sourceStorage[0])) {
+                    const sourceClient = sourceStorage[1]
+                    const data = await sourceClient.get(id)
+                    if (!data) {
+                        console.log(`Storage ${sourceStorage[0]} said it had ${id} but return false to get`)
+                        return
+                    }
+                    await destinationClient.put(id, data)
+                }
 
                 // Notify the finder of the block's new location
                 this.requestNotifyFinder(destinationStorage[0], id)

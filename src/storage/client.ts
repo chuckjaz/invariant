@@ -8,4 +8,5 @@ export interface StorageClient {
     has(code: string, algorithm?: string): Promise<boolean>
     put(code: string, data: Data, algorithm?: string): Promise<boolean>
     post(data: Data, algorithm?: string): Promise<string | false>
+    fetch(code: string, container?: string, algorithm?: string): Promise<boolean>
 }

@@ -60,8 +60,8 @@ async function createBlocks(
 }
 
 async function storagesAndBroker(size: number): Promise<[MockBrokerClient, MockStorageClient[], FindClient]> {
-    const storages = arr(size, i => mockStorage())
     const broker = mockBroker()
+    const storages = arr(size, i => mockStorage(broker))
     const finder = await findServer(broker)
     broker.registerFind(finder)
     for (const storage of storages) {

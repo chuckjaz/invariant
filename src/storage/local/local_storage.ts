@@ -41,6 +41,10 @@ export class LocalStorage implements StorageClient {
         return this.receiveFile(data)
     }
 
+    async fetch(code: string, container?: string, algorithm?: string): Promise<boolean> {
+        return false
+    }
+
     private toHashPath(hashCode: string): string {
         return  path.join(this.directory, 'sha256', hashCode.slice(0, 2), hashCode.slice(2, 4), hashCode.slice(4))
     }

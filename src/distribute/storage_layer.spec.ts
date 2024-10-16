@@ -62,21 +62,3 @@ function arr<T>(size: number, init: (index: number) => T): T[] {
     }
     return result
 }
-
-function sortStorages(id: Buffer, storages: Storage[]): Storage[] {
-    return storages.sort((a, b) => compareDistance(id, a.id, b.id))
-}
-
-function compareDistance(id: Buffer, a: Buffer, b: Buffer): number {
-    for (let i = 0, len = id.length; i < len; i++) {
-        const ab = a.at(i)!!
-        const bb = b.at(i)!!
-        if (ab == bb) continue
-        const ib = id.at(i)!!
-        const ad = Math.abs(ib - ab)
-        const bd = Math.abs(ib - bb)
-        if (ad > bd) return 1;
-        return -1
-    }
-    return 0
-}

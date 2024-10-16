@@ -1,4 +1,3 @@
-import { Blob } from "buffer";
 import { normalizeCode } from "../../common/codes";
 import { PingableClient } from "../../common/pingable_client";
 import { Data, StorageClient } from "../client";
@@ -6,6 +5,7 @@ import { streamBlob } from "../../common/blob";
 
 export class Storage extends PingableClient implements StorageClient {
     private hook: (url: URL, init?: RequestInit) => RequestInit | undefined
+    private fetchSupported = true
 
     constructor(url: URL, id?: string, hook?: (url: URL, init?: RequestInit) => RequestInit | undefined) {
         super(url, id)
@@ -62,6 +62,20 @@ export class Storage extends PingableClient implements StorageClient {
                 return url.substring(storagePrefix.length)
             }
         }
+        return false
+    }
+
+    async fetch(code: string, container?: string, algorithm?: string): Promise<boolean> {
+        if (!this.fetchSupported) return false
+        const request = new URL(`/storage/${algorithm ?? 'sha256'}`, this.url)
+        const response = await fetch(request, this.hook(request, {
+            method: 'PUT',
+            body: JSON.stringify({ code, container }),
+            duplex: 'half'
+        }))
+        if (response.status == 200) return true
+        if (response.status == 400) this.fetchSupported = false
+        if (response.status >= 500) throw new Error(`Invalid response: ${response.status}`,)
         return false
     }
 }

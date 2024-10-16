@@ -2,12 +2,13 @@ import { createHash, randomBytes } from 'node:crypto'
 import { Data, StorageClient } from "../client";
 import { normalizeCode } from '../../common/codes';
 import { hashTransform } from '../../common/data';
+import { BrokerClient } from '../../broker/client';
 
 export interface MockStorageClient extends StorageClient {
     id: string
 }
 
-export function mockStorage(): MockStorageClient {
+export function mockStorage(broker?: BrokerClient): MockStorageClient {
     const store = new Map<string, Buffer[]>()
     const idBytes = randomBytes(32)
     const id = idBytes.toString('hex')
@@ -57,6 +58,25 @@ export function mockStorage(): MockStorageClient {
         return true
     }
 
+    async function fetch(code: string, container?: string, algorithm?: string): Promise<boolean> {
+        let otherStorage: StorageClient | undefined = undefined
+        if (broker && container) {
+            otherStorage = await broker.storage(container)
+        }
+        if (otherStorage) {
+            const data = await otherStorage.get(code, algorithm)
+            if (data) {
+                const hash = createHash('sha256')
+                const buffers = await buffersOfData(hashTransform(data, hash))
+                const id = hash.digest().toString('hex')
+                if (code != id) return false
+                store.set(id, buffers)
+                return true
+            }
+        }
+        return false
+    }
+
     return {
         id,
         ping,
@@ -64,6 +84,7 @@ export function mockStorage(): MockStorageClient {
         has,
         post,
         put,
+        fetch
     }
 }
 

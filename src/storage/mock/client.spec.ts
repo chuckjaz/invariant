@@ -1,3 +1,4 @@
+import { mockBroker } from "../../broker/mock/client"
 import { dataToString } from "../../common/parseJson"
 import { Data } from "../client"
 import { mockStorage } from "./client"
@@ -79,6 +80,21 @@ describe('storage/mock/client', () => {
         const code = codeOf(value)
         const result = await client.get(code)
         expect(result).toBeFalse()
+    })
+    it('can fetch one storage from another', async() => {
+        const broker = mockBroker()
+        const c1 = mockStorage(broker)
+        const c2 = mockStorage(broker)
+        await broker.registerStorage(c1)
+        await broker.registerStorage(c2)
+        const value = 'This is a test'
+        const code = codeOf(value)
+        const putResult = await c1.put(code, dataOf(value))
+        expect(putResult).toBeTrue()
+        const fetchResult = await c2.fetch(code, c1.id)
+        expect(fetchResult).toBeTrue()
+        const hasResult = await c2.has(code)
+        expect(hasResult).toBeTrue()
     })
 })
 
