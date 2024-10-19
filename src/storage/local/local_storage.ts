@@ -17,7 +17,7 @@ export class LocalStorage implements StorageClient {
     }
 
     async ping(): Promise<string> {
-        throw this.id
+        return this.id
     }
 
     async get(code: string, algorithm?: string): Promise<Data | false> {

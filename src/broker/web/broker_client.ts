@@ -5,7 +5,7 @@ import { BrokerLocationResponse, BrokerRegisterResponse } from "../../common/typ
 import { FindClient } from "../../find/client";
 import { Find } from "../../find/web/find_client";
 import { StorageClient } from "../../storage/client";
-import { Storage } from "../../storage/web";
+import { Storage } from "../../storage/web/storage_web_client";
 import { BrokerClient } from "../client";
 
 const brokerLocationPrefix = '/broker/location/'

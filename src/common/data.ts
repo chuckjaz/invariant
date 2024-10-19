@@ -1,7 +1,11 @@
 import type { Hash } from 'node:crypto'
 import { Data } from "../storage/client"
+import { Readable } from "node:stream"
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
+import { Channel } from './channel'
+import { z } from 'zod'
+import { dataToString, safeParseJson } from './parseJson'
 
 export async function *hashTransform(stream: Data, hash: Hash): Data {
     for await (const buffer of stream) {
@@ -20,6 +24,31 @@ export async function readAllData(data: Data): Promise<Buffer> {
 
 export async function *dataFromBuffers(buffers: Buffer[]): Data {
     yield *buffers.filter(buffer => buffer.length > 0)
+}
+
+export async function *dataFromReadable(readable: Readable): Data {
+    const channel = new Channel<Buffer>(100)
+    async function readAll() {
+        readable.pause()
+        readable.on('data', data => channel.send(data))
+        readable.on('error', err => channel.fail(err))
+        readable.on('close', () => channel.close())
+        readable.resume()
+    }
+    readAll()
+    yield *channel.all()
+}
+
+export async function *readDataFromFile(fullName: string): Data {
+    const fh = await fs.open(fullName, "r")
+    try {
+        while (true) {
+            const result = await fh.read()
+            if (result.bytesRead > 0) yield result.buffer
+        }
+    } finally {
+        fh.close()
+    }
 }
 
 export async function writeDataToFile(data: Data, fullName: string) {
@@ -82,4 +111,16 @@ export function take<T>(itr: Iterable<T>, size: number): T[] {
         }
     }
     return result
+}
+
+export async function jsonFromData<Schema extends z.ZodType<any, any, any>, T = z.output<Schema>>(
+    schema: Schema,
+    data: Data,
+    body: (data: T) => Promise<boolean>
+): Promise<boolean> {
+    const text = await dataToString(data)
+    const jsonObject = safeParseJson(text)
+    if (jsonObject && schema.safeParse(jsonObject)) {
+        return await body(jsonObject)
+    } else return false
 }

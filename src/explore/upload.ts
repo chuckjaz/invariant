@@ -2,7 +2,7 @@ import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { createHash } from 'node:crypto'
 import { dataFromFile, dataFromString } from '../common/parseJson'
-import { Storage } from '../storage/web'
+import { Storage } from '../storage/web/storage_web_client'
 import { Data } from '../storage/client'
 import { dataFromBuffers, readAllData } from '../common/data'
 import { ParallelContext } from '../common/parallel_context'
@@ -11,7 +11,7 @@ import { fileExists } from '../common/files'
 import { DirectoryEntry, Entry, EntryKind, FileEntry } from '../common/types'
 
 const storage = new Storage(
-    new URL("https://storage.chuckjaz.workers.dev"),
+    new URL("http://localhost:3001"),
     undefined,
     (_, init) => {
         if (init?.method == 'PUT') {

@@ -4,6 +4,7 @@ import { text } from 'co-body'
 import { jsonStreamToText, safeParseJson, textToReadable } from '../../common/parseJson';
 import { z } from 'zod'
 import { SignatureAlgorithmKind } from '../local/slots_local';
+import { idSchema } from '../../common/schema';
 
 const pingPrefix = '/id/'
 const slotsPrefix = '/slots/'
@@ -14,18 +15,6 @@ const slotsRegister = '/slots/register'
 type Ctx = Koa.ParameterizedContext<Koa.DefaultState, Koa.DefaultContext, any>
 type Next = Koa.Next
 type ResponseFunc = (ctx: Ctx, next: Next) => Promise<void>
-
-const idSchema = z.string().transform((arg, ctx) => {
-    try {
-        return Buffer.from(arg, 'hex').toString('hex')
-    } catch (e) {
-        ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: 'id must be a hex string'
-        })
-        return arg
-    }
-})
 
 const signatureAlgorithmNoneSchema = z.object({
     kind: z.literal(SignatureAlgorithmKind.None)
