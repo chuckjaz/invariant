@@ -23,6 +23,11 @@ export class LocalSlots implements SlotsClient {
         return this.id
     }
 
+    async has(id: string): Promise<boolean> {
+        const fileName = this.toHashPath(id) + '.json'
+        return fileExists(fileName)
+    }
+
     async get(id: string): Promise<SlotsGetResponse> {
         return await this.readState(id)
     }

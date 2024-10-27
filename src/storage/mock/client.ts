@@ -64,7 +64,7 @@ export function mockStorage(broker?: BrokerClient): MockStorageClient {
             otherStorage = await broker.storage(container)
         }
         if (otherStorage) {
-            const data = await otherStorage.get(code, algorithm)
+            const data = await otherStorage.get(code)
             if (data) {
                 const hash = createHash('sha256')
                 const buffers = await buffersOfData(hashTransform(data, hash))

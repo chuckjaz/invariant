@@ -4,6 +4,8 @@ import { PingableClient } from "../../common/pingable_client";
 import { BrokerLocationResponse, BrokerRegisterResponse } from "../../common/types";
 import { FindClient } from "../../find/client";
 import { Find } from "../../find/web/find_client";
+import { SlotsClient } from "../../slots/slot_client";
+import { SlotsWebClient } from "../../slots/web/slots_web_client";
 import { StorageClient } from "../../storage/client";
 import { Storage } from "../../storage/web/storage_web_client";
 import { BrokerClient } from "../client";
@@ -29,6 +31,10 @@ export class Broker extends PingableClient implements BrokerClient {
 
     storage(id: string): Promise<StorageClient | undefined> {
         return this.client(id, async (id, url) => new Storage(url, id))
+    }
+
+    slots(id: string): Promise<SlotsClient | undefined> {
+        return this.client(id, async (id, url) => new SlotsWebClient(url, id))
     }
 
     async registered(kind: string): Promise<AsyncIterable<string>> {

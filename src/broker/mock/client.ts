@@ -5,12 +5,14 @@ import { StorageClient } from "../../storage/client";
 import { BrokerClient } from "../client";
 import { ParallelMapper } from '../../common/parallel_mapper';
 import { BrokerRegisterResponse } from '../../common/types';
+import { SlotsClient } from '../../slots/slot_client';
 
 export interface MockBrokerClient extends BrokerClient {
     id: string
     registerBroker(broker: BrokerClient): Promise<void>
     registerFind(find: FindClient): Promise<void>
     registerStorage(storage: StorageClient): Promise<void>
+    registerSlots(slots: SlotsClient): Promise<void>
 }
 
 export function mockBroker(): MockBrokerClient {
@@ -20,6 +22,7 @@ export function mockBroker(): MockBrokerClient {
     const brokers = new Map<string, BrokerClient>()
     const finds = new Map<string, FindClient>()
     const storages = new Map<string, StorageClient>()
+    const slotsClients = new Map<string, SlotsClient>()
 
     async function ping(): Promise<string> {
         return id
@@ -37,6 +40,10 @@ export function mockBroker(): MockBrokerClient {
 
     async function storage(id: string): Promise<StorageClient | undefined> {
         return storages.get(normalizeCode(id) ?? '')
+    }
+
+    async function slots(id: string): Promise<SlotsClient | undefined> {
+        return slotsClients.get(id)
     }
 
     async function registered(kind: string): Promise<AsyncIterable<string>> {
@@ -65,6 +72,11 @@ export function mockBroker(): MockBrokerClient {
         if (id) storages.set(id, storage)
     }
 
+    async function registerSlots(slots: SlotsClient): Promise<void> {
+        const id = await slots.ping()
+        if (id) slotsClients.set(id, slots)
+    }
+
     async function register(id: string, url: URL, kind?: string): Promise<BrokerRegisterResponse | undefined> {
         return undefined
     }
@@ -75,10 +87,12 @@ export function mockBroker(): MockBrokerClient {
         broker,
         find,
         storage,
+        slots,
         registered,
         registerBroker,
         registerFind,
         registerStorage,
+        registerSlots,
         register,
     }
 }

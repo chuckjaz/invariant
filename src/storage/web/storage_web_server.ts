@@ -1,23 +1,28 @@
 import Koa from 'koa'
 import { storageHandlers } from './storage_web_handlers'
-import { getBrokerUrl, getStorageDirectory, getStorageUrl } from '../../common/config'
+import { getStorageDirectory, getStorageUrl, optionalBrokerUrl } from '../../common/config'
 import { Broker } from '../../broker/web/broker_client'
 import { LocalStorage } from '../local/local_storage'
 import { BrokerClient } from '../../broker/client'
 import { logHandler } from '../../common/web'
 const app = new Koa()
 
-const directory = getStorageDirectory()
+const directory = getStorageDirectory(__dirname)
 const client = new LocalStorage(directory)
 
-const brokerUrl = getBrokerUrl()
+const brokerUrl = optionalBrokerUrl()
 const storageUrl = getStorageUrl()
 
 async function startup() {
-    // Create the broker
-    let broker: BrokerClient | undefined = new Broker(brokerUrl)
+    console.log('DIRECTORY', directory)
+
+    // Create the broker client
+    let broker: BrokerClient | undefined = brokerUrl ? new Broker(brokerUrl) : undefined
     try {
-        await broker.register(client.id, storageUrl, 'slots')
+        if (broker) {
+            const id = await client.ping()
+            await broker.register(id, storageUrl, 'slots')
+        }
     } catch(e: any) {
         broker = undefined
         console.log(`WARNING: could not register with broker: ${e.message}`)

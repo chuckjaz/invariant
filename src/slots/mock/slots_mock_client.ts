@@ -11,6 +11,10 @@ export class MockSlotsServer implements SlotsClient {
         return this.id
     }
 
+    async has(id: string): Promise<boolean> {
+        return this.slots.has(id)
+    }
+
     async get(id: string): Promise<SlotsGetResponse> {
         const responses = this.required(id)
         return responses[responses.length - 1]

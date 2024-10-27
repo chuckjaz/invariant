@@ -22,6 +22,11 @@ export function getBrokerUrl(): URL {
     return new URL(requiredEnv(BROKER_URL))
 }
 
+export function optionalBrokerUrl(): URL | undefined {
+    const url = optionalEnv(BROKER_URL)
+    if (url) return new URL(url)
+}
+
 export function optionalParentBrokerUrl(): URL | undefined {
     const url = optionalEnv(PARENT_BROKER_URL)
     if (url) return new URL(url)
@@ -35,8 +40,8 @@ export function getStorageUrl(): URL {
     return new URL(requiredEnv(STORAGE_URL))
 }
 
-export function getStorageDirectory(): string {
-    return optionalEnv(STORAGE_DIRECTORY) || __dirname
+export function getStorageDirectory(defaultDir?: string): string {
+    return optionalEnv(STORAGE_DIRECTORY) ?? defaultDir ?? __dirname
 }
 
 export function getSlotsUrl(): URL {

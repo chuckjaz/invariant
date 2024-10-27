@@ -129,3 +129,11 @@ export interface DistributorPostBlocksResponseItem {
 }
 
 export type DistributorPostBlocksResponse = AsyncIterable<DistributorPostBlocksResponseItem>
+
+export interface PingClient {
+    ping(): Promise<string | undefined>
+}
+
+export interface ContainerClient {
+    has(id: string): Promise<boolean>
+}

@@ -1,6 +1,9 @@
 import { BrokerClient } from "../broker/client"
+import { Channel } from "../common/channel"
+import { ParallelContext } from "../common/parallel_context"
 import { dataToString, safeParseJson } from "../common/parseJson"
-import { BlockTree, ContentLink, Entry, EntryKind } from "../common/types"
+import { PingableClient } from "../common/pingable_client"
+import { BlockTree, ContainerClient, ContentLink, Entry, EntryKind, PingClient } from "../common/types"
 import { FindClient } from "../find/client"
 import { Data, StorageClient } from "../storage/client"
 import * as path from 'node:path/posix'
@@ -100,6 +103,53 @@ export async function findStorage(address: string, finder: FindClient, broker: B
         }
     }
     return false
+}
+
+//export async function findFirstContainer<C extend>
+export async function *findContainer<C extends (PingClient & ContainerClient)>(context: ParallelContext, id: string, finder: FindClient, broker: BrokerClient, create: (id: string) => Promise<C | undefined>): AsyncIterable<C> {
+    const found = new Set<string>()
+    const channel = new Channel<C>()
+    const job = context.job()
+
+    async function findIn(finder: FindClient) {
+        for await (const entry of await finder.find(id)) {
+            if (channel.closed) return
+            switch (entry.kind) {
+                case "HAS":
+                    if (found.has(entry.container)) break
+                    found.add(entry.container)
+                    const container = await create(entry.container)
+                    if (container) {
+                        if (channel.closed) return
+                        if (await container.ping() && await container.has(id)) {
+                            channel.send(container)
+                        }
+                    }
+                    break
+                case "CLOSER":
+                    if (found.has(entry.find)) break
+                    found.add(entry.find)
+                    job.run(async () => {
+                        if (channel.closed) return
+                        const findClient = await broker.find(entry.find)
+                        if (findClient) findIn(findClient)
+                    })
+                    break
+            }
+        }
+    }
+
+    async function findAll() {
+        job.run(async () => {
+            if (channel.closed) return
+            findIn(finder)
+        })
+        await job.join()
+        channel.close()
+    }
+
+    findAll()
+    yield *channel.all()
 }
 
 export class FileContentReader {

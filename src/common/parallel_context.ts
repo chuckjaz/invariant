@@ -34,6 +34,10 @@ export class ParallelContext {
         return promise
     }
 
+    job(): ParallelContextJob {
+        return new ParallelContextJob(this)
+    }
+
     async map<E, R>(items: Iterable<E> | AsyncIterable<E>, cb: (item: E, index: number, schedule: (...items: E[]) => void) => Promise<R>): Promise<R[]> {
         const result: (R | undefined)[] = []
         let resolve: (value: R[]) => void = () => {}
@@ -90,9 +94,49 @@ export class ParallelContext {
         })().catch(e => this.reject(e)))
     }
 
+
     join(): Promise<void> {
         if (this.pending.length == 0 && this.running.size == 0) this.resolve(undefined)
         return this.joinPromise
     }
 }
 
+class ParallelContextJob {
+    private resolve: (value: any) => void = () => { }
+    private reject: (value: any) => void = () => { }
+    private context: ParallelContext
+    private promise: Promise<void>
+    private pending = 0
+    private joined = false
+
+    constructor (context: ParallelContext) {
+        this.context = context
+        this.promise = new Promise((resolve, reject) => {
+            this.resolve = resolve
+            this.reject = reject
+        })
+    }
+
+    run<T>(task: () => Promise<T>): Promise<T> {
+        return  this.context.run(async () => {
+            this.pending++
+            try {
+                const result = await task()
+                const stillPending = --this.pending
+                if (stillPending == 0 && this.joined) {
+                    this.resolve(undefined)
+                }
+                return result
+            } catch (e) {
+                this.reject(e)
+            }
+            throw Error("unexpected")
+        })
+    }
+
+    join(): Promise<void> {
+        this.joined = true
+        if (this.pending == 0) this.resolve(undefined)
+        return this.promise
+    }
+}

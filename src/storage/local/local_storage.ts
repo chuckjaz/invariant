@@ -1,5 +1,5 @@
 import { Data, StorageClient } from "../client";
-import { mkdir, stat, rename, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, stat, rename, unlink, readFile, writeFile } from 'node:fs/promises'
 import { createHash, randomBytes } from 'node:crypto'
 import * as path from 'node:path'
 import { dataToReadable, dataFromFile } from "../../common/parseJson";
@@ -8,16 +8,28 @@ import { pipeline } from 'node:stream/promises'
 import { hashTransform } from "../../common/data";
 
 export class LocalStorage implements StorageClient {
-    id: string
-    directory: string
+    private id?: string
+    private directory: string
 
     constructor(directory: string) {
-        this.id = randomBytes(32).toString('hex')
         this.directory = directory
     }
 
     async ping(): Promise<string> {
-        return this.id
+        let id = this.id
+        if (!id) {
+            const idFile = path.join(this.directory, ".id")
+            if (await fileExists(idFile)) {
+                id = await readFile(idFile, 'utf-8')
+                this.id = id
+            } else {
+                id = randomBytes(32).toString('hex')
+                await writeFile(idFile, id, 'utf-8')
+                this.id = id
+            }
+            console.log('ID', id)
+        }
+        return id
     }
 
     async get(code: string, algorithm?: string): Promise<Data | false> {
