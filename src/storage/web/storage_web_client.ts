@@ -3,6 +3,8 @@ import { PingableClient } from "../../common/pingable_client";
 import { Data, StorageClient } from "../client";
 import { streamBlob } from "../../common/blob";
 
+const storagePrefix = '/storage/'
+
 export class Storage extends PingableClient implements StorageClient {
     private hook: (url: URL, init?: RequestInit) => RequestInit | undefined
     private fetchSupported = true
@@ -12,10 +14,10 @@ export class Storage extends PingableClient implements StorageClient {
         this.hook = hook ?? ((_, i) => i)
     }
 
-    async get(code: string, algorithm?: string): Promise<Data | false> {
+    async get(code: string): Promise<Data | false> {
         const id = normalizeCode(code)
         if (id) {
-            const request = new URL(`/storage/${algorithm ?? 'sha256'}/${id}`, this.url)
+            const request = new URL(`${storagePrefix}${id}`, this.url)
             const response = await fetch(request, this.hook(request))
             if (response.status == 200) {
                 return streamBlob(await response.blob())
@@ -24,20 +26,20 @@ export class Storage extends PingableClient implements StorageClient {
         return false
     }
 
-    async has(code: string, algorithm?: string): Promise<boolean> {
+    async has(code: string): Promise<boolean> {
         const id = normalizeCode(code)
         if (id) {
-            const request = new URL(`/storage/${algorithm ?? 'sha256'}/${id}`, this.url)
+            const request = new URL(`${storagePrefix}${id}`, this.url)
             const response = await fetch(request, this.hook(request, { method: 'HEAD' }))
             return response.status == 200
         }
         return false
     }
 
-    async put(code: string, data: Data, algorithm?: string): Promise<boolean> {
+    async put(code: string, data: Data): Promise<boolean> {
         const id = normalizeCode(code)
         if (id) {
-            const request = new URL(`/storage/${algorithm ?? 'sha256'}/${id}`, this.url)
+            const request = new URL(`${storagePrefix}${id}`, this.url)
             const response = await fetch(request, this.hook(request, {
                 method: 'PUT',
                 body: data,
@@ -48,8 +50,8 @@ export class Storage extends PingableClient implements StorageClient {
         return false
     }
 
-    async post(data: Data, algorithm?: string): Promise<string | false> {
-        const request = new URL(`/storage/${algorithm ?? 'sha256'}/`, this.url)
+    async post(data: Data): Promise<string | false> {
+        const request = new URL(storagePrefix, this.url)
         const response = await fetch(request, this.hook(request, {
             method: 'POST',
             body: data,
@@ -57,7 +59,6 @@ export class Storage extends PingableClient implements StorageClient {
         }))
         if (response.status == 200) {
             const url = await response.text()
-            const storagePrefix = `/storage/`
             if (url.startsWith(storagePrefix)) {
                 return url.substring(storagePrefix.length)
             }
@@ -65,12 +66,12 @@ export class Storage extends PingableClient implements StorageClient {
         return false
     }
 
-    async fetch(code: string, container?: string, algorithm?: string): Promise<boolean> {
+    async fetch(address: string, container?: string): Promise<boolean> {
         if (!this.fetchSupported) return false
-        const request = new URL(`/storage/${algorithm ?? 'sha256'}`, this.url)
+        const request = new URL(`${storagePrefix}fetch`, this.url)
         const response = await fetch(request, this.hook(request, {
             method: 'PUT',
-            body: JSON.stringify({ code, container }),
+            body: JSON.stringify({ address, container }),
             duplex: 'half'
         }))
         if (response.status == 200) return true

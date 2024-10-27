@@ -8,11 +8,12 @@ import { BrokerClient } from '../../broker/client';
 import { dataToReadable } from '../../common/parseJson';
 import { ResponseFunc } from '../../common/web';
 
-const sha256Prefix = '/storage/sha256/'
-const fetchPrefix = '/storage/fetch'
+const idPrefix = '/id/'
+const storagePrefix = '/storage/'
+const fetchPrefix = `${storagePrefix}fetch`
 
 const fetchSchema = z.object({
-    code: idSchema,
+    address: idSchema,
     container: idSchema
 })
 
@@ -20,11 +21,11 @@ export function storageHandlers(client: StorageClient, broker?: BrokerClient): R
     return async function (ctx,  next) {
         await next()
         try {
-            if (ctx.path == '/id/') {
+            if (ctx.path == idPrefix) {
                 ctx.body = await client.ping()
                 ctx.status = 200
-            } else if (ctx.path.startsWith(sha256Prefix)) {
-                if (ctx.path == sha256Prefix && ctx.method == 'POST') {
+            } else if (ctx.path.startsWith(storagePrefix)) {
+                if (ctx.path == storagePrefix && ctx.method == 'POST') {
                     console.log('post')
                     const result = await client.post(dataFromReadable(ctx.request.req))
                     if (result) {
@@ -34,19 +35,19 @@ export function storageHandlers(client: StorageClient, broker?: BrokerClient): R
                         ctx.status = 400
                     }
                 } else {
-                    const hashPart = ctx.path.slice(sha256Prefix.length)
-                    const hashCode = normalizeCode(hashPart)
-                    if (hashCode != undefined) {
+                    const addressPart = ctx.path.slice(storagePrefix.length)
+                    const address = normalizeCode(addressPart)
+                    if (address != undefined) {
                         switch (ctx.method) {
                             case "HEAD": {
-                                if (await client.has(hashCode)) {
+                                if (await client.has(address)) {
                                     ctx.status = 200
                                     ctx.body = ''
                                 }
                                 break
                             }
                             case "GET": {
-                                const result = await client.get(hashCode)
+                                const result = await client.get(address)
                                 if (result) {
                                     ctx.body = dataToReadable(result)
                                     ctx.status = 200
@@ -54,7 +55,7 @@ export function storageHandlers(client: StorageClient, broker?: BrokerClient): R
                                 break
                             }
                             case "PUT": {
-                                const result = await client.put(hashCode, dataFromReadable(ctx.request.req))
+                                const result = await client.put(address, dataFromReadable(ctx.request.req))
                                 if (result) {
                                     ctx.body = ''
                                     ctx.status = 200
@@ -66,25 +67,36 @@ export function storageHandlers(client: StorageClient, broker?: BrokerClient): R
                         }
                     }
                 }
-            } else if (broker && ctx.path == fetchPrefix && ctx.method == 'PUT') {
-                const result = await jsonFromData(fetchSchema, dataFromReadable(ctx.req), async request => {
-                    const storage = await broker.storage(request.container)
-                    if (storage) {
-                        const data = await storage.get(request.code)
-                        if (data) {
-                            if (await client.put(request.code, data))
-                                return true
-                        }
-                    }
-                    return false
-                })
-                if (result) {
-                    ctx.status = 200
-                    ctx.body = ''
+            } else if (broker && ctx.path == fetchPrefix) {
+                switch (ctx.method) {
+                    case 'PUT': {
+                        const result = await jsonFromData(fetchSchema, dataFromReadable(ctx.req), async request => {
+                            const storage = await broker.storage(request.container)
+                            if (storage) {
+                                const data = await storage.get(request.address)
+                                if (data) {
+                                    if (await client.put(request.address, data))
+                                        return true
+                                }
+                            }
+                            return false
+                        })
+                        if (result) {
+                            ctx.status = 200
+                            ctx.body = ''
 
-                } else {
-                    ctx.status = 403
-                    ctx.body = ''
+                        } else {
+                            ctx.status = 403
+                            ctx.body = ''
+                        }
+                        break
+                    }
+                    case 'HEAD': {
+                        ctx.status = 200
+                        ctx.body = ''
+                        break
+                    }
+
                 }
             }
         } catch (e) {

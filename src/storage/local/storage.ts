@@ -13,46 +13,46 @@ import { Broker } from '../../broker/web/broker_client';
 const app = new Koa()
 export default app
 
-const sha256Prefix = '/storage/sha256/'
+const storagePrefix = '/storage/'
 
 app.use(async function (ctx,  next) {
     console.log(ctx.method, ctx.path)
     try {
-        if (ctx.path.startsWith(sha256Prefix)) {
-            if (ctx.path === sha256Prefix) {
+        if (ctx.path.startsWith(storagePrefix)) {
+            if (ctx.path === storagePrefix) {
                 if (ctx.method == 'POST') {
                     await receiveFile(ctx)
                     return
                 }
             } else {
-                const hashPart = ctx.path.slice(sha256Prefix.length)
-                const hashCode = normalizeCode(hashPart)
-                if (hashCode !== undefined) {
+                const addressPart = ctx.path.slice(storagePrefix.length)
+                const address = normalizeCode(addressPart)
+                if (address !== undefined) {
                     try {
-                        const hashPath = toHashPath(hashCode)
+                        const addressPath = toAddressPath(address)
                         switch (ctx.method) {
                             case 'GET':
-                                if (await fileExists(hashPath)) {
+                                if (await fileExists(addressPath)) {
                                     ctx.response.type = 'application/octet-stream'
-                                    ctx.body = createReadStream(hashPath, { })
-                                    ctx.etag = hashCode
+                                    ctx.body = createReadStream(addressPath, { })
+                                    ctx.etag = address
                                     ctx.set('cache-control', 'immutable')
                                     return
                                 }
                                 break
                             case 'HEAD': {
-                                const size = await fileSize(hashPath)
+                                const size = await fileSize(addressPath)
                                 if (size !== undefined) {
                                     ctx.response.status = 200
                                     ctx.response.type = 'application/octet-stream'
                                     ctx.response.length = size
-                                    ctx.response.etag = hashCode
+                                    ctx.response.etag = address
                                     return
                                 }
                                 break
                             }
                             case 'PUT':
-                                if (await receiveFile(ctx, receivedCode => receivedCode == hashCode)) {
+                                if (await receiveFile(ctx, receivedCode => receivedCode == address)) {
                                     return
                                 }
                                 break
@@ -77,8 +77,8 @@ async function receiveFile(
         const result = hasher.digest()
         const hashCode = result.toString('hex')
         if (validate(hashCode)) {
-            ctx.body = `${sha256Prefix}${hashCode}`
-            const hashPath = toHashPath(hashCode)
+            ctx.body = `${storagePrefix}${hashCode}`
+            const hashPath = toAddressPath(hashCode)
             if (!await fileExists(hashPath)) {
                 await moveFile(name, hashPath)
             } else {
@@ -115,7 +115,7 @@ async function fileSize(file: string): Promise<number | undefined> {
     }
 }
 
-function toHashPath(hashCode: string): string {
+function toAddressPath(hashCode: string): string {
     return  path.join(__dirname, 'sha256', hashCode.slice(0, 2), hashCode.slice(2, 4), hashCode.slice(4))
 }
 

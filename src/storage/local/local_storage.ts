@@ -20,32 +20,27 @@ export class LocalStorage implements StorageClient {
         return this.id
     }
 
-    async get(code: string, algorithm?: string): Promise<Data | false> {
-        if (algorithm && algorithm != 'sha256') return false
-        return this.sendFile(code)
+    async get(address: string): Promise<Data | false> {
+        return this.sendFile(address)
     }
 
-    async has(code: string, algorithm?: string): Promise<boolean> {
-        if (algorithm && algorithm != 'sha256') return false
-        const fileName = this.toHashPath(code)
-        return fileExists(fileName)
+    async has(address: string): Promise<boolean> {
+        return fileExists(this.toAddressPath(address))
     }
 
-    async put(code: string, data: Data, algorithm?: string): Promise<boolean> {
-        if (algorithm && algorithm != 'sha256') return false
-        return await this.receiveFile(data, code) != false
+    async put(addrss: string, data: Data): Promise<boolean> {
+        return await this.receiveFile(data, addrss) != false
     }
 
-    async post(data: Data, algorithm?: string): Promise<string | false> {
-        if (algorithm && algorithm != 'sha256') return false
+    async post(data: Data): Promise<string | false> {
         return this.receiveFile(data)
     }
 
-    async fetch(code: string, container?: string, algorithm?: string): Promise<boolean> {
+    async fetch(code: string, container?: string): Promise<boolean> {
         return false
     }
 
-    private toHashPath(hashCode: string): string {
+    private toAddressPath(hashCode: string): string {
         return  path.join(this.directory, 'sha256', hashCode.slice(0, 2), hashCode.slice(2, 4), hashCode.slice(4))
     }
 
@@ -73,7 +68,7 @@ export class LocalStorage implements StorageClient {
 
     private async receiveFile(data: Data, expected?: string): Promise<string | false> {
         if (expected) {
-            const fileName = this.toHashPath(expected)
+            const fileName = this.toAddressPath(expected)
             if (await fileExists(fileName)) return expected
         }
         const hasher = createHash('sha256')
@@ -84,7 +79,7 @@ export class LocalStorage implements StorageClient {
         const result = hasher.digest()
         const hashCode = result.toString('hex')
         if (!expected || expected == hashCode) {
-            const hashPath = this.toHashPath(hashCode)
+            const hashPath = this.toAddressPath(hashCode)
             if (!await fileExists(hashPath)) {
                 await moveFile(name, hashPath)
             } else {
@@ -95,8 +90,8 @@ export class LocalStorage implements StorageClient {
         return false
     }
 
-    private async sendFile(code: string): Promise<Data | false> {
-        const fileName = this.toHashPath(code)
+    private async sendFile(address: string): Promise<Data | false> {
+        const fileName = this.toAddressPath(address)
         if (!await fileExists(fileName)) return false
         return dataFromFile(fileName)
     }

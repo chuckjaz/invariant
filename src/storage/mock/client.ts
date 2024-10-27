@@ -13,16 +13,9 @@ export function mockStorage(broker?: BrokerClient): MockStorageClient {
     const idBytes = randomBytes(32)
     const id = idBytes.toString('hex')
 
-    function validateAlgorithm(algorithm?: string) {
-        if (algorithm && algorithm != 'sha256') {
-            throw Error(`Unrecognized algorithm`)
-        }
-    }
-
     async function ping(): Promise<string> { return id }
 
-    async function get(code: string, algorithm?: string): Promise<Data | false> {
-        validateAlgorithm(algorithm)
+    async function get(code: string): Promise<Data | false> {
         const normalCode = normalizeCode(code)
         if (normalCode) {
             const buffers = store.get(normalCode)
@@ -33,14 +26,12 @@ export function mockStorage(broker?: BrokerClient): MockStorageClient {
         return false
     }
 
-    async function has(code: string, algorithm?: string): Promise<boolean> {
-        validateAlgorithm(algorithm)
+    async function has(code: string): Promise<boolean> {
         const normalCode = normalizeCode(code)
         return normalCode != undefined && store.has(normalCode)
     }
 
-    async function post(data: Data, algorithm?: string): Promise<string | false> {
-        validateAlgorithm(algorithm)
+    async function post(data: Data): Promise<string | false> {
         const hash = createHash('sha256')
         const buffers = await buffersOfData(hashTransform(data, hash))
         const id = hash.digest().toString('hex')
@@ -48,8 +39,7 @@ export function mockStorage(broker?: BrokerClient): MockStorageClient {
         return id
     }
 
-    async function put(code: string, data: Data, algorithm?: string): Promise<boolean> {
-        validateAlgorithm(algorithm)
+    async function put(code: string, data: Data): Promise<boolean> {
         const hash = createHash('sha256')
         const buffers = await buffersOfData(hashTransform(data, hash))
         const id = hash.digest().toString('hex')
@@ -58,13 +48,13 @@ export function mockStorage(broker?: BrokerClient): MockStorageClient {
         return true
     }
 
-    async function fetch(code: string, container?: string, algorithm?: string): Promise<boolean> {
+    async function fetch(code: string, container?: string): Promise<boolean> {
         let otherStorage: StorageClient | undefined = undefined
         if (broker && container) {
             otherStorage = await broker.storage(container)
         }
         if (otherStorage) {
-            const data = await otherStorage.get(code, algorithm)
+            const data = await otherStorage.get(code)
             if (data) {
                 const hash = createHash('sha256')
                 const buffers = await buffersOfData(hashTransform(data, hash))
