@@ -124,3 +124,25 @@ export async function jsonFromData<Schema extends z.ZodType<any, any, any>, T = 
         return await body(jsonObject)
     } else return false
 }
+
+export function splitStream<T>(data: AsyncIterable<T>): [AsyncIterable<T>, AsyncIterable<T>] {
+    const channel1 = new Channel<T>()
+    const channel2 = new Channel<T>()
+
+    async function readAll() {
+        try {
+            for await (const item of data) {
+                if (channel1.closed && channel2.closed) break
+                channel1.send(item)
+                channel2.send(item)
+            }
+        } finally {
+            channel1.close()
+            channel2.close()
+        }
+    }
+
+    readAll()
+
+    return [channel1.all(), channel2.all()]
+}

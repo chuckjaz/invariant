@@ -1,13 +1,16 @@
-import { Data, StorageClient } from "../client";
-import { mkdir, stat, rename, unlink, writeFile } from 'node:fs/promises'
+import { Data, ManagedStorageClient, StorageBlock, StorageClient } from "../client";
+import { opendir, mkdir, stat, rename, unlink, writeFile } from 'node:fs/promises'
 import { createHash, randomBytes } from 'node:crypto'
 import * as path from 'node:path'
 import { dataToReadable, dataFromFile } from "../../common/parseJson";
 import { createWriteStream } from 'fs'
 import { pipeline } from 'node:stream/promises'
 import { hashTransform } from "../../common/data";
+import { normalizeCode } from "../../common/codes";
 
-export class LocalStorage implements StorageClient {
+const hexBytes = /^[0-9a-fA-F]+$/
+
+export class LocalStorage implements ManagedStorageClient {
     id: string
     directory: string
 
@@ -36,12 +39,38 @@ export class LocalStorage implements StorageClient {
         return this.receiveFile(data)
     }
 
-    async fetch(code: string, container?: string): Promise<boolean> {
+    async fetch(): Promise<boolean> {
         return false
     }
 
+    async forget(address: string): Promise<boolean> {
+        const addressPath = this.toAddressPath(address)
+        if (await fileExists(addressPath)) {
+            await unlink(addressPath)
+            return true
+        }
+        return false
+    }
+
+    async *blocks(): AsyncIterable<StorageBlock> {
+        const dirPath = path.join(this.directory, 'store')
+        for await (const prefix1 of directoryNames(dirPath, isPrefixByte)) {
+            const layer1 = path.join(dirPath, prefix1)
+            for await (const prefix2 of directoryNames(layer1, isPrefixByte)) {
+                const layer2 = path.join(layer1, prefix2)
+                for await (const postfix of directoryNames(layer2, isPostfixBytes)) {
+                    const address = normalizeCode(path.join(layer2, postfix))
+                    if (address) {
+                        const fstat = await stat(address)
+                        yield { address, size: fstat.size, lastAccess: fstat.atime.getTime() }
+                    }
+                }
+            }
+        }
+    }
+
     private toAddressPath(hashCode: string): string {
-        return  path.join(this.directory, 'sha256', hashCode.slice(0, 2), hashCode.slice(2, 4), hashCode.slice(4))
+        return  path.join(this.directory, 'store', hashCode.slice(0, 2), hashCode.slice(2, 4), hashCode.slice(4))
     }
 
     private async tmpName(): Promise<string> {
@@ -111,4 +140,23 @@ async function fileExists(file: string): Promise<boolean> {
 
     }
     return false
+}
+
+function isPrefixByte(name: string): boolean {
+    const match = name.match(hexBytes)
+    return !!match && match[0].length == 2
+}
+
+function isPostfixBytes(name: string): boolean {
+    const match = name.match(hexBytes)
+    return !!match && match[0].length == 28
+}
+
+async function *directoryNames(path: string, filter: (name: string) => boolean): AsyncIterable<string> {
+    const dir = await opendir(path)
+    for await (const entry of dir) {
+        if (entry.isFile() && filter(entry.name)) {
+            yield entry.name
+        }
+    }
 }
