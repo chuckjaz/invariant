@@ -101,8 +101,6 @@ export interface ContentLink {
     algorithm?: string
     salt?: string
     blockTree?: boolean
-    offset?: number
-    length?: number
     primary?: string
 }
 

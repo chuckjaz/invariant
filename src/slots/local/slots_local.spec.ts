@@ -35,6 +35,8 @@ describe("slots/local", () => {
         it("can get the current state", async () => {
             await withSimpleSlot(async (slots, id, address) => {
                 const response = await slots.get(id)
+                expect(response).toBeDefined()
+                if (!response) return;
                 expect(response.address).toEqual(address)
                 expect(response.previous).toEqual("root")
             })
@@ -45,6 +47,8 @@ describe("slots/local", () => {
                 const putResponse = await slots.put(id, { address: newAddress, previous: address })
                 expect(putResponse).toBeTrue()
                 const getResponse = await slots.get(id)
+                expect(getResponse).toBeDefined()
+                if (!getResponse) return;
                 expect(getResponse.address).toEqual(newAddress)
                 expect(getResponse.previous).toEqual(address)
             })
@@ -87,6 +91,8 @@ describe("slots/local", () => {
                     previous = address
                 }
                 const result = await slots.get(id)
+                expect(result).toBeDefined()
+                if (!result) return;
                 expect(result.address).toEqual(addresses[addresses.length - 1])
             })
         })
@@ -116,6 +122,8 @@ describe("slots/local", () => {
         it("can get the current state", async () => {
             await withSignedSlot(async (slots, id, address) => {
                 const response = await slots.get(id)
+                expect(response).toBeDefined()
+                if (!response) return;
                 expect(response.address).toEqual(address)
                 expect(response.previous).toEqual("root")
             })
@@ -128,6 +136,8 @@ describe("slots/local", () => {
                 const putResponse = await slots.put(id, request)
                 expect(putResponse).toBeTrue()
                 const getResponse = await slots.get(id)
+                expect(getResponse).toBeDefined()
+                if (!getResponse) return;
                 expect(getResponse.address).toEqual(newAddress)
                 expect(getResponse.previous).toEqual(address)
             })
@@ -148,6 +158,8 @@ describe("slots/local", () => {
                     previous = address
                 }
                 const result = await slots.get(id)
+                expect(result).toBeDefined()
+                if (!result) return;
                 expect(result.address).toEqual(addresses[addresses.length - 1])
             })
         })

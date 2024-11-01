@@ -70,25 +70,22 @@ export function storageHandlers(client: StorageClient, broker?: BrokerClient): R
             } else if (broker && ctx.path == fetchPrefix) {
                 switch (ctx.method) {
                     case 'PUT': {
-                        const result = await jsonFromData(fetchSchema, dataFromReadable(ctx.req), async request => {
+                        const request = await jsonFromData(fetchSchema, dataFromReadable(ctx.req))
+                        if (request) {
                             const storage = await broker.storage(request.container)
                             if (storage) {
                                 const data = await storage.get(request.address)
                                 if (data) {
-                                    if (await client.put(request.address, data))
-                                        return true
+                                    if (await client.put(request.address, data)) {
+                                        ctx.status = 200
+                                        ctx.body = ''
+                                        return
+                                    }
                                 }
                             }
-                            return false
-                        })
-                        if (result) {
-                            ctx.status = 200
-                            ctx.body = ''
-
-                        } else {
-                            ctx.status = 403
-                            ctx.body = ''
                         }
+                        ctx.status = 403
+                        ctx.body = ''
                         break
                     }
                     case 'HEAD': {

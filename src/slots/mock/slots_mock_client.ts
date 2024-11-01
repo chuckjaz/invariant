@@ -2,6 +2,10 @@ import { SlotConfiguration, SlotsGetResponse, SlotsPutRequest, SlotsRegisterRequ
 import { SlotsClient } from "../slot_client";
 import { randomBytes } from 'node:crypto'
 
+export function mockSlots(): MockSlotsServer {
+    return new MockSlotsServer()
+}
+
 export class MockSlotsServer implements SlotsClient {
     private slots = new Map<string, SlotsGetResponse[]>()
 

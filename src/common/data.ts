@@ -1,8 +1,9 @@
 import type { Hash } from 'node:crypto'
 import { Data } from "../storage/client"
-import { Readable } from "node:stream"
+import { Readable, Transform } from "node:stream"
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
+import * as crypto from 'node:crypto'
 import { Channel } from './channel'
 import { z } from 'zod'
 import { dataToString, safeParseJson } from './parseJson'
@@ -116,13 +117,13 @@ export function take<T>(itr: Iterable<T>, size: number): T[] {
 export async function jsonFromData<Schema extends z.ZodType<any, any, any>, T = z.output<Schema>>(
     schema: Schema,
     data: Data,
-    body: (data: T) => Promise<boolean>
-): Promise<boolean> {
+): Promise<T | undefined> {
     const text = await dataToString(data)
     const jsonObject = safeParseJson(text)
     if (jsonObject && schema.safeParse(jsonObject)) {
-        return await body(jsonObject)
-    } else return false
+        return jsonObject
+    }
+    return undefined
 }
 
 export function splitStream<T>(data: AsyncIterable<T>): [AsyncIterable<T>, AsyncIterable<T>] {
@@ -145,4 +146,26 @@ export function splitStream<T>(data: AsyncIterable<T>): [AsyncIterable<T>, Async
     readAll()
 
     return [channel1.all(), channel2.all()]
+}
+
+async function *moveCipherData<T extends crypto.Decipher | crypto.Cipher>(transform: T, data: Data): Data {
+    for await (const buffer of data) {
+        yield transform.update(buffer)
+    }
+    const final = transform.final()
+    if (final.length > 0) yield final
+}
+
+export async function *decipherData(algorithm: string, key: string, iv: string, data: Data): Data {
+    const keyBuffer = Buffer.from(key, 'hex')
+    const ivBuffer = Buffer.from(iv, 'hex')
+    const decipher = crypto.createDecipheriv(algorithm, keyBuffer, ivBuffer)
+    yield *moveCipherData(decipher, data)
+}
+
+export async function *cipherData(algorithm: string, key: string, iv: string, data: Data): Data {
+    const keyBuffer = Buffer.from(key, 'hex')
+    const ivBuffer = Buffer.from(iv, 'hex')
+    const cipher = crypto.createCipheriv(algorithm, keyBuffer, ivBuffer)
+    yield *moveCipherData(cipher, data)
 }
