@@ -97,11 +97,29 @@ export type Entry = FileEntry | DirectoryEntry
 export interface ContentLink {
     address: string
     slot?: boolean
-    key?: string
-    algorithm?: string
-    salt?: string
-    blockTree?: boolean
+    transforms?: ContentTransform[]
     primary?: string
+}
+
+export type ContentTransform =
+    BlocksTransform |
+    AesCbcDecipherTransform |
+    DecompressTransform
+
+export interface BlocksTransform {
+    kind: "Blocks"
+}
+
+export interface AesCbcDecipherTransform {
+    kind: "Decipher"
+    algorithm: "aes-256-cbc"
+    key: string
+    iv: string
+}
+
+export interface DecompressTransform {
+    kind: "Decompress"
+    algorithm: "inflate" | "brotli" | "unzip"
 }
 
 export interface Block {

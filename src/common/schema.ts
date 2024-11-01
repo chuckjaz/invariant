@@ -12,13 +12,31 @@ export const idSchema = z.string().transform((arg, ctx) => {
     }
 })
 
+export const blocksTransformSchema = z.object({
+    kind: z.literal("Block")
+})
+
+export const aesCbcDecipherTransformSchema = z.object({
+    kind: z.literal("Decipher"),
+    algorithm: z.literal("aes-256-cbc"),
+    key: z.string(),
+    iv: z.string(),
+})
+
+export const decompressTransformSchema = z.object({
+    kind: z.literal("Decompress"),
+    algorithm: z.string(),
+})
+
+export const contentTransformSchema = z.discriminatedUnion(
+    "kind",
+    [blocksTransformSchema, aesCbcDecipherTransformSchema, decompressTransformSchema]
+)
+
 export const contentLinkSchema = z.object({
     address: idSchema,
     slot: z.optional(z.boolean()),
-    key: z.optional(z.string()),
-    algorithm: z.optional(z.string()),
-    salt: z.optional(z.string()),
-    blockTree: z.optional(z.boolean()),
+    transforms: z.optional(z.array(contentTransformSchema)),
     primary: z.optional(idSchema),
 })
 
@@ -26,6 +44,7 @@ export const blockSchema = z.object({
     content: contentLinkSchema,
     size: z.number()
 })
+
 
 export const blockTreeSchema = z.array(blockSchema)
 

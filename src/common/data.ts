@@ -4,6 +4,7 @@ import { Readable, Transform } from "node:stream"
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import * as crypto from 'node:crypto'
+import * as zlib from 'node:zlib'
 import { Channel } from './channel'
 import { z } from 'zod'
 import { dataToString, safeParseJson } from './parseJson'
@@ -168,4 +169,48 @@ export async function *cipherData(algorithm: string, key: string, iv: string, da
     const ivBuffer = Buffer.from(iv, 'hex')
     const cipher = crypto.createCipheriv(algorithm, keyBuffer, ivBuffer)
     yield *moveCipherData(cipher, data)
+}
+
+export async function *transformData(transform: Transform, data: Data): Data {
+    const channel = new Channel<Buffer>()
+
+    async function readAll() {
+        transform.resume()
+        for await (const buffer of data) {
+            transform.write(buffer)
+        }
+        transform.end()
+    }
+
+    transform.pause()
+    transform.on('data', buffer => channel.send(buffer))
+    transform.on('error', err => channel.fail(err))
+    transform.on('close', () => channel.close())
+    readAll()
+
+    yield *channel.all()
+}
+
+export function brotliCompressData(data: Data): Data {
+    return transformData(zlib.createBrotliCompress(), data)
+}
+
+export function brotliDecompressData(data: Data): Data {
+    return transformData(zlib.createBrotliDecompress(), data)
+}
+
+export function deflateData(data: Data): Data {
+    return transformData(zlib.createDeflate(), data)
+}
+
+export function inflateData(data: Data): Data {
+    return transformData(zlib.createInflate(), data)
+}
+
+export function unzipData(data: Data): Data {
+    return transformData(zlib.createGunzip(), data)
+}
+
+export function zipData(data: Data): Data {
+    return transformData(zlib.createGzip(), data)
 }

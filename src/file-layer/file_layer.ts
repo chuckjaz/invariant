@@ -1,7 +1,7 @@
 import { BrokerClient } from "../broker/client";
-import { decipherData, jsonFromData } from "../common/data";
-import { blockTreeSchema, directorySchema, idSchema } from "../common/schema";
-import { BlockTree, ContentLink, DirectoryEntry, EntryKind } from "../common/types";
+import { brotliDecompressData, decipherData, inflateData, jsonFromData, unzipData } from "../common/data";
+import { blockTreeSchema, directorySchema } from "../common/schema";
+import { BlockTree, ContentLink, ContentTransform, EntryKind } from "../common/types";
 import { SlotsClient } from "../slots/slot_client";
 import { Data, StorageClient } from "../storage/client";
 
@@ -122,7 +122,7 @@ export class FileLayer {
                     type: entry.type,
                 }
                 this.infos.set(entryNode, info)
-                this.contentMap.set(entryNode, entry.content)
+                this.contentMap.set(entryNode, entry.content as any as ContentLink)
                 entries.set(entry.name, entryNode)
                 this.parents.set(entryNode, node)
             }
@@ -147,24 +147,55 @@ export class FileLayer {
                 data = await primaryStorage.get(address)
             }
         }
+
         if (!data) invalid(`Could not find ${address}`);
-        if (content.key) {
-            const key = content.key
-            const algorithm  = content.algorithm ?? "aes-256-cbc"
-            const iv = content.salt ?? Buffer.alloc(0, 16).toString('hex')
-            if (algorithm != "aes-256-cbc") invalid(`Algorithm ${content.algorithm} not supported`);
-            data = decipherData(algorithm, key, iv, data)
+
+        if (content.transforms) {
+            data = this.transformReadData(address, data, content.transforms)
         }
-        if (content.blockTree) {
-            data = this.expandBlockTree(address, data)
-        }
+
         yield *data
     }
 
-    private async *expandBlockTree(address: string, data: Data): Data {
+    private transformReadData(address: string, data: Data, transforms: ContentTransform[]): Data {
+        for (const transform of transforms) {
+            switch (transform.kind) {
+                case "Blocks":
+                    data = this.expandBlocks(address, data)
+                    break
+                case "Decipher":
+                    switch (transform.algorithm) {
+                        case "aes-256-cbc":
+                            data = decipherData(transform.algorithm, transform.key, transform.iv, data)
+                            break
+                        default:
+                            invalid(`Unsupported algorithm ${(transform as any).algorithm}`)
+                    }
+                    break
+                case "Decompress":
+                    switch (transform.algorithm) {
+                        case "brotli":
+                            data = brotliDecompressData(data)
+                            break
+                        case "inflate":
+                            data = inflateData(data)
+                            break
+                        case "unzip":
+                            data = unzipData(data)
+                            break
+                    }
+                    break
+                default:
+                    invalid("Unexpected transform")
+            }
+        }
+        return data
+    }
+
+    private async *expandBlocks(address: string, data: Data): Data {
         const tree = await jsonFromData(blockTreeSchema, data)
         if (tree === undefined) invalid(`Invalid block tree JSON in ${address}`);
-        const blockTree: BlockTree = tree
+        const blockTree: BlockTree = tree as BlockTree
         for (const block of blockTree) {
             yield *this.readContentLink(block.content)
         }

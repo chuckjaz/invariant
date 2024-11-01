@@ -29,19 +29,7 @@ export class FileTree {
     }
 
     async readFile(content: ContentLink): Promise<Data | false> {
-        if (content.blockTree) {
-            const block = await this.readBlocks(content.address)
-            if (block) {
-                const text = await dataToString(block)
-                const blocks = safeParseJson(text) as BlockTree
-                if (blocks) {
-                    return this.flatten(blocks)
-                }
-            }
-        } else {
-            return this.readBlocks(content.address)
-        }
-        return false
+        return this.readBlocks(content.address)
     }
 
     private async *flatten(blocks: BlockTree): Data {
@@ -113,19 +101,7 @@ export class FileContentReader {
     }
 
     async readFile(content: ContentLink): Promise<Data | false> {
-        if (content.blockTree) {
-            const block = await this.readBlocks(content.address)
-            if (block) {
-                const text = await dataToString(block)
-                const blocks = safeParseJson(text) as BlockTree
-                if (blocks) {
-                    return this.flatten(blocks)
-                }
-            }
-        } else {
-            return this.readBlocks(content.address)
-        }
-        return false
+        return this.readBlocks(content.address)
     }
 
     async readDirectory(content: ContentLink): Promise<FileTreeDirectory | false> {
