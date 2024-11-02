@@ -37,6 +37,7 @@ export const contentLinkSchema = z.object({
     address: idSchema,
     slot: z.optional(z.boolean()),
     transforms: z.optional(z.array(contentTransformSchema)),
+    expected: z.optional(idSchema),
     primary: z.optional(idSchema),
 })
 

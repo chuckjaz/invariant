@@ -1,4 +1,4 @@
-import type { Hash } from 'node:crypto'
+import { Hash, createHash } from 'node:crypto'
 import { Data } from "../storage/client"
 import { Readable, Transform } from "node:stream"
 import * as fs from 'node:fs/promises'
@@ -8,6 +8,7 @@ import * as zlib from 'node:zlib'
 import { Channel } from './channel'
 import { z } from 'zod'
 import { dataToString, safeParseJson } from './parseJson'
+import { invalid } from './errors'
 
 export async function *hashTransform(stream: Data, hash: Hash): Data {
     for await (const buffer of stream) {
@@ -213,4 +214,14 @@ export function unzipData(data: Data): Data {
 
 export function zipData(data: Data): Data {
     return transformData(zlib.createGzip(), data)
+}
+
+export async function *validateData(data: Data, expected: string): Data {
+    const hash = createHash('sha256')
+    for await (const buffer of data)                   {
+        hash.update(buffer)
+        yield buffer
+    }
+    const received = hash.digest().toString('hex')
+    if (received != expected) invalid(`Invalid data hash, received ${received}, expected ${expected}`)
 }

@@ -1,7 +1,8 @@
 import { BrokerClient } from "../broker/client";
-import { brotliDecompressData, decipherData, inflateData, jsonFromData, unzipData } from "../common/data";
+import { brotliDecompressData, decipherData, hashTransform, inflateData, jsonFromData, unzipData, validateData } from "../common/data";
+import { invalid } from "../common/errors";
 import { blockTreeSchema, directorySchema } from "../common/schema";
-import { BlockTree, ContentLink, ContentTransform, EntryKind } from "../common/types";
+import { BlockTree, ContentLink, ContentTransform, Entry, EntryKind } from "../common/types";
 import { SlotsClient } from "../slots/slot_client";
 import { Data, StorageClient } from "../storage/client";
 
@@ -19,6 +20,8 @@ export interface ContentInformation {
     createTime: number
     executable: boolean
     writable: boolean
+    etag: string
+    size?: number
     type?: string
 }
 
@@ -55,6 +58,7 @@ export class FileLayer {
             createTime: now,
             executable: false,
             writable: content.slot !== undefined,
+            etag: content.expected ?? content.address
         }
         this.infos.set(node, info)
         return node
@@ -107,11 +111,12 @@ export class FileLayer {
             const info = nRequired(this.infos.get(node))
             if (info.kind != ContentKind.Directory) invalid("Node is not a directory");
             const content = nRequired(this.contentMap.get(node))
-            const data = this.readContentLink(content)
-            const directory = await jsonFromData(directorySchema, data)
+            let data = validateData(this.readContentLink(content), content.expected ?? content.address)
+            const directory = await jsonFromData(directorySchema, data) as Entry[]
             if (!directory) invalid(`Could not read directory`);
             for (const entry of directory) {
                 const entryNode = this.newNode()
+                const content = entry.content
                 const info: ContentInformation = {
                     node: entryNode,
                     kind: entry.kind == EntryKind.Directory ? ContentKind.Directory : ContentKind.File,
@@ -119,7 +124,11 @@ export class FileLayer {
                     createTime: entry.createTime ?? Date.now(),
                     executable: (entry.mode?.indexOf("x") ?? -1) >= 0,
                     writable: ((entry.mode?.indexOf("r") ?? -1) >= 0),
-                    type: entry.type,
+                    etag: content.expected ?? content.address,
+                }
+                if (entry.kind == EntryKind.File) {
+                    if (entry.type) info.type = entry.type;
+                    if (entry.size !== undefined) info.size = entry.size
                 }
                 this.infos.set(entryNode, info)
                 this.contentMap.set(entryNode, entry.content as any as ContentLink)
@@ -248,24 +257,12 @@ export class FileLayer {
     }
 }
 
-export class InvalidRequest extends Error {
-    constructor(msg: string) {
-        super(msg)
-    }
-}
 
 function nRequired<T>(value: T | undefined): T {
     if (value) return value
     invalid("Unrecognized node")
 }
 
-function invalid(msg: string): never {
-    throw new InvalidRequest(msg)
-}
-
-function error(msg: string): never {
-    throw new Error(msg)
-}
 
 function sorted<T>(arr: T[]): boolean {
     for (let i = 0, limit = arr.length - 2; i < limit; i++) {
@@ -273,3 +270,4 @@ function sorted<T>(arr: T[]): boolean {
     }
     return true
 }
+

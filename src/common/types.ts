@@ -79,13 +79,13 @@ export interface BaseEntry {
     content: ContentLink
     createTime?: number
     modifyTime?: number
+    mode?: string
 }
 
 export interface FileEntry extends BaseEntry {
     kind: EntryKind.File
     size?: number
     type?: string
-    mode?: string
 }
 
 export interface DirectoryEntry extends BaseEntry {
@@ -98,6 +98,7 @@ export interface ContentLink {
     address: string
     slot?: boolean
     transforms?: ContentTransform[]
+    expected?: string
     primary?: string
 }
 
