@@ -44,7 +44,8 @@ export async function *dataFromFile(file: string | fss.ReadStream): AsyncIterabl
 
 export async function *dataFromString(text: string): AsyncIterable<Buffer> {
     const encoded = new TextEncoder().encode(text)
-    yield Buffer.from(encoded)
+    const buffer = Buffer.from(encoded)
+    yield buffer
 }
 
 export function textToReadable(stream: AsyncIterable<string>): Readable {

@@ -122,8 +122,13 @@ export async function jsonFromData<Schema extends z.ZodType<any, any, any>, T = 
 ): Promise<T | undefined> {
     const text = await dataToString(data)
     const jsonObject = safeParseJson(text)
-    if (jsonObject && schema.safeParse(jsonObject)) {
-        return jsonObject
+    if (jsonObject !== undefined) {
+        const result =schema.safeParse(jsonObject)
+        if (result.success) {
+            return jsonObject
+        } else {
+            invalid(`${result.error.message}: ${text}`)
+        }
     }
     return undefined
 }
@@ -225,3 +230,36 @@ export async function *validateData(data: Data, expected: string): Data {
     const received = hash.digest().toString('hex')
     if (received != expected) invalid(`Invalid data hash, received ${received}, expected ${expected}`)
 }
+
+export async function *splitData(data: Data, splitCb: number[] | ((index: number) => number)): Data {
+    let current = 0
+    let splitIndex = 0
+    const splits: (index: number) => number = Array.isArray(splitCb) ? index => splitCb[index] : splitCb;
+    let nextSplit = splits(splitIndex++) ?? Number.MAX_VALUE
+    for await (const buffer of data) {
+        const nextCurrent = current + buffer.length
+        if (nextCurrent < nextSplit) {
+            yield buffer
+        } else {
+            let currentBuffer = buffer
+            while (current < nextSplit && currentBuffer.length > 0) {
+                const bufferSplit = nextSplit - current
+                yield currentBuffer.subarray(0, bufferSplit)
+                currentBuffer = currentBuffer.subarray(bufferSplit)
+                current += bufferSplit
+                nextSplit = splits(splitIndex++) ?? Number.MAX_VALUE
+            }
+        }
+        current = nextCurrent
+    }
+}
+
+export async function *measureTransform(data: Data, result: { size: number }): Data {
+    let size = 0
+    for await (const buffer of data) {
+        size += buffer.length
+        yield buffer
+    }
+    result.size = size
+}
+

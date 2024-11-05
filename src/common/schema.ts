@@ -13,7 +13,7 @@ export const idSchema = z.string().transform((arg, ctx) => {
 })
 
 export const blocksTransformSchema = z.object({
-    kind: z.literal("Block")
+    kind: z.literal("Blocks")
 })
 
 export const aesCbcDecipherTransformSchema = z.object({

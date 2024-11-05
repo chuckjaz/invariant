@@ -1,5 +1,5 @@
 import { BrokerClient } from "../broker/client";
-import { brotliDecompressData, decipherData, hashTransform, inflateData, jsonFromData, unzipData, validateData } from "../common/data";
+import { brotliDecompressData, decipherData, hashTransform, inflateData, jsonFromData, splitData, unzipData, validateData } from "../common/data";
 import { invalid } from "../common/errors";
 import { blockTreeSchema, directorySchema } from "../common/schema";
 import { BlockTree, ContentLink, ContentTransform, Entry, EntryKind } from "../common/types";
@@ -234,31 +234,7 @@ export class FileLayer {
     }
 }
 
- async function *splitData(data: Data, splits: number[]): Data {
-    let current = 0
-    let splitIndex = 0
-    let nextSplit = splits[splitIndex++] ?? Number.MAX_VALUE
-    for await (const buffer of data) {
-        const nextCurrent = current + buffer.length
-        if (nextCurrent < nextSplit) {
-            yield buffer
-        } else {
-            let currentBuffer = buffer
-            while (current < nextSplit) {
-                const bufferSplit = nextSplit - current
-                yield currentBuffer.subarray(0, bufferSplit)
-                currentBuffer = currentBuffer.subarray(bufferSplit)
-                if (bufferSplit == currentBuffer.length) break
-                current += bufferSplit
-                nextSplit = splits[splitIndex++] ?? Number.MAX_VALUE
-            }
-        }
-        current = nextCurrent
-    }
-}
-
-
-function nRequired<T>(value: T | undefined): T {
+ function nRequired<T>(value: T | undefined): T {
     if (value) return value
     invalid("Unrecognized node")
 }

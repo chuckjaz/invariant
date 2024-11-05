@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { Data, ManagedStorageClient, StorageClient } from "../client";
 import { Lru } from '../../common/lru';
-import { splitStream } from '../../common/data';
+import { measureTransform, splitStream } from '../../common/data';
 
 export class StorageCache implements StorageClient {
     private id = randomBytes(32).toString('hex')
@@ -196,15 +196,6 @@ export class StorageCache implements StorageClient {
             }
         }
     }
-}
-
-async function *measureTransform(data: Data, result: { size: number }): Data {
-    let size = 0
-    for await (const buffer of data) {
-        size += buffer.length
-        yield buffer
-    }
-    result.size = size
 }
 
 let nextTaskId = 0

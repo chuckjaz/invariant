@@ -32,9 +32,9 @@ export function mockStorage(broker?: BrokerClient): MockStorageClient {
         return normalCode != undefined && store.has(normalCode)
     }
 
-    async function post(address: Data): Promise<string | false> {
+    async function post(data: Data): Promise<string | false> {
         const hash = createHash('sha256')
-        const buffers = await buffersOfData(hashTransform(address, hash))
+        const buffers = await buffersOfData(hashTransform(data, hash))
         const id = hash.digest().toString('hex')
         const size = sizeOfBuffers(buffers)
         store.set(id, { buffers, size, lastAccess: Date.now() })
