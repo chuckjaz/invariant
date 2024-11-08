@@ -9,8 +9,9 @@ import { mockSlots } from "../slots/mock/slots_mock_client"
 import { SlotsClient } from "../slots/slot_client"
 import { Data, StorageClient } from "../storage/client"
 import { mockStorage } from "../storage/mock"
-import { ContentKind, FileDirectoryEntry, FileLayer, Node } from "./file_layer"
+import { FileLayer } from "./file_layer"
 import { createHash } from 'node:crypto'
+import { ContentKind, FileDirectoryEntry, Node } from "./file_layer_client"
 
 describe("file_layer", () => {
     it("can create a file layer", () => {
@@ -94,7 +95,7 @@ describe("file_layer", () => {
     it("can create a file", async () => {
         const [layer, node, slot, slots, storage] = await fileLayerWithEmptyDirectory()
         try {
-            const fileNode = await layer.createFile(node, "test")
+            const fileNode = await layer.createNode(node, "test", ContentKind.File)
             const data = await readAllData(layer.readFile(fileNode))
             expect(data).toEqual(Buffer.alloc(0, 0))
             await delay(2)
@@ -115,7 +116,7 @@ describe("file_layer", () => {
     it("can create and write to a file", async () => {
         const [layer, node, slot, slots, storage] = await fileLayerWithEmptyDirectory()
         try {
-            const fileNode = await layer.createFile(node, "test")
+            const fileNode = await layer.createNode(node, "test", ContentKind.File)
             const size = 1024
             const buffers = [randomBytes(size)]
             const result = await layer.writeFile(fileNode, dataFromBuffers(buffers))
@@ -148,8 +149,9 @@ describe("file_layer", () => {
     it("can remove a file", async () => {
         const [layer, node] = await fileLayerWithEmptyDirectory()
         try {
-            const fileNode = await layer.createFile(node, "test")
-            await layer.removeFile(node, "test")
+            const fileNode = await layer.createNode(node, "test", ContentKind.File)
+            expect(fileNode).toBeGreaterThan(-1)
+            await layer.remove(node, "test")
             let count = 0
             for await (const entry of layer.readDirectory(node)) {
                 count++
@@ -164,7 +166,7 @@ describe("file_layer", () => {
     it("can create a directory", async () => {
         const [layer, node] = await fileLayerWithEmptyDirectory()
         try {
-            const directoryNode = await layer.createDirectory(node, "test")
+            const directoryNode = await layer.createNode(node, "test", ContentKind.Directory)
             const directoryLookup = await layer.lookup(node, "test")
             expect(directoryLookup).toBeDefined()
             if (directoryLookup === undefined) return
@@ -395,7 +397,9 @@ async function validateDirectory(fileLayer: FileLayer, root: Node) {
         for await (const entry of fileLayer.readDirectory(node)) {
             if (previous) expect(entry.name > previous.name).toBeTrue();
             previous = entry
-            switch (entry.kind) {
+            const info = await fileLayer.info(entry.node)
+            if (!info) error(`No info found for ${node}`)
+            switch (info.kind) {
                 case ContentKind.Directory: {
                     await validateDirectory(entry.node)
                     break

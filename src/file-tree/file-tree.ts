@@ -12,6 +12,7 @@ export class FileTree {
     storage?: StorageClient
     private rootDirectory: FileTreeDirectory | undefined = undefined
     private fileReader:  FileContentReader
+
     constructor(broker: BrokerClient, finder: FindClient, root: ContentLink, storage?: StorageClient) {
         this.broker = broker
         this.finder = finder
@@ -66,7 +67,6 @@ export class FileTree {
         return findStorage(address, this.finder, this.broker)
     }
 }
-
 
 export async function findStorage(address: string, finder: FindClient, broker: BrokerClient): Promise<StorageClient | false> {
     const pending: FindClient[] = [finder]
