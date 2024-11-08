@@ -263,3 +263,89 @@ export async function *measureTransform(data: Data, result: { size: number }): D
     result.size = size
 }
 
+export interface BlockOverride {
+    offset: number
+    buffer: Buffer
+}
+
+export async function *overrideData(overrides: BlockOverride[], data: Data): Data {
+    overrides.sort((a, b) => a.offset - b.offset)
+
+    let skip = 0
+    let currentOverrideIndex = 0
+    let current = 0
+    for await (const buffer of data) {
+        let effectiveBuffer = buffer
+        if (skip > 0) {
+            if (skip > buffer.length) {
+                skip += buffer.length
+                continue
+            }
+            effectiveBuffer = buffer.subarray(skip)
+            skip = 0
+        }
+        while (currentOverrideIndex < overrides.length) {
+            const override = overrides[currentOverrideIndex]
+            if (override.offset >= current && override.offset < current + effectiveBuffer.length) {
+                const overlapStart = override.offset - current
+                effectiveBuffer = Buffer.concat([
+                    effectiveBuffer.subarray(0, overlapStart),
+                    override.buffer,
+                    effectiveBuffer.subarray(overlapStart + override.buffer.length)
+                ])
+                currentOverrideIndex++
+            } else break
+        }
+
+        skip = buffer.length < effectiveBuffer.length ? effectiveBuffer.length - buffer.length : 0
+        yield effectiveBuffer
+        current += effectiveBuffer.length
+    }
+
+    let effectiveBuffer = Buffer.alloc(0, 0)
+    while (currentOverrideIndex < overrides.length) {
+        const override = overrides[currentOverrideIndex]
+        if (override.offset >= current && override.offset < current + effectiveBuffer.length) {
+            const overlapStart = override.offset - current
+            effectiveBuffer = Buffer.concat([
+                effectiveBuffer.subarray(0, overlapStart),
+                override.buffer,
+                effectiveBuffer.subarray(overlapStart + override.buffer.length)
+            ])
+            currentOverrideIndex++
+        } else {
+            const overlapStart = override.offset - current
+            if (overlapStart > effectiveBuffer.length) {
+                effectiveBuffer = Buffer.concat([
+                    effectiveBuffer,
+                    Buffer.alloc(overlapStart - effectiveBuffer.length, 0)
+                ])
+            }
+            effectiveBuffer = Buffer.concat([
+                effectiveBuffer.subarray(0, overlapStart),
+                override.buffer,
+                effectiveBuffer.subarray(overlapStart + override.buffer.length)
+            ])
+        }
+    }
+    if (effectiveBuffer.length > 0) yield effectiveBuffer
+}
+
+export async function *setDataSize(size: number, data: Data): Data {
+    let current = 0
+    for await (const buffer of data) {
+        const nextCurrent = current + buffer.length
+        if (nextCurrent < size) {
+            yield buffer
+
+        } else {
+            const bufferSize = size - current
+            yield buffer.subarray(0, bufferSize)
+        }
+        current = nextCurrent
+    }
+    if (current < size) {
+        const bufferSize = size - current
+        yield Buffer.alloc(bufferSize, 0)
+    }
+}

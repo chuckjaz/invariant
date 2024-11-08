@@ -1,9 +1,9 @@
 import { BrokerClient } from "../broker/client"
 import { mockBroker } from "../broker/mock/client"
-import { Channel } from "../common/channel"
 import { brotliCompressData, cipherData, dataFromBuffers, deflateData, hashTransform, jsonFromData, measureTransform, readAllData, splitData, validateData, zipData } from "../common/data"
+import { delay } from "../common/delay"
 import { error, invalid } from "../common/errors"
-import { dataFromString } from "../common/parseJson"
+import { dataFromString, dataToString } from "../common/parseJson"
 import { Block, ContentLink, ContentTransform, Entry, EntryKind } from "../common/types"
 import { mockSlots } from "../slots/mock/slots_mock_client"
 import { SlotsClient } from "../slots/slot_client"
@@ -18,36 +18,64 @@ describe("file_layer", () => {
         const storage = mockStorage(broker)
         const slots = mockSlots()
         const fileLayer = new FileLayer(storage, slots, broker, 1)
-        expect(fileLayer).toBeDefined()
+        try {
+            expect(fileLayer).toBeDefined()
+        } finally {
+            fileLayer.stop()
+        }
     })
     it("can mount a directory of the file", async () => {
         const [layer, node] = await fileLayerWithRandomContent()
-        expect(layer).toBeDefined()
-        expect(node).toBeDefined()
+        try {
+            expect(layer).toBeDefined()
+            expect(node).toBeDefined()
+        } finally {
+            layer.stop()
+        }
     })
     it ("can read a directory", async () => {
         const [layer, node] = await fileLayerWithRandomContent()
-        await validateDirectory(layer, node)
+        try {
+            await validateDirectory(layer, node)
+        } finally {
+            layer.stop()
+        }
     })
     it("can read a compressed directory", async () => {
         const transforms = [decompressTx()]
         const [layer, node] = await fileLayerWithRandomContent({ transforms })
-        await validateDirectory(layer, node)
+        try {
+            await validateDirectory(layer, node)
+        } finally {
+            layer.stop()
+        }
     })
     it("can read an encrypted directory", async () => {
         const transforms = [decypherTx()]
         const [layer, node] = await fileLayerWithRandomContent({ transforms })
-        await validateDirectory(layer, node)
+        try {
+            await validateDirectory(layer, node)
+        } finally {
+            layer.stop()
+        }
     })
     it("can read a compressed, encrypted directory", async () => {
         const transforms = [decypherTx(), decompressTx()]
         const [layer, node] = await fileLayerWithRandomContent({ transforms })
-        await validateDirectory(layer, node)
+        try {
+            await validateDirectory(layer, node)
+        } finally {
+            layer.stop()
+        }
     })
     it("can read a deep compressed, encrypted directory", async () => {
         const transforms = [decypherTx(), decompressTx()]
         const [layer, node] = await fileLayerWithRandomContent({ transforms, depth: 4 })
-        await validateDirectory(layer, node)
+        try {
+            await validateDirectory(layer, node)
+        } finally {
+            layer.stop()
+        }
     })
     it("can read files with block lists", async () => {
         const transforms = [blockListTx()]
@@ -57,8 +85,101 @@ describe("file_layer", () => {
             splits: fixedSplit(1024),
             width: 1,
         })
-        await validateDirectory(layer, node)
+        try {
+            await validateDirectory(layer, node)
+        } finally {
+            layer.stop()
+        }
     })
+    it("can create a file", async () => {
+        const [layer, node, slot, slots, storage] = await fileLayerWithEmptyDirectory()
+        try {
+            const fileNode = await layer.createFile(node, "test")
+            const data = await readAllData(layer.readFile(fileNode))
+            expect(data).toEqual(Buffer.alloc(0, 0))
+            await delay(2)
+            await validateDirectory(layer, node)
+        } finally {
+            layer.stop()
+        }
+
+        const current = await slots.get(slot)
+        expect(current).toBeDefined()
+        if (!current) return
+        const data = await storage.get(current.address)
+        expect(data).toBeTruthy()
+        if (!data) return
+        const newDirectory = await dataToString(data)
+        expect(newDirectory).toContain('"test"')
+    })
+    it("can create and write to a file", async () => {
+        const [layer, node, slot, slots, storage] = await fileLayerWithEmptyDirectory()
+        try {
+            const fileNode = await layer.createFile(node, "test")
+            const size = 1024
+            const buffers = [randomBytes(size)]
+            const result = await layer.writeFile(fileNode, dataFromBuffers(buffers))
+            const data = await readAllData(layer.readFile(fileNode))
+            expect(result).toEqual(size)
+            expect(data).toEqual(buffers[0])
+
+            let count = 0
+            for await (const entry of layer.readDirectory(node)) {
+                expect(entry.name).toEqual("test")
+                count++
+            }
+            expect(count).toBe(1)
+            await delay(2)
+            await validateDirectory(layer, node)
+        } finally {
+            layer.stop()
+        }
+
+        const current = await slots.get(slot)
+        expect(current).toBeDefined()
+        if (!current) return
+        const data = await storage.get(current.address)
+        expect(data).toBeTruthy()
+        if (!data) return
+        const newDirectory = await dataToString(data)
+        expect(newDirectory).toContain('"test"')
+        expect(newDirectory).toContain('"size":1024')
+    })
+    it("can remove a file", async () => {
+        const [layer, node] = await fileLayerWithEmptyDirectory()
+        try {
+            const fileNode = await layer.createFile(node, "test")
+            await layer.removeFile(node, "test")
+            let count = 0
+            for await (const entry of layer.readDirectory(node)) {
+                count++
+            }
+            expect(count).toBe(0)
+            await delay(2)
+            await validateDirectory(layer, node)
+        } finally {
+            layer.stop()
+        }
+    })
+    it("can create a directory", async () => {
+        const [layer, node] = await fileLayerWithEmptyDirectory()
+        try {
+            const directoryNode = await layer.createDirectory(node, "test")
+            const directoryLookup = await layer.lookup(node, "test")
+            expect(directoryLookup).toBeDefined()
+            if (directoryLookup === undefined) return
+            expect(directoryLookup).toEqual(directoryNode)
+            const directoryInfo = await layer.info(directoryNode)
+            expect(directoryInfo).toBeDefined()
+            if (!directoryInfo) return
+            expect(directoryInfo.kind).toEqual(EntryKind.Directory)
+            await delay(2)
+            await validateDirectory(layer, node)
+        } finally {
+            layer.stop()
+        }
+    })
+
 })
 
 function decypherTx(): ContentTransform {
@@ -75,6 +196,27 @@ function blockListTx(): ContentTransform {
     return { kind: "Blocks" }
 }
 
+async function fileLayerWithEmptyDirectory(): Promise<[FileLayer, Node, string, SlotsClient, StorageClient, BrokerClient]> {
+    const broker = mockBroker()
+    const storage = mockStorage()
+    const slots = mockSlots()
+    broker.registerStorage(storage)
+    broker.registerSlots(slots)
+    const slot = randomBytes(32).toString('hex')
+    const fileLayer = new FileLayer(storage, slots, broker, 1)
+    const content = await emptyDirectory(storage)
+    slots.register({ id: slot, address: content.address })
+    const slotContent: ContentLink = { ...content, address: slot, slot: true }
+    const node = await fileLayer.mount(slotContent)
+    return [fileLayer, node, slot, slots, storage, broker]
+}
+
+async function emptyDirectory(storage: StorageClient): Promise<ContentLink> {
+    const address = await storage.post(dataFromString("[]"))
+    if (!address) error("Storage refused empty directory")
+    return { address }
+}
+
 async function fileLayerWithRandomContent(
     options: RandomDirectoryOptions = { }
 ): Promise<[FileLayer, Node, BrokerClient, SlotsClient, StorageClient]> {
@@ -83,7 +225,7 @@ async function fileLayerWithRandomContent(
     const slots = mockSlots()
     const fileLayer = new FileLayer(storage, slots, broker, 1)
     const content = await randomDirectory(storage, options)
-    const node = fileLayer.mount(content)
+    const node = await fileLayer.mount(content)
     return [fileLayer, node, broker, slots, storage]
 }
 

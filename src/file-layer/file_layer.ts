@@ -1,10 +1,13 @@
 import { BrokerClient } from "../broker/client";
-import { brotliDecompressData, decipherData, hashTransform, inflateData, jsonFromData, splitData, unzipData, validateData } from "../common/data";
-import { invalid } from "../common/errors";
+import { BlockOverride, brotliDecompressData, dataFromBuffers, decipherData, hashTransform, inflateData, jsonFromData, measureTransform, overrideData, readAllData, setDataSize, splitData, unzipData, validateData } from "../common/data";
+import { error, invalid } from "../common/errors";
+import { dataFromString } from "../common/parseJson";
+import { ReadWriteLock } from "../common/read-write-lock";
 import { blockTreeSchema, directorySchema } from "../common/schema";
-import { BlockTree, ContentLink, ContentTransform, Entry, EntryKind } from "../common/types";
+import { Block, BlockTree, ContentLink, ContentTransform, DirectoryEntry, Entry, EntryKind, FileEntry } from "../common/types";
 import { SlotsClient } from "../slots/slot_client";
 import { Data, StorageClient } from "../storage/client";
+import { createHash } from 'node:crypto'
 
 export type Node = number
 
@@ -38,6 +41,11 @@ export class FileLayer {
     private directories = new Map<Node, Map<string, Node>>()
     private parents = new Map<Node, Node>()
     private infos = new Map<Node, ContentInformation>()
+    private overrides = new Map<Node, BlockOverride[]>()
+    private tranforms =  new Map<Node, (data: Data) => Data>()
+    private invalidDirectories = new Set<Node>()
+    private slotMounts = new Map<Node, string>()
+    private locks = new Map<Node, ReadWriteLock>()
     private nextNode = 0
 
     constructor(storage: StorageClient, slots: SlotsClient, broker: BrokerClient, syncFrequency: number) {
@@ -47,9 +55,21 @@ export class FileLayer {
         this.syncFrequency = syncFrequency
     }
 
-    mount(content: ContentLink): Node {
+    async mount(content: ContentLink): Promise<Node> {
         const node = this.newNode()
+        let writable = false
+        if (content.slot !== undefined) {
+            const slotId = content.address
+            this.slotMounts.set(node, slotId)
+            const current = await this.slots.get(slotId)
+            if (current == undefined) invalid(`Could not find slot ${slotId}`);
+            writable = true
+            content = {...content, address: current.address }
+            delete content.slot
+            this.scheduleSlotReads()
+        }
         this.contentMap.set(node, content)
+
         const now = Date.now()
         const info: ContentInformation = {
             node,
@@ -57,7 +77,7 @@ export class FileLayer {
             modifyTime: now,
             createTime: now,
             executable: false,
-            writable: content.slot !== undefined,
+            writable,
             etag: content.expected ?? content.address
         }
         this.infos.set(node, info)
@@ -73,33 +93,217 @@ export class FileLayer {
         return this.infos.get(node)
     }
 
+    async createFile(parent: Node, name: string): Promise<Node> {
+        return await this.createNode(parent, name, ContentKind.File)
+    }
+
     async *readFile(node: Node, offset?: number, length?: number): Data {
-        const info = nRequired(this.infos.get(node))
-        if (info.kind != ContentKind.File) invalid(`Node is not a file`)
-        const content = nRequired(this.contentMap.get(node))
-        const data = this.readContentLink(content)
-        if (offset !== undefined) {
-            const l = length ?? Number.MAX_VALUE
-            let current = 0
-            let end = offset + l
-            for await (const buffer of splitData(data, [offset, end])) {
-                if (current >= offset) {
-                    yield buffer
+        this.assertKind(node, ContentKind.File)
+        const lock = nRequired(this.locks.get(node))
+        await lock.readLock()
+        try {
+            const data = this.readFileDataLocked(node)
+            if (offset !== undefined) {
+                const l = length ?? Number.MAX_VALUE
+                let current = 0
+                let end = offset + l
+                for await (const buffer of splitData(data, [offset, end])) {
+                    if (current >= offset) {
+                        yield buffer
+                    }
+                    current += buffer.length
+                    if (current >= end) break
                 }
-                current += buffer.length
-                if (current >= end) break
+            } else {
+                yield *data
             }
-        } else {
-            yield *data
+        } finally {
+            lock.readUnlock()
         }
     }
 
-    async *readDirectory(node: Node): AsyncIterable<FileDirectoryEntry> {
-        const entries = await this.ensureDirectory(node)
-        for (const [name, node] of entries) {
-            const info = nRequired(this.infos.get(node))
-            yield { name, ...info }
+    async writeFile(node: Node, data: Data, offset?: number): Promise<number> {
+        this.assertWritable(node, ContentKind.File)
+        const lock = nRequired(this.locks.get(node))
+        await lock.writeLock()
+        try {
+            const buffer = await readAllData(data)
+            this.addOverride(node, { offset: offset ?? 0, buffer })
+            return buffer.length
+        } finally {
+            lock.writeUnlock()
         }
+    }
+
+    async setAttributes(node: Node, executable?: boolean, writable?: boolean, type?: string | null) {
+        const parent = nRequired(this.parents.get(node))
+        this.assertWritable(parent, ContentKind.Directory)
+        const now = Date.now()
+        const parentLock = nRequired(this.locks.get(parent))
+        parentLock.writeLock()
+        try {
+            const directoryInfo = nRequired(this.infos.get(parent))
+            directoryInfo.modifyTime = now
+            const info = nRequired(this.infos.get(node))
+            if (executable !== undefined) info.executable = executable
+            if (writable !== undefined) info.writable = writable
+            if (type !== undefined) {
+                this.assertKind(node, ContentKind.File)
+                if (type == null) info.type = undefined
+                else info.type = type
+            }
+            this.invalidDirectories.add(parent)
+            this.scheduleSync()
+        } finally {
+            parentLock.writeUnlock()
+        }
+    }
+
+    async setSize(node: Node, size: number) {
+        this.assertWritable(node, ContentKind.File)
+        const lock = nRequired(this.locks.get(node))
+        await lock.writeLock()
+        try {
+            const previous = this.tranforms.get(node)
+            if (previous !== undefined) {
+                this.tranforms.set(node, data => setDataSize(size, previous(data)))
+                this.overrides.delete(node)
+            } else {
+                this.tranforms.set(node, data => setDataSize(size, data))
+            }
+            this.scheduleSync()
+        } finally {
+            lock.writeUnlock()
+        }
+    }
+
+    async removeFile(parent: Node, name: string) {
+        await this.removeNode(parent, name, ContentKind.File)
+    }
+
+    async allocateFileSpace(node: Node, offset: number, size: number) {
+        this.assertWritable(node, ContentKind.File)
+        const lock = nRequired(this.locks.get(node))
+        await lock.writeLock()
+        try {
+            this.addOverride(node, { offset: offset + size, buffer: Buffer.alloc(0, 0) })
+        } finally {
+            lock.writeUnlock()
+        }
+    }
+
+    async createDirectory(parent: Node, name: string): Promise<Node> {
+        return this.createNode(parent, name, ContentKind.Directory)
+    }
+
+    async *readDirectory(node: Node): AsyncIterable<FileDirectoryEntry> {
+        this.assertKind(node, ContentKind.Directory)
+        const lock = nRequired(this.locks.get(node))
+        await lock.readLock()
+        try {
+            const entries = await this.ensureDirectory(node)
+            for (const [name, node] of entries) {
+                const info = nRequired(this.infos.get(node))
+                yield { name, ...info }
+            }
+        } finally {
+            lock.readUnlock()
+        }
+    }
+
+    async removeDirectory(parent: Node, name: string) {
+        this.removeNode(parent, name, ContentKind.Directory)
+    }
+
+    stop() {
+        if (this.syncTimeout) {
+            clearTimeout(this.syncTimeout)
+            this.syncTimeout = undefined
+        }
+        if (this.slotReadsTimeout) {
+            clearInterval(this.slotReadsTimeout)
+            this.slotReadsTimeout = undefined
+        }
+    }
+
+    private async *readFileDataLocked(node: Node): Data {
+        const content = this.contentMap.get(node)
+        let data = content ? this.readContentLink(content) : dataFromBuffers([])
+        const transforms = this.tranforms.get(node)
+        if (transforms) {
+            data = transforms(data)
+        }
+        yield *data
+    }
+
+    private async createNode(parent: Node, name: string, kind: ContentKind): Promise<Node> {
+        this.assertWritable(parent, ContentKind.Directory)
+        const lock = nRequired(this.locks.get(parent))
+        await lock.writeLock()
+        try {
+            const entries = await this.ensureDirectory(parent)
+            const info = nRequired(this.infos.get(parent))
+            const now = Date.now()
+            info.modifyTime = now
+            this.invalidDirectories.add(parent)
+            const node = this.newNode()
+            const newInfo: ContentInformation = {
+                node,
+                kind,
+                modifyTime: now,
+                createTime: now,
+                writable: true,
+                executable: false,
+                etag: "",
+                size: 0,
+            }
+            this.infos.set(node, newInfo)
+            entries.set(name, node)
+            this.parents.set(node, parent)
+            this.invalidDirectories.add(parent)
+            if (kind == ContentKind.Directory) {
+                this.directories.set(node, new Map())
+            }
+            this.scheduleSync()
+            return node
+        } finally {
+            lock.writeUnlock()
+        }
+    }
+
+    private async removeNode(parent: Node, name: string, kind: ContentKind) {
+        this.assertWritable(parent, ContentKind.Directory)
+        const lock = nRequired(this.locks.get(parent))
+        await lock.writeLock()
+        try {
+            const entries = nRequired(this.directories.get(parent))
+            const node = entries.get(name)
+            if (node !== undefined) {
+                this.assertKind(node, kind)
+                entries.delete(name)
+                this.invalidDirectories.add(parent)
+                this.scheduleSync()
+            }
+        } finally {
+            lock.writeUnlock()
+        }
+    }
+
+    private addOverride(node: Node, override: BlockOverride) {
+        let overrides = this.overrides.get(node)
+        if (overrides === undefined) {
+            const newOverrides = [override]
+            this.overrides.set(node, newOverrides)
+            const previous = this.tranforms.get(node)
+            if (previous === undefined) {
+                this.tranforms.set(node, data => overrideData(newOverrides, data))
+            } else {
+                this.tranforms.set(node, data => overrideData(newOverrides, previous(data)))
+            }
+        } else {
+            overrides.push(override)
+        }
+        this.scheduleSync()
     }
 
     private async ensureDirectory(node: Node): Promise<Map<string, Node>> {
@@ -203,10 +407,229 @@ export class FileLayer {
 
     private async *expandBlocks(address: string, data: Data): Data {
         const tree = await jsonFromData(blockTreeSchema, data)
-        if (tree === undefined) invalid(`Invalid block tree JSON in ${address}`);
+        if (tree as any === undefined) invalid(`Invalid block tree JSON in ${address}`);
         const blockTree: BlockTree = tree as BlockTree
         for (const block of blockTree) {
             yield *this.readContentLink(block.content)
+        }
+    }
+
+    private assertKind(node: Node, kind: ContentKind) {
+        const info = nRequired(this.infos.get(node))
+        if (info.kind != kind) {
+            invalid(kind == ContentKind.Directory ? "Node is not a directory" : "Node is not a file")
+        }
+    }
+
+    private assertWritable(node: Node, kind: ContentKind) {
+        let info = nRequired(this.infos.get(node))
+        if (info.kind != kind) {
+            this.assertKind(node, kind)
+        }
+        while (true) {
+            if (!info.writable) invalid(kind == ContentKind.Directory ? "Directory is not writable" : "File is not writable");
+            const parent = this.parents.get(node)
+            if (parent === undefined) break
+            node = parent
+        }
+    }
+
+    private previousSync = Promise.resolve()
+    private syncTimeout?: NodeJS.Timeout
+
+    private scheduleSync() {
+        if (this.syncTimeout) return
+        this.syncTimeout = setTimeout(this.sinkTimeout.bind(this), this.syncFrequency)
+    }
+
+    private sinkTimeout() {
+        this.previousSync = this.doSync(this.previousSync)
+    }
+
+    private async doSync(previousSync: Promise<void>) {
+        await previousSync
+        const nodes = [...this.tranforms.keys()]
+        for (const node of nodes) {
+            await this.syncFile(node)
+        }
+        const roots = new Set<Node>()
+        const seen = new Set<Node>()
+        for (const node of [...this.invalidDirectories]) {
+            let current = node
+            if (seen.has(current)) break
+            let last: Node | undefined = node
+            while (true) {
+                seen.add(current)
+                this.invalidDirectories.add(current)
+                const newCurrent = this.parents.get(current)
+                if (newCurrent === undefined) break
+            }
+            roots.add(current)
+        }
+        for (const node of roots) {
+            await this.syncDirectory(node)
+        }
+    }
+
+    private async syncDirectory(node: Node) {
+        const lock = nRequired(this.locks.get(node))
+        await lock.writeLock()
+        try {
+            const entries = this.directories.get(node)
+            if (!entries) return
+            for (const entryNode of entries.values()) {
+                if (this.invalidDirectories.has(entryNode)) {
+                    await this.syncDirectory(entryNode)
+                }
+            }
+            const directoryEntries: Entry[] = []
+            for (const [name, entryNode] of entries) {
+                const info = this.infos.get(entryNode)
+                if (!info) error(`Could not find info for ${name} in directory node ${node}, file node: ${entryNode}`);
+                const content = this.contentMap.get(node)
+                if (!content) error(`Could not find content for ${name} in directory node ${node}, file node: ${entryNode}`);
+                if (info.kind == ContentKind.Directory) {
+                    const directoryEntry: DirectoryEntry = {
+                        kind: EntryKind.Directory,
+                        name,
+                        content
+                    }
+                    directoryEntries.push(directoryEntry)
+                } else {
+                    const fileEntry: FileEntry = {
+                        kind: EntryKind.File,
+                        name,
+                        content,
+                        size: info.size,
+                        type: info.type
+                    }
+                    directoryEntries.push(fileEntry)
+                }
+            }
+            directoryEntries.sort((a, b) => stringCompare(a.name, b.name))
+            const directoryEntriesText = JSON.stringify(directoryEntries)
+            const directoryBlock = await this.writeData(node, dataFromString(directoryEntriesText))
+            if (!directoryBlock) return
+            const previous = this.contentMap.get(node)
+            this.contentMap.set(node, directoryBlock.content)
+            this.invalidDirectories.delete(node)
+
+            if (previous) {
+                const slot = this.slotMounts.get(node)
+                if (slot) {
+                    const result = await this.slots.put(slot, {
+                        previous: previous.address,
+                        address: directoryBlock.content.address
+                    })
+                    if (!result) {
+                        console.error(`Update of slot ${slot} failed`)
+                    }
+                }
+            }
+        } finally {
+            lock.writeUnlock()
+        }
+    }
+
+    private async syncFile(node: Node) {
+        const lock = nRequired(this.locks.get(node))
+        await lock.writeLock()
+        try {
+            const data = this.readFileDataLocked(node)
+            const dataBlock = await this.writeData(node, data)
+            if (!dataBlock) return
+            const info = nRequired(this.infos.get(node))
+            info.etag = dataBlock.content.expected ?? dataBlock.content.address
+            info.size = dataBlock.size
+            this.contentMap.set(node, dataBlock.content)
+            this.overrides.delete(node)
+            this.tranforms.delete(node)
+            const parent = this.parents.get(node)
+            if (parent !== undefined) {
+                this.invalidDirectories.add(parent)
+            }
+        } finally {
+            lock.writeUnlock()
+        }
+    }
+
+    private async writeData(node: Node, data: Data): Promise<Block | undefined> {
+        const pieceLimit = 1024 * 1024
+        const hash = createHash('sha256')
+        data = hashTransform(data, hash)
+        const sizeBox = { size: 0 }
+        data = measureTransform(data, sizeBox)
+        data = splitData(data, index => (index + 1) * pieceLimit)
+        const blocks: Block[] = []
+        const buffers: Buffer[] = []
+        let current = 0
+        const that = this
+
+        async function writeBuffers(): Promise<boolean> {
+            if (buffers.length == 0) return true
+            const address = await that.storage.post(dataFromBuffers(buffers))
+            buffers.length = 0
+            if (!address) {
+                console.error(`Could not save ${address}, writes to ${node} were lost`)
+                return false
+            }
+            const content: ContentLink = { address }
+            blocks.push({ content, size: current })
+            current = 0
+            return true
+        }
+
+        for await (const buffer of data) {
+            buffers.push(buffer)
+            current += buffer.length
+            if (current >= pieceLimit) {
+                if (!await writeBuffers()) return undefined
+            }
+        }
+
+        if (!await writeBuffers()) return undefined
+
+        if (blocks.length == 1) {
+            return blocks[0]
+        }
+        const blocksText = JSON.stringify(blocks)
+        const blocksData = dataFromString(blocksText)
+        const blocksBlock = await this.writeData(node, blocksData)
+        if (blocksBlock === undefined) return
+        const expected = hash.digest().toString('hex')
+        const transforms: ContentTransform[] = [{ kind: "Blocks" }]
+        return {content: { ...blocksBlock.content,  expected, transforms }, size: sizeBox.size }
+    }
+
+    private slotReadsTimeout?: NodeJS.Timeout
+    private previousSlotReads = Promise.resolve()
+
+    private scheduleSlotReads() {
+        if (this.slotReadsTimeout) return
+        this.slotReadsTimeout = setInterval(this.slotReadsInterval.bind(this), this.syncFrequency)
+    }
+
+    private slotReadsInterval() {
+        this.previousSlotReads = this.doSlotReads(this.previousSlotReads)
+    }
+
+    private async doSlotReads(previousSlotReads: Promise<void>) {
+        await previousSlotReads
+        if (this.slotMounts.size == 0) {
+            clearInterval(this.slotReadsTimeout)
+            this.slotReadsTimeout = undefined
+            return
+        }
+        for (const [node, slot] of this.slotMounts) {
+            if (this.invalidDirectories.has(node)) continue
+            const slotResult = await this.slots.get(slot)
+            if (!slotResult) continue
+            const address = slotResult.address
+            const content = this.contentMap.get(node)
+            if (!content) continue
+            if (content.address == address) continue
+            this.directories.delete(node)
+            content.address = address
         }
     }
 
@@ -230,11 +653,18 @@ export class FileLayer {
     }
 
     private newNode(): number {
-        return this.nextNode++
+        const node = this.nextNode++
+        this.locks.set(node, new ReadWriteLock())
+        return node
     }
 }
 
- function nRequired<T>(value: T | undefined): T {
+interface SlotMount {
+    slot: string
+    client: SlotsClient
+}
+
+function nRequired<T>(value: T | undefined): T {
     if (value) return value
     invalid("Unrecognized node")
 }
@@ -247,3 +677,6 @@ function sorted<T>(arr: T[]): boolean {
     return true
 }
 
+function stringCompare(a: string, b: string): number {
+    return a > b ? 1 : a == b ? 0 : -1
+}
