@@ -61,6 +61,14 @@ The request is a `:content-link`.
 
 The response is a `:node`
 
+# `POST /file-layer/unmount/:node`
+
+Unmount `:node`.
+
+## Response
+
+The response is a `:content-link`.
+
 # `GET /file-layer/lookup/:node/:name`
 
 Lookup `:name` in the directory `:node`

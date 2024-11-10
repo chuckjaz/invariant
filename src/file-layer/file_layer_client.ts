@@ -25,18 +25,28 @@ export interface FileDirectoryEntry {
     node: number
 }
 
+export interface EntryAttriutes {
+    executable?: boolean
+    writable?: boolean
+    modifyTime?: number
+    createTime?: number
+    type?: string | null
+}
+
 export interface FileLayerClient {
-    mount(content: ContentLink, executable?: boolean, writable?: boolean): Promise<Node>
+    mount(content: ContentLink): Promise<Node>
     unmount(node: Node): Promise<ContentLink>
 
     lookup(parent: Node, name: string): Promise<Node | undefined>
     info(node: Node): Promise<ContentInformation | undefined>
     content(node: Node): Promise<ContentLink>
 
-    createNode(parent: Node, name: string, kind: ContentKind.File, executable?: boolean, writable?: boolean, type?: string | null, data?: Data, size?: number): Promise<Node>
-    createNode(parent: Node, name: string, kind: ContentKind.Directory, executable?: boolean, writable?: boolean): Promise<Node>
     readFile(node: Node, offset?: number, length?: number): Data
-    writeFile(node: Node, data: Data, offset?: number, size?: number, executable?: boolean, writable?: boolean, type?: string | null): Promise<number>
+    writeFile(node: Node, data: Data, offset?: number, length?: number): Promise<number>
+    setSize(node: Node, size: number): Promise<void>
+
     readDirectory(node: Node, offset?: number, length?: number): AsyncIterable<FileDirectoryEntry>
-    remove(parent: Node, name: string): Promise<boolean>
+    createNode(parent: Node, name: string, kind: ContentKind): Promise<Node>
+    removeNode(parent: Node, name: string): Promise<boolean>
+    setAttributes(node: Node, attributes: EntryAttriutes): Promise<void>
 }

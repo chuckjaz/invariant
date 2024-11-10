@@ -46,7 +46,6 @@ export const blockSchema = z.object({
     size: z.number()
 })
 
-
 export const blockTreeSchema = z.array(blockSchema)
 
 export const entryKindSchema = z.enum(["File", "Directory"])

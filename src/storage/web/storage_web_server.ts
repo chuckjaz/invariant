@@ -16,14 +16,14 @@ const storageUrl = getStorageUrl()
 async function startup() {
     // Create the broker
     let broker: BrokerClient | undefined = new Broker(brokerUrl)
+    app.use(logHandler("storage"))
+    app.use(storageHandlers(client, broker))
     try {
         await broker.register(client.id, storageUrl, 'slots')
     } catch(e: any) {
         broker = undefined
         console.log(`WARNING: could not register with broker: ${e.message}`)
     }
-    app.use(logHandler())
-    app.use(storageHandlers(client, broker))
     console.log('Fully initialized')
 }
 

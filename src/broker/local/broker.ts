@@ -67,6 +67,7 @@ app.use(async function (ctx,  next) {
                     save().catch(e => console.log(e))
                     ctx.body = { id: myId.id.toString('hex') }
                 } else {
+                    console.log(400, `URL ${entry.url} is not reacable`)
                     ctx.throw(400, `Url "${entry.url}" is not reachable`)
                 }
                 return

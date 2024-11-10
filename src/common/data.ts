@@ -116,11 +116,10 @@ export function take<T>(itr: Iterable<T>, size: number): T[] {
     return result
 }
 
-export async function jsonFromData<Schema extends z.ZodType<any, any, any>, T = z.output<Schema>>(
+export function jsonFromText<Schema extends z.ZodType<any, any, any>, T = z.output<Schema>>(
     schema: Schema,
-    data: Data,
-): Promise<T | undefined> {
-    const text = await dataToString(data)
+    text: string
+): T | undefined {
     const jsonObject = safeParseJson(text)
     if (jsonObject !== undefined) {
         const result =schema.safeParse(jsonObject)
@@ -131,6 +130,29 @@ export async function jsonFromData<Schema extends z.ZodType<any, any, any>, T = 
         }
     }
     return undefined
+}
+
+export async function jsonFromData<Schema extends z.ZodType<any, any, any>, T = z.output<Schema>>(
+    schema: Schema,
+    data: Data,
+): Promise<T | undefined> {
+    return jsonFromText(schema, await dataToString(data))
+}
+
+export async function *limitData(data: Data, length?: number): Data {
+    if (length === undefined) {
+        yield *data
+    } else {
+        let current = 0
+        for await (const buffer of data) {
+            const nextCurrent = current + buffer.length
+            if (nextCurrent > length) {
+                yield buffer.subarray(0, length - current)
+                break
+            }
+            yield buffer
+        }
+    }
 }
 
 export function splitStream<T>(data: AsyncIterable<T>): [AsyncIterable<T>, AsyncIterable<T>] {

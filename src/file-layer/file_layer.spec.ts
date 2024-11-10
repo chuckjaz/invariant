@@ -151,7 +151,7 @@ describe("file_layer", () => {
         try {
             const fileNode = await layer.createNode(node, "test", ContentKind.File)
             expect(fileNode).toBeGreaterThan(-1)
-            await layer.remove(node, "test")
+            await layer.removeNode(node, "test")
             let count = 0
             for await (const entry of layer.readDirectory(node)) {
                 count++

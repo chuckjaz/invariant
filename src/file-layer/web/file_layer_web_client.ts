@@ -3,14 +3,17 @@ import { error } from "../../common/errors";
 import { PingableClient } from "../../common/pingable_client";
 import { ContentLink } from "../../common/types";
 import { Data } from "../../storage/client";
-import { ContentInformation, ContentKind, FileDirectoryEntry, FileLayerClient, Node } from "../file_layer_client";
+import { ContentInformation, ContentKind, EntryAttriutes, FileDirectoryEntry, FileLayerClient, Node } from "../file_layer_client";
 
 const fileLayerPrefix = '/file-layer'
 const mountPrefix = `${fileLayerPrefix}/mount`
 const unmountPrefix = `${fileLayerPrefix}/unmount`
+const lookupPrefix = `${fileLayerPrefix}/lookup`
 const infoPrefix = `${fileLayerPrefix}/info`
 const contentPrefix = `${fileLayerPrefix}/content`
 const removePrefix = `${fileLayerPrefix}/remove`
+const attributesPrefix = `${fileLayerPrefix}/attributes`
+const sizePrefix = `${fileLayerPrefix}/size`
 
 export class FileLayerWebClient extends PingableClient implements FileLayerClient {
     constructor (url: URL) {
@@ -33,7 +36,7 @@ export class FileLayerWebClient extends PingableClient implements FileLayerClien
     }
 
     lookup(parent: Node, name: string): Promise<Node | undefined> {
-        return this.getJsonOrUndefined(`${fileLayerPrefix}/${parent}/${name}`)
+        return this.getJsonOrUndefined(`${lookupPrefix}/${parent}/${name}`)
     }
 
     info(node: Node): Promise<ContentInformation | undefined> {
@@ -44,28 +47,13 @@ export class FileLayerWebClient extends PingableClient implements FileLayerClien
         return this.getJson<ContentLink>(`${contentPrefix}/${node}`)
     }
 
-    createNode(parent: Node, name: string, kind: ContentKind.File, executable?: boolean, writable?: boolean, type?: string | null, data?: Data, size?: number): Promise<Node>;
-    createNode(parent: Node, name: string, kind: ContentKind.Directory, executable?: boolean, writable?: boolean): Promise<Node>;
-    async createNode(parent: Node, name: string, kind: ContentKind, executable?: boolean, writable?: boolean, type?: string, data?: Data, size?: number): Promise<number> {
+    async createNode(parent: Node, name: string, kind: ContentKind): Promise<number> {
         const url = new URL(`${fileLayerPrefix}/${parent}`, this.url)
-        let headers = {}
+        let headers = { }
         url.searchParams.append('kind', kind)
-        if (executable !== undefined) {
-            url.searchParams.append('executable', `${executable}`)
-        }
-        if (writable !== undefined) {
-            url.searchParams.append('writable', `${writable}`)
-        }
-        if (type !== undefined) {
-            headers = { 'Content-Type': type }
-        }
-        if (size !== undefined) {
-            url.searchParams.append('size', `${size}`)
-        }
         const response = await fetch(url, {
             method: 'POST',
-            headers,
-            body: data
+            headers
         })
         if (response.ok) {
             return await response.json() as number
@@ -118,6 +106,17 @@ export class FileLayerWebClient extends PingableClient implements FileLayerClien
         error(`Could not write to file: ${response.status}`)
     }
 
+    async setSize(node: Node, size: number): Promise<void> {
+        const url = new URL(`${sizePrefix}/${node}`, this.url)
+        url.searchParams.append('size', `${size}`)
+        const response = await fetch(url, {
+            method: 'PUT',
+        })
+        if (!response.ok) {
+            error(`Could not set the size of ${node}: ${response.status}`)
+        }
+    }
+
     async *readDirectory(node: Node, offset?: number, length?: number): AsyncIterable<FileDirectoryEntry> {
         const url = new URL(`${fileLayerPrefix}/${node}`, this.url)
         if (offset !== undefined) {
@@ -129,7 +128,7 @@ export class FileLayerWebClient extends PingableClient implements FileLayerClien
         yield *await this.getJsonStream<FileDirectoryEntry>(url)
     }
 
-    async remove(parent: Node, name: string): Promise<boolean> {
+    async removeNode(parent: Node, name: string): Promise<boolean> {
         const url = new URL(`${removePrefix}/${parent}/${name}`, this.url)
         const response = await fetch(url, {
             method: 'POST'
@@ -138,5 +137,16 @@ export class FileLayerWebClient extends PingableClient implements FileLayerClien
             return await response.json() as boolean
         }
         error(`Could not remove node: ${response.status}`)
+    }
+
+    async setAttributes(node: Node, attributes: EntryAttriutes): Promise<void> {
+        const url = new URL(`${attributesPrefix}/${node}`, this.url)
+        const response = await fetch(url, {
+            method: 'POST',
+            body: JSON.stringify(attributes)
+        })
+        if (!response.ok) {
+            error(`Could not set attributes of ${node}`)
+        }
     }
 }

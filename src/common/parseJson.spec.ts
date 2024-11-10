@@ -1,4 +1,3 @@
-import { ReadableStreamDefaultReadResult } from "stream/web"
 import { jsonBackwardStream, jsonStream, jsonStreamToText, safeParseJson, textStreamFromFile, textStreamFromFileBackward, textStreamFromWeb } from "./parseJson"
 import { ReadableStreamDefaultReader } from "node:stream/web"
 import { withTempFile } from "./test_tmp"
@@ -14,7 +13,7 @@ describe("common/parseJson", () => {
         let resolved: (v: undefined) => void
         let closed = new Promise<undefined>((res, _) => resolved = res)
         const result: ReadableStreamDefaultReader = {
-            read: async function (): Promise<ReadableStreamDefaultReadResult<any>> {
+            read: async function (): Promise<any> {
                 if (index < dataLen) {
                     return { value: data[index++], done: false }
                 } else {

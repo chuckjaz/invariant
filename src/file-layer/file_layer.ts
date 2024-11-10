@@ -1,5 +1,5 @@
 import { BrokerClient } from "../broker/client";
-import { BlockOverride, brotliDecompressData, dataFromBuffers, decipherData, hashTransform, inflateData, jsonFromData, measureTransform, overrideData, readAllData, setDataSize, splitData, unzipData, validateData } from "../common/data";
+import { BlockOverride, brotliDecompressData, dataFromBuffers, decipherData, hashTransform, inflateData, jsonFromData, limitData, measureTransform, overrideData, readAllData, setDataSize, splitData, unzipData, validateData } from "../common/data";
 import { error, invalid } from "../common/errors";
 import { dataFromString } from "../common/parseJson";
 import { ReadWriteLock } from "../common/read-write-lock";
@@ -8,7 +8,7 @@ import { Block, BlockTree, ContentLink, ContentTransform, DirectoryEntry, Entry,
 import { SlotsClient } from "../slots/slot_client";
 import { Data, StorageClient } from "../storage/client";
 import { createHash } from 'node:crypto'
-import { ContentInformation, ContentKind, FileDirectoryEntry, FileLayerClient, Node } from "./file_layer_client";
+import { ContentInformation, ContentKind, EntryAttriutes, FileDirectoryEntry, FileLayerClient, Node } from "./file_layer_client";
 
 export class FileLayer implements FileLayerClient {
     private broker: BrokerClient
@@ -84,46 +84,6 @@ export class FileLayer implements FileLayerClient {
         return nRequired(this.contentMap.get(node))
     }
 
-    async createNode(parent: Node, name: string, kind: ContentKind, executable?: boolean, writable?: boolean, type?: string, data?: Data, size?: number): Promise<number> {
-        this.assertWritable(parent, ContentKind.Directory)
-        const lock = nRequired(this.locks.get(parent))
-        await lock.writeLock()
-        try {
-            const entries = await this.ensureDirectory(parent)
-            const info = nRequired(this.infos.get(parent))
-            const now = Date.now()
-            info.modifyTime = now
-            this.invalidDirectories.add(parent)
-            const node = this.newNode()
-            const newInfo: ContentInformation = {
-                node,
-                kind,
-                modifyTime: now,
-                createTime: now,
-                writable: writable ?? true,
-                executable: executable ?? false,
-                etag: "",
-                size: 0,
-                type
-            }
-            this.infos.set(node, newInfo)
-            entries.set(name, node)
-            this.parents.set(node, parent)
-            this.invalidDirectories.add(parent)
-            if (kind == ContentKind.Directory) {
-                this.directories.set(node, new Map())
-            }
-            this.scheduleSync()
-            if (data || size !== undefined) {
-                await this.writeFile(node, data ?? dataFromBuffers([]), 0, size)
-            }
-            return node
-        } finally {
-            lock.writeUnlock()
-        }
-    }
-
-
     async *readFile(node: Node, offset?: number, length?: number): Data {
         this.assertKind(node, ContentKind.File)
         const lock = nRequired(this.locks.get(node))
@@ -149,24 +109,29 @@ export class FileLayer implements FileLayerClient {
         }
     }
 
-    async writeFile(node: Node, data: Data, offset?: number, size?: number, executable?: boolean, writable?: boolean, type?: string | null): Promise<number> {
+    async writeFile(node: Node, data: Data, offset?: number, length?: number): Promise<number> {
         this.assertWritable(node, ContentKind.File)
         const lock = nRequired(this.locks.get(node))
         await lock.writeLock()
         try {
-            const buffer = await readAllData(data)
-            if (size !== undefined) {
-                this.addTransform(node, data => setDataSize(size, data))
-            }
+            const buffer = await readAllData(limitData(data, length))
             this.addOverride(node, { offset: offset ?? 0, buffer })
             const info = nRequired(this.infos.get(node))
-            if (executable !== undefined) info.executable = executable
-            if (writable != undefined) info.writable = writable
-            if (type != undefined) {
-                if (type === null) delete info.type
-                else info.type = type
-            }
+            info.modifyTime = Date.now()
+            const parent = nRequired(this.parents.get(node))
+            this.invalidDirectories.add(parent)
             return buffer.length
+        } finally {
+            lock.writeUnlock()
+        }
+    }
+
+    async setSize(node: Node, size: number): Promise<void> {
+        this.assertWritable(node, ContentKind.File)
+        const lock = nRequired(this.locks.get(node))
+        await lock.writeLock()
+        try {
+            this.addTransform(node, data => setDataSize(size, data))
         } finally {
             lock.writeUnlock()
         }
@@ -186,7 +151,42 @@ export class FileLayer implements FileLayerClient {
         }
     }
 
-    async remove(parent: Node, name: string): Promise<boolean> {
+    async createNode(parent: Node, name: string, kind: ContentKind): Promise<number> {
+        this.assertWritable(parent, ContentKind.Directory)
+        const lock = nRequired(this.locks.get(parent))
+        await lock.writeLock()
+        try {
+            const entries = await this.ensureDirectory(parent)
+            const info = nRequired(this.infos.get(parent))
+            const now = Date.now()
+            info.modifyTime = now
+            this.invalidDirectories.add(parent)
+            const node = this.newNode()
+            const newInfo: ContentInformation = {
+                node,
+                kind,
+                modifyTime: now,
+                createTime: now,
+                writable: true,
+                executable: false,
+                etag: "",
+                size: 0
+            }
+            this.infos.set(node, newInfo)
+            entries.set(name, node)
+            this.parents.set(node, parent)
+            this.invalidDirectories.add(parent)
+            if (kind == ContentKind.Directory) {
+                this.directories.set(node, new Map())
+            }
+            this.scheduleSync()
+            return node
+        } finally {
+            lock.writeUnlock()
+        }
+    }
+
+    async removeNode(parent: Node, name: string): Promise<boolean> {
         this.assertWritable(parent, ContentKind.Directory)
         const lock = nRequired(this.locks.get(parent))
         await lock.writeLock()
@@ -201,6 +201,38 @@ export class FileLayer implements FileLayerClient {
                 return true
             }
             return false
+        } finally {
+            lock.writeUnlock()
+        }
+    }
+
+    async setAttributes(node: Node, attributes: EntryAttriutes): Promise<void> {
+        const parent = nRequired(this.parents.get(node))
+        const lock = nRequired(this.locks.get(parent))
+        await lock.writeLock()
+        try {
+            const info = nRequired(this.infos.get(node))
+            if (attributes.createTime !== undefined) {
+                info.createTime = attributes.createTime
+            }
+            if (attributes.modifyTime !== undefined) {
+                info.modifyTime = attributes.modifyTime
+            }
+            if (attributes.executable !== undefined) {
+                info.executable = attributes.executable
+            }
+            if (attributes.writable !== undefined) {
+                info.writable = attributes.writable
+            }
+            if (attributes.type !== undefined) {
+                if (attributes.type == null) {
+                    delete attributes.type
+                } else {
+                    info.type = attributes.type
+                }
+            }
+            this.invalidDirectories.add(parent)
+            this.scheduleSync()
         } finally {
             lock.writeUnlock()
         }
