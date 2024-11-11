@@ -66,11 +66,15 @@ export function dataToReadable(data: AsyncIterable<Buffer>): Readable {
     const readable = new Readable()
     readable._read = () => {}
     async function readAll() {
-        for await (const item of data) {
-            if (readable.closed) return
-            readable.push(item)
+        try {
+            for await (const item of data) {
+                if (readable.closed) return
+                readable.push(item)
+            }
+            readable.push(null)
+        } catch(e) {
+            readable.emit("error", e)
         }
-        readable.push(null)
     }
     readAll()
     return readable

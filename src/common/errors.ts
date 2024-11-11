@@ -1,4 +1,5 @@
 export class InvalidRequest extends Error {
+    status = 400
     constructor(msg: string) {
         super(msg)
     }

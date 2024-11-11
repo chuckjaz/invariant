@@ -1,6 +1,6 @@
 import z, { Schema } from "zod"
 import { allOfStream, dataFromReadable, jsonFromData, jsonFromText, stringsToData } from "../../common/data"
-import { invalid, InvalidRequest } from "../../common/errors"
+import { invalid } from "../../common/errors"
 import { contentLinkSchema } from "../../common/schema"
 import { ContentLink } from "../../common/types"
 import { ResponseFunc, route, Route } from "../../common/web"
@@ -19,15 +19,15 @@ const attributesSchema = z.object({
     type: z.optional(z.union([z.string(), z.null()])),
 })
 
-function offsetOrLength(value: string): number | undefined {
-    if (!value || value == '') return undefined
-    const result = nonNegativeIntSchema.safeParse(value)
-    if (result.success) return result.data
-    invalid(result.error.message)
+function offsetOrLength(value: string | string[] | undefined): number | undefined {
+    if (!value || value == '' || Array.isArray(value)) return undefined
+    const result = parseInt(value)
+    if (Number.isNaN(result) || result < 0) invalid("Expected a non-negative number")
+    return result
 }
 
-function contentKind(value: string): ContentKind | undefined {
-    if (!value || value == '') return undefined
+function contentKind(value: string | string[] | undefined): ContentKind | undefined {
+    if (!value || value == '' || Array.isArray(value)) return undefined
     const result = contentKindSchema.safeParse(value)
     if (result.success) return result.data as ContentKind
 }

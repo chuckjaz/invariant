@@ -1,6 +1,5 @@
 import type Koa from 'koa';
 import { Schema } from 'zod';
-import { InvalidRequest } from './errors';
 import { dataFromReadable, jsonFromData, jsonFromText } from './data';
 
 export type Ctx = Koa.ParameterizedContext<Koa.DefaultState, Koa.DefaultContext, any>
@@ -19,7 +18,7 @@ export function logHandler(name: string): ResponseFunc {
     }
 }
 
-export type Converter<T> = (value: string) => T | undefined
+export type Converter<T> = (value: string | string[] | undefined) => T | undefined
 
 export interface QueryParameters {
     [name: string]: Converter<any>
@@ -49,6 +48,8 @@ function isHandler(rt: Route): rt is Handler {
 }
 
 export async function route(route: Route, ctx: Ctx, next: Next): Promise<void> {
+    const path = ctx.path
+
     async function handle(rest: string[], handler: Handler): Promise<void> {
         const params = handler.params ?? []
         if (params.length != rest.length) {
@@ -59,7 +60,7 @@ export async function route(route: Route, ctx: Ctx, next: Next): Promise<void> {
         if (handler.query) {
             const query: { [name: string]: any } = {}
             for (const name in handler.query) {
-                query[name] = handler.query[name](ctx.get(name))
+                query[name] = handler.query[name](ctx.query[name])
             }
             args.push(query)
         }
@@ -83,7 +84,7 @@ export async function route(route: Route, ctx: Ctx, next: Next): Promise<void> {
     }
 
     try {
-        const parts = ctx.url.split('/').slice(1)
+        const parts = path.split('/').slice(1)
         let i = 0;
         let current = route
         loop: while (current && i < parts.length) {
@@ -114,14 +115,9 @@ export async function route(route: Route, ctx: Ctx, next: Next): Promise<void> {
             }
             break
         }
-    } catch(e) {
-        if (e instanceof InvalidRequest) {
-            ctx.status = 403
-            ctx.body = e.message
-        } else {
-            ctx.status = 500
-            ctx.body = (e as Error).message
-        }
+    } catch(e: any) {
+        ctx.status = e.status ?? 500
+        ctx.body = e.message
     }
 }
 
