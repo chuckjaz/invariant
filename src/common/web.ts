@@ -83,12 +83,12 @@ export async function route(route: Route, ctx: Ctx, next: Next): Promise<void> {
     }
 
     try {
-        const parts = ctx.url.split('/')
+        const parts = ctx.url.split('/').slice(1)
         let i = 0;
         let current = route
         loop: while (current && i < parts.length) {
             const part = parts[i]
-            if (part in current) {
+            if (!Array.isArray(current) && part in current) {
                 current = (current as RoutePart)[part]
                 i++
                 continue
@@ -101,14 +101,15 @@ export async function route(route: Route, ctx: Ctx, next: Next): Promise<void> {
                 for (const item of current) {
                     if (isHandler(item)) {
                         if (item.method == ctx.method) {
-                            await handle(parts.slice(1), item)
+                            await handle(parts.slice(i), item)
                             return
                         }
                     } else {
-                        current = item
-                        continue loop
+                        if (part in item) {
+                            current = item
+                            continue loop
+                        }
                     }
-
                 }
             }
             break

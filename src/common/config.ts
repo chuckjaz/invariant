@@ -5,6 +5,7 @@ export const STORAGE_DIRECTORY = 'INVARIANT_STORAGE_DIRECTORY'
 export const PARENT_BROKER_URL = 'INVARIANT_PARENT_BROKER_URL'
 export const SLOTS_URL = 'INVARIANT_SLOTS_URL'
 export const SLOTS_DIRECTORY = 'INVARIANT_SLOTS_DIR'
+export const FILE_LAYER_URL = 'INVARIANT_FILE_LAYER_URL'
 
 export function requiredEnv(name: string): string {
     const value = process.env[name]
@@ -45,4 +46,8 @@ export function getSlotsUrl(): URL {
 
 export function getSlotsDirectory(): string {
     return optionalEnv(SLOTS_DIRECTORY) || __dirname
+}
+
+export function getFileLayerUrl(): URL {
+    return new URL(requiredEnv(FILE_LAYER_URL))
 }

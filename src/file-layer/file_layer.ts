@@ -668,7 +668,6 @@ function nRequired<T>(value: T | undefined): T {
     invalid("Unrecognized node")
 }
 
-
 function sorted<T>(arr: T[]): boolean {
     for (let i = 0, limit = arr.length - 2; i < limit; i++) {
         if (arr[i] > arr[i + 1]) return false

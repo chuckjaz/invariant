@@ -1,0 +1,28 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Launch File-Layer",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "program": "${workspaceFolder}/dist/file-layer/web/file_layer_web_server.js",
+            "args": [
+                "8a651545332cbd03c93dd28f328f76662149deb0881f6f77f39dfc8a33cee7e6",
+                "1a7329106ffc05bcc8fbecc23a458c902adc2d323c94c01de1d9ab6a8eeec0c4"
+            ],
+            "env": {
+                "INVARIANT_BROKER_URL": "http://10.0.0.21:3003"
+            },
+            "outFiles": [
+                "${workspaceFolder}/dist/**/*.js"
+            ]
+        }
+    ]
+}

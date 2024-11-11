@@ -101,6 +101,14 @@ export async function *stringsToData(strings: string | Iterable<string> | AsyncI
     }
 }
 
+export async function allOfStream<T>(stream: AsyncIterable<T>): Promise<T[]> {
+    const result: T[] = []
+    for await (const item of stream) {
+        result.push(item)
+    }
+    return result
+}
+
 function isUtf8TrailByte(byte: number): boolean {
     return (0xD0 & byte) == 0x80
 }

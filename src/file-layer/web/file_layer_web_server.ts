@@ -1,9 +1,11 @@
 import Koa from 'koa'
-import { getBrokerUrl, getSlotsUrl } from '../../common/config'
+import { getBrokerUrl, getFileLayerUrl, getSlotsUrl } from '../../common/config'
 import { Broker } from '../../broker/web/broker_client'
 import { FileLayer } from '../file_layer'
 import { normalizeCode } from '../../common/codes'
-import { FindClient } from '../../find/client'
+import { mockSlots } from '../../slots/mock/slots_mock_client'
+import { fileLayerWebHandlers } from './file_layer_web_handler'
+import { logHandler } from '../../common/web'
 
 const app = new Koa()
 
@@ -15,18 +17,12 @@ if (!storageId) {
     error("Expected a storage ID parameter")
 }
 
-const slotId = normalizeCode(process.argv[3])!!
-if (!slotId) {
+const rootId = normalizeCode(process.argv[3])!!
+if (!rootId) {
     error("Expected a slot ID parameter")
 }
 
-async function firstFinderOf(broker: Broker): Promise<FindClient> {
-    for await (const findId of await broker.registered('find')) {
-        const find = await broker.find(findId)
-        if (find && await find.ping()) return find
-    }
-    error("Could not find a finder")
-}
+const fileLayerUrl = getFileLayerUrl()
 
 async function startup() {
     // Create the broker
@@ -37,23 +33,22 @@ async function startup() {
     if (!storage) {
         error(`Could not find the storage: ${storage}`)
     }
-    const finder = await firstFinderOf(broker)
 
-//    const layer = new FileLayer(storage, )
+    const slots = mockSlots()
+
+    const layer = new FileLayer(storage, slots, broker, 500)
+    await layer.mount({ address: rootId })
+
+    const log = logHandler('file-layer')
+    const handlers = fileLayerWebHandlers(layer)
+
+    app.use(log)
+    app.use(handlers)
 }
 
-console.log('Storage:', storageId)
-console.log('Slot:', slotId)
-
-startup()
-
-// const port = parseInt(slotsUrl.port)
-// app.listen(port)
-// console.log(`Listening on http://localhost:${port}`)
-// startup().catch(e => {
-//     console.error(e)
-//     process.exit(1)
-// })
+const port = parseInt(fileLayerUrl.port)
+app.listen(port)
+startup().catch(e => error(e.message))
 
 function error(msg: string): never {
     console.error(msg)

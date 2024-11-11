@@ -11,7 +11,7 @@ import { fileExists } from '../common/files'
 import { DirectoryEntry, Entry, EntryKind, FileEntry } from '../common/types'
 
 const storage = new Storage(
-    new URL("http://localhost:3000"),
+    new URL(process.env["INVARIANT_STORAGE_URL"] ?? "http://localhost:3000"),
     undefined,
     (_, init) => {
         if (init?.method == 'PUT') {
