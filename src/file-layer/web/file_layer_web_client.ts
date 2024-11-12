@@ -14,6 +14,8 @@ const contentPrefix = `${fileLayerPrefix}/content`
 const removePrefix = `${fileLayerPrefix}/remove`
 const attributesPrefix = `${fileLayerPrefix}/attributes`
 const sizePrefix = `${fileLayerPrefix}/size`
+const renamePrefix = `${fileLayerPrefix}/rename`
+const linkPrefix = `${fileLayerPrefix}/link`
 
 export class FileLayerWebClient extends PingableClient implements FileLayerClient {
     constructor (url: URL) {
@@ -148,5 +150,25 @@ export class FileLayerWebClient extends PingableClient implements FileLayerClien
         if (!response.ok) {
             error(`Could not set attributes of ${node}`)
         }
+    }
+
+    async rename(parent: Node, name: string, newName: string): Promise<boolean> {
+        const url = new URL(`${renamePrefix}/${parent}/${name}`)
+        url.searchParams.append("newName", newName)
+        const response = await fetch(url, {
+            method: 'PUT',
+            body: ''
+        })
+        return response.ok
+    }
+
+    async link(parent: Node, node: Node, name: string): Promise<boolean> {
+        const url = new URL(`${linkPrefix}/${parent}/${name}`)
+        url.searchParams.append("node", `${node}`)
+        const response = await fetch(url, {
+            method: 'PUT',
+            body: ''
+        })
+        return response.ok
     }
 }

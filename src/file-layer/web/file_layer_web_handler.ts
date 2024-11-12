@@ -32,6 +32,11 @@ function contentKind(value: string | string[] | undefined): ContentKind | undefi
     if (result.success) return result.data as ContentKind
 }
 
+function convertString(value: string | string[] | undefined): string | undefined {
+    if (!value || value == '' || Array.isArray(value)) return undefined
+    return value
+}
+
 interface OffsetLength {
     offset?: number
     length?: number
@@ -104,7 +109,8 @@ export function fileLayerWebHandlers(layer: FileLayerClient): ResponseFunc {
                 params: [nodeSchema],
                 body: attributesSchema,
                 handler: async (ctx, next, node, attributes: EntryAttriutes) => {
-                    ctx.body = await layer.setAttributes(node, attributes)
+                    await layer.setAttributes(node, attributes)
+                    ctx.body = ''
                     ctx.status = 200
                 }
             },
@@ -115,6 +121,34 @@ export function fileLayerWebHandlers(layer: FileLayerClient): ResponseFunc {
                     await layer.setSize(node, size)
                     ctx.body = ''
                     ctx.status = 200
+                }
+            },
+            'rename': {
+                method: 'PUT',
+                params: [nodeSchema, nameSchema],
+                query: { 'newName': convertString },
+                handler: async (ctx, next, parent, query: { newName?: string }, name: string) => {
+                    const newName = query.newName
+                    ctx.body = ''
+                    if (!newName || await layer.rename(parent, name, newName)) {
+                        ctx.status = 404
+                    } else {
+                        ctx.status = 200
+                    }
+                }
+            },
+            'link': {
+                method: 'PUT',
+                params: [nodeSchema, nameSchema],
+                query: { 'node': offsetOrLength },
+                handler: async (ctx, next, parent, query: { node?: Node }, name: string) => {
+                    const node = query.node
+                    ctx.body = ''
+                    if (node === undefined || await layer.link(parent, node, name)) {
+                        ctx.status = 404
+                    } else {
+                        ctx.status = 200
+                    }
                 }
             }
         },{
