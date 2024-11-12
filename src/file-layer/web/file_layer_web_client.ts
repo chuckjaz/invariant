@@ -16,6 +16,7 @@ const attributesPrefix = `${fileLayerPrefix}/attributes`
 const sizePrefix = `${fileLayerPrefix}/size`
 const renamePrefix = `${fileLayerPrefix}/rename`
 const linkPrefix = `${fileLayerPrefix}/link`
+const syncPrefix = `${fileLayerPrefix}/sync`
 
 export class FileLayerWebClient extends PingableClient implements FileLayerClient {
     constructor (url: URL) {
@@ -153,7 +154,7 @@ export class FileLayerWebClient extends PingableClient implements FileLayerClien
     }
 
     async rename(parent: Node, name: string, newParent: Node, newName: string): Promise<boolean> {
-        const url = new URL(`${renamePrefix}/${parent}/${name}`)
+        const url = new URL(`${renamePrefix}/${parent}/${name}`, this.url)
         url.searchParams.append("newParent", `${newParent}`)
         url.searchParams.append("newName", newName)
         const response = await fetch(url, {
@@ -164,12 +165,20 @@ export class FileLayerWebClient extends PingableClient implements FileLayerClien
     }
 
     async link(parent: Node, node: Node, name: string): Promise<boolean> {
-        const url = new URL(`${linkPrefix}/${parent}/${name}`)
+        const url = new URL(`${linkPrefix}/${parent}/${name}`, this.url)
         url.searchParams.append("node", `${node}`)
         const response = await fetch(url, {
             method: 'PUT',
             body: ''
         })
         return response.ok
+    }
+
+    async sync(): Promise<void> {
+        const url = new URL(syncPrefix, this.url)
+        const response = await fetch(url, {
+            method: 'PUT',
+            body: ''
+        })
     }
 }

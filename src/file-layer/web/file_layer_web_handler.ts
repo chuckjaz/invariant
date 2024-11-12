@@ -154,6 +154,14 @@ export function fileLayerWebHandlers(layer: FileLayerClient): ResponseFunc {
                         ctx.status = 200
                     }
                 }
+            },
+            'sync': {
+                method: 'PUT',
+                handler: async (ctx, next) => {
+                    await layer.sync()
+                    ctx.body = ''
+                    ctx.status = 200
+                }
             }
         },{
             method: 'GET',

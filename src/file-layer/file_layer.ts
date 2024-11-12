@@ -274,6 +274,15 @@ export class FileLayer implements FileLayerClient {
         }
     }
 
+    sync(): Promise<void> {
+        if (this.syncTimeout) {
+            clearTimeout(this.syncTimeout)
+            this.syncTimeout = undefined
+            this.scheduleSync()
+        }
+        return this.previousSync
+    }
+
     stop() {
         if (this.syncTimeout) {
             clearTimeout(this.syncTimeout)
@@ -472,12 +481,12 @@ export class FileLayer implements FileLayerClient {
     private previousSync = Promise.resolve()
     private syncTimeout?: NodeJS.Timeout
 
-    private scheduleSync() {
+    private scheduleSync(timeout: number = this.syncFrequency) {
         if (this.syncTimeout) return
-        this.syncTimeout = setTimeout(this.sinkTimeout.bind(this), this.syncFrequency)
+        this.syncTimeout = setTimeout(this.sinkTimeoutFunc.bind(this), timeout)
     }
 
-    private sinkTimeout() {
+    private sinkTimeoutFunc() {
         this.previousSync = this.doSync(this.previousSync)
     }
 

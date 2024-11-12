@@ -51,4 +51,6 @@ export interface FileLayerClient {
     setAttributes(node: Node, attributes: EntryAttriutes): Promise<void>
     rename(parent: Node, name: string,  newParent: Node, newName: string): Promise<boolean>
     link(parent: Node, node: Node, name: string): Promise<boolean>
+
+    sync(): Promise<void>
 }
