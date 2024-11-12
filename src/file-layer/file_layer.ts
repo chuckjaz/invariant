@@ -238,16 +238,19 @@ export class FileLayer implements FileLayerClient {
         }
     }
 
-    async rename(parent: Node, name: string, newName: string): Promise<boolean> {
+    async rename(parent: Node, name: string, newParent: Node, newName: string): Promise<boolean> {
         const lock = nRequired(this.locks.get(parent))
         await lock.writeLock()
         try {
             const entries = nRequired(this.directories.get(parent))
+            const newEntries = nRequired(this.directories.get(newParent))
             const node = entries.get(name)
             if (node === undefined) return false
             entries.delete(name)
-            entries.set(newName, node)
+            newEntries.set(newName, node)
             this.invalidDirectories.add(parent)
+
+            this.invalidDirectories.add(newParent)
             this.scheduleSync()
             return true
         } finally {

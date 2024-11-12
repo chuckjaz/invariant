@@ -49,6 +49,6 @@ export interface FileLayerClient {
     createNode(parent: Node, name: string, kind: ContentKind): Promise<Node>
     removeNode(parent: Node, name: string): Promise<boolean>
     setAttributes(node: Node, attributes: EntryAttriutes): Promise<void>
-    rename(parent: Node, name: string, newName: string): Promise<boolean>
+    rename(parent: Node, name: string,  newParent: Node, newName: string): Promise<boolean>
     link(parent: Node, node: Node, name: string): Promise<boolean>
 }

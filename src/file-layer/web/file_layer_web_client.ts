@@ -152,8 +152,9 @@ export class FileLayerWebClient extends PingableClient implements FileLayerClien
         }
     }
 
-    async rename(parent: Node, name: string, newName: string): Promise<boolean> {
+    async rename(parent: Node, name: string, newParent: Node, newName: string): Promise<boolean> {
         const url = new URL(`${renamePrefix}/${parent}/${name}`)
+        url.searchParams.append("newParent", `${newParent}`)
         url.searchParams.append("newName", newName)
         const response = await fetch(url, {
             method: 'PUT',

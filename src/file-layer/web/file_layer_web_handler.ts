@@ -126,11 +126,15 @@ export function fileLayerWebHandlers(layer: FileLayerClient): ResponseFunc {
             'rename': {
                 method: 'PUT',
                 params: [nodeSchema, nameSchema],
-                query: { 'newName': convertString },
-                handler: async (ctx, next, parent, query: { newName?: string }, name: string) => {
+                query: {
+                    'newParent': offsetOrLength,
+                    'newName': convertString
+                },
+                handler: async (ctx, next, parent, query: { newParent?: Node, newName?: string }, name: string) => {
+                    const newParent = query.newParent
                     const newName = query.newName
                     ctx.body = ''
-                    if (!newName || await layer.rename(parent, name, newName)) {
+                    if (newName === undefined || newParent === undefined || await layer.rename(parent, name, newParent, newName)) {
                         ctx.status = 404
                     } else {
                         ctx.status = 200
