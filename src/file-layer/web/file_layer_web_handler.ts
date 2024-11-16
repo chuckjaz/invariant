@@ -9,7 +9,6 @@ import { dataToReadable, jsonStreamToText } from "../../common/parseJson"
 
 const nodeSchema = z.number().int().nonnegative('Expected a node') satisfies Schema
 const nonNegativeIntSchema = z.number().int().nonnegative('Expected a positive number') satisfies Schema
-const nameSchema = z.string() satisfies Schema
 const contentKindSchema = z.union([z.literal("File"), z.literal("Directory")])
 const attributesSchema = z.object({
     executable: z.optional(z.boolean()),
@@ -65,21 +64,29 @@ export function fileLayerWebHandlers(layer: FileLayerClient): ResponseFunc {
                 method: 'GET',
                 params: [nodeSchema],
                 handler: async (ctx, next, node: Node) => {
+                    console.log("info:", node)
                     const result = await layer.info(node)
                     if (result) {
+                        console.log("info: result:", result)
                         ctx.status = 200
                         ctx.body = result
+                    } else {
+                        console.log("info: Not Found")
                     }
                 }
             },
             'lookup': {
                 method: 'GET',
-                params: [nodeSchema, nameSchema],
+                params: [nodeSchema, convertString],
                 handler: async (ctx, next, parent: number, name: string) => {
+                    console.log("lookup:", parent, name)
                     const result = await layer.lookup(parent, name)
                     if (result) {
+                        console.log("lookup: result:", result)
                         ctx.body = result
                         ctx.status = 200
+                    } else {
+                        console.log("lookup: Not Found")
                     }
                 }
             },
@@ -98,7 +105,7 @@ export function fileLayerWebHandlers(layer: FileLayerClient): ResponseFunc {
             },
             'remove': {
                 method: 'POST',
-                params: [nodeSchema, nameSchema],
+                params: [nodeSchema, convertString],
                 handler: async (ctx, next, parent: Node, name: string) => {
                     ctx.body = await layer.removeNode(parent, name)
                     ctx.status = 200
@@ -125,7 +132,7 @@ export function fileLayerWebHandlers(layer: FileLayerClient): ResponseFunc {
             },
             'rename': {
                 method: 'PUT',
-                params: [nodeSchema, nameSchema],
+                params: [nodeSchema, convertString],
                 query: {
                     'newParent': offsetOrLength,
                     'newName': convertString
@@ -143,7 +150,7 @@ export function fileLayerWebHandlers(layer: FileLayerClient): ResponseFunc {
             },
             'link': {
                 method: 'PUT',
-                params: [nodeSchema, nameSchema],
+                params: [nodeSchema, convertString],
                 query: { 'node': offsetOrLength },
                 handler: async (ctx, next, parent, query: { node?: Node }, name: string) => {
                     const node = query.node
@@ -187,7 +194,7 @@ export function fileLayerWebHandlers(layer: FileLayerClient): ResponseFunc {
             }
         }, {
             method: 'PUT',
-            params: [nodeSchema, nameSchema],
+            params: [nodeSchema, convertString],
             query: {
                 'kind': contentKind,
             },

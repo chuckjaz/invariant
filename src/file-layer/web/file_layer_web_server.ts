@@ -25,6 +25,7 @@ if (!rootId) {
 const fileLayerUrl = getFileLayerUrl()
 
 async function startup() {
+    console.log("Starting on", fileLayerUrl)
     // Create the broker
     const broker = new Broker(brokerUrl)
 
@@ -44,6 +45,7 @@ async function startup() {
 
     app.use(log)
     app.use(handlers)
+    console.log("Fully started")
 }
 
 const port = parseInt(fileLayerUrl.port)

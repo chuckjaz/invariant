@@ -22,6 +22,7 @@ export interface ContentInformation {
 
 export interface FileDirectoryEntry {
     name: string
+    kind: ContentKind
     node: number
 }
 

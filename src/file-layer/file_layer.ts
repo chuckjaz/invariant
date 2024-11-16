@@ -25,7 +25,7 @@ export class FileLayer implements FileLayerClient {
     private invalidDirectories = new Set<Node>()
     private slotMounts = new Map<Node, string>()
     private locks = new Map<Node, ReadWriteLock>()
-    private nextNode = 0
+    private nextNode = 1
 
     constructor(storage: StorageClient, slots: SlotsClient, broker: BrokerClient, syncFrequency: number) {
         this.storage = storage
@@ -137,14 +137,19 @@ export class FileLayer implements FileLayerClient {
         }
     }
 
-    async *readDirectory(node: Node): AsyncIterable<FileDirectoryEntry> {
+    async *readDirectory(node: Node, offset: number = 0, length: number = Number.MAX_SAFE_INTEGER): AsyncIterable<FileDirectoryEntry> {
         this.assertKind(node, ContentKind.Directory)
         const lock = nRequired(this.locks.get(node))
         await lock.readLock()
         try {
             const entries = await this.ensureDirectory(node)
+            let current = 0
             for (const [name, node] of entries) {
-                yield { name, node }
+                if (current < offset) continue
+                if (current - offset > length) break
+                current++
+                const info = nRequired(this.infos.get(node))
+                yield { name, kind: info.kind, node }
             }
         } finally {
             lock.readUnlock()

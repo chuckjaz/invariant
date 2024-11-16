@@ -30,7 +30,7 @@ export interface Headers {
 
 export interface Handler {
     method: 'GET' | 'PUT' | 'POST' | 'HEAD'
-    params?: Schema[],
+    params?: (Schema | Converter<any>)[],
     headers?: Headers,
     query?: QueryParameters,
     body?: Schema,
@@ -73,13 +73,19 @@ export async function route(route: Route, ctx: Ctx, next: Next): Promise<void> {
         }
         if (params) {
             for (let i = 0; i < params.length; i++) {
-                args.push(jsonFromText(params[i], rest[i]))
+                const validator = params[i]
+                if (typeof validator == 'function') {
+                    args.push(validator(rest[i]))
+                } else {
+                    args.push(jsonFromText(validator, rest[i]))
+                }
             }
         }
         if (handler.body) {
             const body = await jsonFromData(handler.body, dataFromReadable(ctx.req))
             args.push(body)
         }
+        console.log("route handler args", args)
         await handler.handler(ctx, next, ...args)
     }
 
