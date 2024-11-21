@@ -5,6 +5,7 @@ import { Broker } from '../../broker/web/broker_client'
 import { LocalStorage } from '../local/local_storage'
 import { BrokerClient } from '../../broker/client'
 import { logHandler } from '../../common/web'
+
 const app = new Koa()
 
 const directory = getStorageDirectory()
@@ -19,7 +20,7 @@ async function startup() {
     app.use(logHandler("storage"))
     app.use(storageHandlers(client, broker))
     try {
-        await broker.register(client.id, storageUrl, 'slots')
+        await broker.register(client.id, storageUrl, 'storage')
     } catch(e: any) {
         broker = undefined
         console.log(`WARNING: could not register with broker: ${e.message}`)

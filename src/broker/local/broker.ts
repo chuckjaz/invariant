@@ -17,7 +17,7 @@ export default app
 
 const brokerPrefix = '/broker/'
 const brokerLocationPrefx = brokerPrefix + 'location/'
-const brokerServersPrefix = brokerPrefix + 'servers/'
+const brokerRegisteredPrefix = brokerPrefix + 'registered/'
 const brokerRegisterPrefix = brokerPrefix + 'register/'
 
 const generateKeyPair = promisify(gkp)
@@ -35,8 +35,8 @@ const info = new Map<string, Information>()
 
 app.use(async function (ctx,  next) {
     console.log(ctx.method, ctx.path)
-    if (ctx.path.startsWith(brokerServersPrefix) && ctx.method == 'GET') {
-        const kind = trimTrailingSlash(ctx.path.slice(brokerServersPrefix.length))
+    if (ctx.path.startsWith(brokerRegisteredPrefix) && ctx.method == 'GET') {
+        const kind = trimTrailingSlash(ctx.path.slice(brokerRegisteredPrefix.length))
 
         const brokers: string[] = []
         for (const entry of info.values()) {

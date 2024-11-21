@@ -16,6 +16,7 @@
     "jasmine": "^5.2.0",
     "koa": "^2.15.3",
     "koa-body": "^6.0.1",
+    "yargs": "^17.7.2",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -24,6 +25,7 @@
     "@types/jasmine": "^5.1.4",
     "@types/koa": "^2.15.0",
     "@types/koa__router": "^12.0.4",
+    "@types/yargs": "^17.0.33",
     "typescript": "^5.5.3"
   }
 }
