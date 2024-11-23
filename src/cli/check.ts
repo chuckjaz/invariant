@@ -4,12 +4,11 @@ import * as fs from 'node:fs/promises'
 import { fileExists } from '../common/files'
 import { Broker } from '../broker/web/broker_client'
 import { BrokerClient } from '../broker/client'
+import { loadConfigutation } from '../config/config'
 
 export default {
     command: 'check',
-    describe: `Check the configuration.
-
-Ensure the broker is running and enumerates all the servers and pings them to ensure they are running.`,
+    describe: `Check the configuration`,
     handler: () => check()
 }
 
@@ -24,8 +23,7 @@ async function check() {
         error(notConfigured)
     }
 
-    const configurationText = await fs.readFile(configurationDir, 'utf-8')
-    const configuration = JSON.parse(configurationText) as ConfigurationJson
+    const configuration = await loadConfigutation()
 
     const brokerUrl = new URL(configuration.broker)
     const broker = new Broker(brokerUrl)

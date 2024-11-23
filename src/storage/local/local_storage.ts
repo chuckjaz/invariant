@@ -14,8 +14,8 @@ export class LocalStorage implements ManagedStorageClient {
     id: string
     directory: string
 
-    constructor(directory: string) {
-        this.id = randomBytes(32).toString('hex')
+    constructor(directory: string, id?: string) {
+        this.id = id ?? randomBytes(32).toString('hex')
         this.directory = directory
     }
 
