@@ -75,7 +75,9 @@ export async function route(route: Route, ctx: Ctx, next: Next): Promise<void> {
             for (let i = 0; i < params.length; i++) {
                 const validator = params[i]
                 if (typeof validator == 'function') {
-                    args.push(validator(rest[i]))
+                    const arg = validator(rest[i])
+                    if (arg === undefined) return
+                    args.push(arg)
                 } else {
                     args.push(jsonFromText(validator, rest[i]))
                 }
@@ -91,6 +93,7 @@ export async function route(route: Route, ctx: Ctx, next: Next): Promise<void> {
 
     try {
         const parts = path.split('/').slice(1)
+        while (parts[parts.length - 1] === '') parts.pop()
         let i = 0;
         let current = route
         loop: while (current && i < parts.length) {
@@ -98,7 +101,9 @@ export async function route(route: Route, ctx: Ctx, next: Next): Promise<void> {
             if (!Array.isArray(current) && part in current) {
                 current = (current as RoutePart)[part]
                 i++
-                continue
+                if (!isHandler(current)) {
+                    continue
+                }
             }
             if (isHandler(current) && current.method == ctx.method) {
                 await handle(parts.slice(i), current)
