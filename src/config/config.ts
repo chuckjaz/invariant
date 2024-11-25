@@ -65,7 +65,7 @@ export async function loadConfigutation(): Promise<Configuration> {
     }
 
     const result: Configuration = {
-        broker: new URL(json.broker),
+        broker: json.broker ? new URL(json.broker) : undefined,
         servers
     }
     return  result
