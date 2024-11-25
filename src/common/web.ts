@@ -10,11 +10,13 @@ export function logHandler(name: string): ResponseFunc {
     let i = 0
     return async (ctx, next) => {
         const requestNumber = i++
-        console.log(`REQUEST(${requestNumber}:${name}): ${ctx.method} ${ctx.path}`)
+        const startDate = new Date().toLocaleString()
+        console.log(`${startDate} REQUEST(${requestNumber}:${name}): ${ctx.method} ${ctx.path}`)
         const start = Date.now()
         await next()
         const time = Date.now() - start
-        console.log(`RESPONSE(${requestNumber}:${name}): ${ctx.status}, time: ${time}ms`)
+        const endDate = new Date().toLocaleString()
+        console.log(`${endDate} RESPONSE(${requestNumber}:${name}): ${ctx.status}, time: ${time}ms`)
     }
 }
 

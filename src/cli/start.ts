@@ -3,10 +3,12 @@ import Koa from 'koa'
 import { CommandModule } from "yargs"
 import { loadConfigutation, Server, ServerConfiguration } from "../config/config"
 import { BrokerClient } from '../broker/client'
-import { Broker } from '../broker/web/broker_client'
+import { BrokerWebClient } from '../broker/web/broker_web_client'
 import { logHandler } from '../common/web'
 import { storageHandlers } from '../storage/web/storage_web_handlers'
 import { LocalStorage } from '../storage/local/local_storage'
+import { LocalBrokerServer } from '../broker/local/broker_local_server'
+import { brokerHandlers } from '../broker/web/broker_web_handler'
 
 export default {
     command: 'start [service]',
@@ -26,12 +28,15 @@ async function start(choice: string) {
     const servers = configuration.servers
     if (servers) {
         console.log('Starting services...')
-        const broker = new Broker(configuration.broker)
+        let broker = configuration.broker ? new BrokerWebClient(configuration.broker) : undefined
         for (const service of servers) {
             const server = service.server
             if (server == choice || choice == "all") {
                 const fn = starters[server]
-                fn(broker, service)
+                const primary = await fn(service, broker)
+                if (primary && server == "broker" && service.primary) {
+                    broker = primary
+                }
             }
         }
     } else {
@@ -39,22 +44,40 @@ async function start(choice: string) {
     }
 }
 
-const starters: { [index: string]: (broker: BrokerClient, config: ServerConfiguration) => Promise<void>} = {
+const starters: { [index: string]: (config: ServerConfiguration, broker?: BrokerClient) => Promise<any>} = {
+    'broker': startBroker,
     'storage': startStorage
 }
 
-async function startStorage(broker: BrokerClient, config: ServerConfiguration) {
-    console.log(" Starting storage server")
+async function startBroker(config: ServerConfiguration, broker?: BrokerClient): Promise<BrokerClient | undefined> {
+    console.log("Starting broker server")
+
+    const app = new Koa()
+    const server = new LocalBrokerServer(config.directory, config.id)
+    app.use(logHandler("broker"))
+    app.use(brokerHandlers(server))
+    app.listen(config.port)
+    console.log(`Broker ${config.id}: Listening on http://localhost:${config.port}, directory: ${config.directory}`)
+    if (broker && config.url) {
+        broker.register(config.id, config.url, 'broker').catch(e => console.error(e))
+    }
+    if (config.primary) {
+        return new BrokerWebClient(new URL(`http://localhost:${config.port}`), config.id)
+    }
+}
+
+async function startStorage(config: ServerConfiguration, broker?: BrokerClient) {
+    console.log("Starting storage server")
 
     const app = new Koa()
 
-    const client = new LocalStorage(config.directory)
+    const client = new LocalStorage(config.directory, config.id)
     app.use(logHandler("storage"))
     app.use(storageHandlers(client, broker))
     app.listen(config.port)
-    console.log(` Storage ${config.id}: Listening on http://localhost:${config.port}, directory: ${config.directory}`)
+    console.log(`Storage ${config.id}: Listening on http://localhost:${config.port}, directory: ${config.directory}`)
 
-    if (config.url) {
-        await broker.register(config.id, config.url, 'storage')
+    if (broker && config.url) {
+        broker.register(config.id, config.url, 'storage').catch(e => console.error(e))
     }
 }

@@ -2,7 +2,7 @@ import { homedir } from 'node:os'
 import * as path from 'path'
 import * as fs from 'node:fs/promises'
 import { fileExists } from '../common/files'
-import { Broker } from '../broker/web/broker_client'
+import { BrokerWebClient } from '../broker/web/broker_web_client'
 import { BrokerClient } from '../broker/client'
 import { loadConfigutation } from '../config/config'
 
@@ -25,20 +25,24 @@ async function check() {
 
     const configuration = await loadConfigutation()
 
-    const brokerUrl = new URL(configuration.broker)
-    const broker = new Broker(brokerUrl)
+    const brokerUrl = configuration.broker
+    if (!brokerUrl) {
+        error(notConnected)
+    }
+    const broker = new BrokerWebClient(brokerUrl)
     const {id: brokerId, time } = await timePing('Broker', broker)
     if (!brokerId) {
         error(brokerNotResposnding(brokerUrl))
     }
 
-    reportKind('storage', broker)
+    reportKind('broker', broker)
+    reportKind('distribute', broker)
     reportKind('find', broker)
     reportKind('slots', broker)
-    reportKind('broker', broker)
+    reportKind('storage', broker)
 }
 
-type ServersKind = "broker" | "find" | "storage" | "slots"
+type ServersKind = "broker" | "distribute" | "find" | "storage" | "slots"
 
 async function reportKind(kind: ServersKind, broker: BrokerClient) {
     for await (const id of await broker.registered(kind)) {
@@ -88,6 +92,15 @@ function error(msg: string): never {
     console.error(msg)
     process.exit(1)
 }
+
+const notConnected = `Invariant is not connected to a broker
+
+Try running,
+
+  invariant connect
+
+to connect with an existing broker
+`
 
 const notConfigured = `Invariant has not been configured.
 

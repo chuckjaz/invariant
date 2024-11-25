@@ -5,19 +5,13 @@ import { z } from 'zod'
 import { idSchema } from '../../common/schema';
 import { BrokerClient } from '../../broker/client';
 import { dataToReadable } from '../../common/parseJson';
-import { Converter, ResponseFunc, route, Route } from '../../common/web';
-import { normalizeCode } from '../../common/codes';
+import { ResponseFunc, route, Route } from '../../common/web';
+import { codeConverter } from '../../common/codes';
 
 const fetchSchema = z.object({
     address: idSchema,
     container: idSchema
 })
-
-const addressConverter: Converter<string> = (value: string | string[] | undefined) => {
-    if (typeof value === 'string') {
-        return normalizeCode(value)
-    }
-}
 
 export function storageHandlers(client: StorageClient, broker?: BrokerClient): ResponseFunc {
     const routes: Route = {
@@ -63,7 +57,7 @@ export function storageHandlers(client: StorageClient, broker?: BrokerClient): R
             },
             {
                 method: 'HEAD',
-                params: [addressConverter],
+                params: [codeConverter],
                 handler: async function (ctx, next, address) {
                     if (await client.has(address)) {
                         ctx.body = ''
@@ -73,7 +67,7 @@ export function storageHandlers(client: StorageClient, broker?: BrokerClient): R
             },
             {
                 method: 'GET',
-                params: [addressConverter],
+                params: [codeConverter],
                 handler: async function (ctx, next, address) {
                     const result = await client.get(address)
                     if (result) {
@@ -84,7 +78,7 @@ export function storageHandlers(client: StorageClient, broker?: BrokerClient): R
             },
             {
                 method: 'PUT',
-                params: [addressConverter],
+                params: [codeConverter],
                 handler: async function (ctx, next, address) {
                     const result = await client.put(address, dataFromReadable(ctx.request.req))
                     if (result) {

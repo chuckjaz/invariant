@@ -1,7 +1,7 @@
 import Koa from 'koa'
 import { slotsHandler } from './slots_web_handler'
 import { getBrokerUrl, getSlotsDirectory, getSlotsUrl } from '../../common/config'
-import { Broker } from '../../broker/web/broker_client'
+import { BrokerWebClient } from '../../broker/web/broker_web_client'
 import { LocalSlots } from '../local/slots_local'
 const app = new Koa()
 
@@ -13,7 +13,7 @@ const slotsUrl = getSlotsUrl()
 
 async function startup() {
     // Create the broker
-    const broker = new Broker(brokerUrl)
+    const broker = new BrokerWebClient(brokerUrl)
     try {
         await broker.register(client.id, slotsUrl, 'slots')
     } catch(e: any) {

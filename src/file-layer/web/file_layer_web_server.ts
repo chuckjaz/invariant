@@ -1,6 +1,6 @@
 import Koa from 'koa'
 import { getBrokerUrl, getFileLayerUrl, getSlotsUrl } from '../../common/config'
-import { Broker } from '../../broker/web/broker_client'
+import { BrokerWebClient } from '../../broker/web/broker_web_client'
 import { FileLayer } from '../file_layer'
 import { normalizeCode } from '../../common/codes'
 import { mockSlots } from '../../slots/mock/slots_mock_client'
@@ -27,7 +27,7 @@ const fileLayerUrl = getFileLayerUrl()
 async function startup() {
     console.log("Starting on", fileLayerUrl)
     // Create the broker
-    const broker = new Broker(brokerUrl)
+    const broker = new BrokerWebClient(brokerUrl)
 
     // Find the storage
     const storage = await broker.storage(storageId)

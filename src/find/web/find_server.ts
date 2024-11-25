@@ -1,6 +1,6 @@
 import { text } from 'co-body'
 import Koa from 'koa'
-import { Broker } from '../../broker/web/broker_client'
+import { BrokerWebClient } from '../../broker/web/broker_web_client'
 import { normalizeCode } from '../../common/codes'
 import { getBrokerUrl, FIND_URL, getFindUrl } from '../../common/config'
 import { safeParseJson as safeParseJson } from '../../common/parseJson'
@@ -70,7 +70,7 @@ app.use(async function (ctx, next) {
 
 async function startup(find: URL, brokerUrl: URL) {
     // Create the broker
-    const broker = new Broker(brokerUrl)
+    const broker = new BrokerWebClient(brokerUrl)
     server = await findServer(broker)
     serverId = (await server.ping())!!
     if (serverId) {

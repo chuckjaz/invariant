@@ -1,8 +1,13 @@
+import { randomBytes } from 'node:crypto'
 import Koa from 'koa'
 import { join } from 'node:path'
 import { readFile, writeFile } from 'node:fs/promises'
 import { fileExists } from './files';
 import { normalizeCode } from './codes';
+
+export function randomId(): string {
+    return randomBytes(32).toString('hex')
+}
 
 type KoaCtx = Koa.ParameterizedContext<Koa.DefaultState, Koa.DefaultContext, any>;
 

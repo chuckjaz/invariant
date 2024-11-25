@@ -10,7 +10,7 @@ import { fileExists } from '../../common/files'
 import { verifyLive } from '../../common/verify'
 import { delay } from '../../common/delay'
 import { BROKER_URL, getBrokerUrl, optionalParentBrokerUrl } from '../../common/config'
-import { Broker } from '../web/broker_client'
+import { BrokerWebClient } from '../web/broker_web_client'
 
 const app = new Koa()
 export default app
@@ -212,7 +212,7 @@ async function startup() {
     app.use(idMiddle(idText))
     const parentBrokerUrl = optionalParentBrokerUrl()
     if (parentBrokerUrl) {
-        const parentBroker = new Broker(parentBrokerUrl)
+        const parentBroker = new BrokerWebClient(parentBrokerUrl)
         await parentBroker.register(idText, parentBrokerUrl, 'broker')
     }
 

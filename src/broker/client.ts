@@ -12,3 +12,4 @@ export interface BrokerClient {
     registered(kind: string): Promise<AsyncIterable<string>>
     register(id: string, url: URL, kind?: string): Promise<BrokerRegisterResponse | undefined>
 }
+

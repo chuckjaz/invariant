@@ -1,7 +1,7 @@
 import Koa from 'koa'
 import { storageHandlers } from './storage_web_handlers'
 import { getBrokerUrl, getStorageDirectory, getStorageUrl } from '../../common/config'
-import { Broker } from '../../broker/web/broker_client'
+import { BrokerWebClient } from '../../broker/web/broker_web_client'
 import { LocalStorage } from '../local/local_storage'
 import { BrokerClient } from '../../broker/client'
 import { logHandler } from '../../common/web'
@@ -16,7 +16,7 @@ const storageUrl = getStorageUrl()
 
 async function startup() {
     // Create the broker
-    let broker: BrokerClient | undefined = new Broker(brokerUrl)
+    let broker: BrokerClient | undefined = new BrokerWebClient(brokerUrl)
     app.use(logHandler("storage"))
     app.use(storageHandlers(client, broker))
     try {

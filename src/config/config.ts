@@ -3,7 +3,7 @@ import * as path from 'path'
 import * as fs from 'node:fs/promises'
 
 export interface Configuration {
-    broker: URL
+    broker?: URL
     servers?: ServerConfiguration[]
 }
 
@@ -15,6 +15,7 @@ export interface ServerConfiguration {
     port: number
     directory: string
     url?: URL
+    primary?: boolean
 }
 
 interface ServerConfigurationJson {
@@ -23,6 +24,7 @@ interface ServerConfigurationJson {
     port: number
     directory?: string
     url?: string
+    primary?: boolean
 }
 
 interface ConfigurationJson {
@@ -56,7 +58,8 @@ export async function loadConfigutation(): Promise<Configuration> {
                 id: server.id,
                 port: server.port,
                 directory,
-                url
+                url,
+                primary: server.primary
             })
         }
     }
