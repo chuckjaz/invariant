@@ -1,7 +1,7 @@
 import * as path from 'path'
 import { readFile, writeFile } from 'fs/promises'
 import { randomId } from "../../common/id";
-import { BrokerRegisterResponse } from "../../common/types";
+import { BrokerLocationResponse, BrokerRegisterResponse } from "../../common/types";
 import { verifyLive } from "../../common/verify";
 import { BrokerServer } from "../server";
 import { fileExists } from '../../common/files';
@@ -38,11 +38,11 @@ export class LocalBrokerServer implements BrokerServer {
         return this.id
     }
 
-    async location(id: string): Promise<URL | undefined> {
+    async location(id: string): Promise<BrokerLocationResponse | undefined> {
         const info = this.info.get(id)
         if (info) {
             this.validateId(id)
-            return new URL(info.url)
+            return { id, url: info.url }
         }
         return undefined
     }

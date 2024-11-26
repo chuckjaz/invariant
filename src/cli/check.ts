@@ -1,22 +1,23 @@
 import { homedir } from 'node:os'
 import * as path from 'path'
-import * as fs from 'node:fs/promises'
 import { fileExists } from '../common/files'
 import { BrokerWebClient } from '../broker/web/broker_web_client'
 import { BrokerClient } from '../broker/client'
 import { loadConfigutation } from '../config/config'
+import yargs from 'yargs'
 
 export default {
-    command: 'check',
+    command: 'check [broker]',
     describe: `Check the configuration`,
-    handler: () => check()
-}
+    handler: yargs =>
+        check((yargs as any).broker)
+} satisfies yargs.CommandModule
 
 function configurationPath(): string {
     return path.join(homedir(), '.invariant', 'config.json')
 }
 
-async function check() {
+async function check(specifiedUrl?: string) {
     // Load the configuration file
     const configurationDir = configurationPath()
     if (!await fileExists(configurationDir)) {
@@ -25,7 +26,7 @@ async function check() {
 
     const configuration = await loadConfigutation()
 
-    const brokerUrl = configuration.broker
+    const brokerUrl = (specifiedUrl ? new URL(specifiedUrl) : undefined) ?? configuration.broker
     if (!brokerUrl) {
         error(notConnected)
     }

@@ -8,7 +8,7 @@
         {
             "type": "node",
             "request": "launch",
-            "name": "Launch File-Layer",
+            "name": "start",
             "skipFiles": [
                 "<node_internals>/**"
             ],
@@ -19,6 +19,23 @@
             "outFiles": [
                 "${workspaceFolder}/dist/**/*.js"
             ]
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "check",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "program": "${workspaceFolder}/dist/cli/cli.js",
+            "args": [
+                "check",
+                "http://localhost:3003"
+            ],
+            "outFiles": [
+                "${workspaceFolder}/dist/**/*.js"
+            ]
         }
+
     ]
 }

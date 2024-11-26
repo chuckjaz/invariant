@@ -1,5 +1,6 @@
 import { Channel } from "../../common/channel";
 import { normalizeCode } from "../../common/codes";
+import { safeParseJson } from "../../common/parseJson";
 import { PingableClient } from "../../common/pingable_client";
 import { BrokerLocationResponse, BrokerRegisterResponse } from "../../common/types";
 import { FindClient } from "../../find/client";
@@ -40,14 +41,17 @@ export class BrokerWebClient extends PingableClient implements BrokerClient {
     async registered(kind: string): Promise<AsyncIterable<string>> {
         const channel = new Channel<string>()
         try {
-            const response = await fetch(new URL(brokerRegisteredPrefix, this.url))
+            const response = await fetch(new URL(`${brokerRegisteredPrefix}${kind}`, this.url))
             if (response.status == 200) {
                 // TODO: Stream response
                 const result = await response.text()
-                for (const line of result.split('\n')) {
-                    const normalId = normalizeCode(line)
-                    if (normalId) await channel.send(normalId)
-                    if (channel.closed) break
+                const codes = result.startsWith("[") ? safeParseJson(result) : result.split(`\n`)
+                if (Array.isArray(codes)) {
+                    for (const line of codes) {
+                        const normalId = normalizeCode(line)
+                        if (normalId) await channel.send(normalId)
+                        if (channel.closed) break
+                    }
                 }
             }
         } finally {
