@@ -58,7 +58,7 @@ export function brokerHandlers(server: BrokerServer): ResponseFunc {
                 method: 'GET',
                 params: [kindConverter],
                 handler: async function (ctx, next, kind) {
-                    const items = allOfStream(await server.registered(kind))
+                    const items = await allOfStream(await server.registered(kind))
                     ctx.body = items
                     ctx.status = 200
                 }
