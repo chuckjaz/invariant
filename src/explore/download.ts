@@ -2,10 +2,10 @@ import { writeDataToFile } from "../common/data"
 import { ParallelMapper } from "../common/parallel_mapper"
 import { dataToString, safeParseJson } from "../common/parseJson"
 import { Entry, EntryKind } from "../common/types"
-import { Storage } from "../storage/web/storage_web_client"
+import { StorageWebClient } from "../storage/web/storage_web_client"
 import * as path from 'node:path'
 
-const storage = new Storage(
+const storage = new StorageWebClient(
     new URL("https://storage.chuckjaz.workers.dev"),
     undefined,
     (_, init) => {

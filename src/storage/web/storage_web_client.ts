@@ -5,7 +5,7 @@ import { streamBlob } from "../../common/blob";
 
 const storagePrefix = '/storage/'
 
-export class Storage extends PingableClient implements StorageClient {
+export class StorageWebClient extends PingableClient implements StorageClient {
     private hook: (url: URL, init?: RequestInit) => RequestInit | undefined
     private fetchSupported = true
 

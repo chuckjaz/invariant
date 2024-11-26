@@ -8,7 +8,7 @@ import { Find } from "../../find/web/find_client";
 import { SlotsClient } from "../../slots/slot_client";
 import { SlotsWebClient } from "../../slots/web/slots_web_client";
 import { StorageClient } from "../../storage/client";
-import { Storage } from "../../storage/web/storage_web_client";
+import { StorageWebClient } from "../../storage/web/storage_web_client";
 import { BrokerClient } from "../client";
 
 const brokerLocationPrefix = '/broker/location/'
@@ -31,7 +31,7 @@ export class BrokerWebClient extends PingableClient implements BrokerClient {
     }
 
     storage(id: string): Promise<StorageClient | undefined> {
-        return this.client(id, async (id, url) => new Storage(url, id))
+        return this.client(id, async (id, url) => new StorageWebClient(url, id))
     }
 
     slots(id: string): Promise<SlotsClient | undefined> {
