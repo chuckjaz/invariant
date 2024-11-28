@@ -1,5 +1,5 @@
 import Koa from 'koa'
-
+import { Server as HttpServer} from 'node:http'
 import { CommandModule } from "yargs"
 import { loadConfigutation, Server, ServerConfiguration } from "../config/config"
 import { BrokerClient } from '../broker/client'
@@ -9,6 +9,7 @@ import { storageHandlers } from '../storage/web/storage_web_handlers'
 import { LocalStorage } from '../storage/local/local_storage'
 import { LocalBrokerServer } from '../broker/local/broker_local_server'
 import { brokerHandlers } from '../broker/web/broker_web_handler'
+import { error } from '../common/errors'
 
 export default {
     command: 'start [service]',
@@ -49,21 +50,37 @@ const starters: { [index: string]: (config: ServerConfiguration, broker?: Broker
     'storage': startStorage
 }
 
+function listening(name: string, id: string, httpServer: HttpServer, directory?: string): number {
+    const address = httpServer.address()
+    if (address == null || typeof address == "string") error("Not an active HTTP server");
+    console.log(`${name} ${id}: Listening on port ${address.port}${directory ? `, directory: ${directory}` : ''}`)
+    return address.port
+}
+
 async function startBroker(config: ServerConfiguration, broker?: BrokerClient): Promise<BrokerClient | undefined> {
     console.log("Starting broker server")
-
+    if (config.server != "broker") error("Unexpected configuration")
     const app = new Koa()
     const server = new LocalBrokerServer(config.directory, config.id)
     app.use(logHandler("broker"))
     app.use(brokerHandlers(server))
-    app.listen(config.port)
-    console.log(`Broker ${config.id}: Listening on http://localhost:${config.port}, directory: ${config.directory}`)
+    const httpServer = app.listen(config.port)
+    const port = listening("Broker", config.id, httpServer, config.directory)
     if (broker && config.url) {
         broker.register(config.id, config.url, 'broker').catch(e => console.error(e))
     }
     if (config.primary) {
-        return new BrokerWebClient(new URL(`http://localhost:${config.port}`), config.id)
+        return new BrokerWebClient(new URL(`http://localhost:${port}`), config.id)
     }
+}
+
+async function startFileLayer(config: ServerConfiguration, broker?: BrokerClient) {
+    console.log("Starting file layer server")
+    if (config.server != "file layer") error("Unexpected configuration");
+    if (!broker) error("File layer requires a broker connection to be configured");
+
+
+    const app = new Koa()
 }
 
 async function startStorage(config: ServerConfiguration, broker?: BrokerClient) {
@@ -74,8 +91,8 @@ async function startStorage(config: ServerConfiguration, broker?: BrokerClient) 
     const client = new LocalStorage(config.directory, config.id)
     app.use(logHandler("storage"))
     app.use(storageHandlers(client, broker))
-    app.listen(config.port)
-    console.log(`Storage ${config.id}: Listening on http://localhost:${config.port}, directory: ${config.directory}`)
+    const httpServer = app.listen(config.port)
+    listening("Storage", config.id, httpServer, config.directory)
 
     if (broker && config.url) {
         broker.register(config.id, config.url, 'storage').catch(e => console.error(e))

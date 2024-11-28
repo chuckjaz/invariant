@@ -1,30 +1,67 @@
 import { homedir } from 'node:os'
 import * as path from 'path'
 import * as fs from 'node:fs/promises'
+import { error } from '../common/errors'
 
 export interface Configuration {
     broker?: URL
     servers?: ServerConfiguration[]
 }
 
-export type Server = "broker" | "distribute" | "find" | "slots" | "storage"
+export type Server = "broker" | "distribute" | "find" | "file layer" | "slots" | "storage"
 
-export interface ServerConfiguration {
+export type ServerConfiguration =
+    BrokerConfiguration |
+    DistirbuteConfiguration |
+    FindConfiguration |
+    FileLayerConfiguration |
+    SlotsConfiguration |
+    StorageConfiguration
+
+export interface CommonServerConfiguration {
     server: Server
     id: string
-    port: number
+    port?: number
     directory: string
     url?: URL
+}
+
+export interface BrokerConfiguration extends CommonServerConfiguration {
+    server: "broker"
     primary?: boolean
+}
+
+export interface DistirbuteConfiguration extends CommonServerConfiguration {
+    server: "distribute"
+}
+
+export interface FileLayerConfiguration extends CommonServerConfiguration {
+    server: "file layer"
+    syncFrequency?: number
+}
+
+export interface FindConfiguration extends CommonServerConfiguration {
+    server: "find"
+}
+
+export interface SlotsConfiguration extends CommonServerConfiguration {
+    server: "slots"
+}
+
+export interface StorageConfiguration extends CommonServerConfiguration {
+    server: "storage"
 }
 
 interface ServerConfigurationJson {
     server: string
     id: string
-    port: number
+    port?: number
     directory?: string
     url?: string
     primary?: boolean
+    storage?: string
+    slots?: string
+    syncFrequency?: number
 }
 
 interface ConfigurationJson {
@@ -53,14 +90,42 @@ export async function loadConfigutation(): Promise<Configuration> {
             let url: URL | undefined = undefined
             let urlString = server.url
             if (urlString) url = new URL(urlString)
-            servers.push({
-                server: server.server as Server,
-                id: server.id,
-                port: server.port,
-                directory,
-                url,
-                primary: server.primary
-            })
+            switch (server.server) {
+                case "broker":
+                    servers.push({
+                        server: server.server,
+                        id: server.id,
+                        port: server.port,
+                        directory,
+                        url,
+                        primary: server.primary
+                    })
+                    break
+                case "distribute":
+                case "find":
+                case "slots":
+                case "storage":
+                    servers.push({
+                        server: server.server,
+                        id: server.id,
+                        port: server.port,
+                        directory,
+                        url
+                    })
+                    break
+                case "file layer":
+                    if (!server.storage) error("File layer requires a storage in the configuraton")
+                    if (!server.slots) error("File layer requires a slots in the configuration")
+                    servers.push({
+                        server: server.server,
+                        id: server.id,
+                        port: server.port,
+                        directory,
+                        url,
+                        syncFrequency: server.syncFrequency
+                    })
+                    break
+            }
         }
     }
 

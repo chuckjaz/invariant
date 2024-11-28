@@ -1,19 +1,30 @@
 import { BrokerClient } from "../../broker/client";
-import { Channel } from "../../common/channel";
+import { findInFinder } from "../../common/findInFinder";
+import { randomId } from "../../common/id";
+import { ParallelContext } from "../../common/parallel_context";
 import { FindClient } from "../../find/client";
 import { Data, StorageClient } from "../client";
-import { randomBytes } from 'node:crypto'
 
 export class BlockFindingStorage implements StorageClient {
-    id = randomBytes(32).toString('hex')
+    id: string
     broker: BrokerClient
     finder: FindClient
     backingStorage?: StorageClient
+    context: ParallelContext
 
-    constructor(broker: BrokerClient, finder: FindClient, backingStorage?: StorageClient) {
+    constructor(
+        broker: BrokerClient,
+        finder: FindClient,
+        backingStorage?: StorageClient,
+        id?: string,
+        context: ParallelContext = new ParallelContext()
+    ) {
+        this.id = id ?? randomId()
+
         this.broker = broker
         this.finder = finder
         if (backingStorage) this.backingStorage = backingStorage;
+        this.context = context
     }
 
     async ping(): Promise<string | undefined> {
@@ -21,7 +32,11 @@ export class BlockFindingStorage implements StorageClient {
     }
 
     async get(address: string): Promise<Data | false> {
-        for await (const storageClient of findStorage(address, this.finder, this.broker)) {
+        if (this.backingStorage) {
+            const data = this.backingStorage.get(address)
+            if (data) return data
+        }
+        for await (const storageClient of findStorage(address, this.finder, this.broker, this.context)) {
             const data = await storageClient.get(address)
             if (data) return data
         }
@@ -29,8 +44,9 @@ export class BlockFindingStorage implements StorageClient {
     }
 
     async has(address: string): Promise<boolean> {
-        for await (const _ of findStorage(address, this.finder, this.broker)) {
-            return true
+        if (this.backingStorage && await this.backingStorage.has(address)) return true;
+        for await (const storage of findStorage(address, this.finder, this.broker, this.context)) {
+            if (await storage.has(address)) return true
         }
         return false
     }
@@ -78,55 +94,14 @@ export class BlockFindingStorage implements StorageClient {
     }
  }
 
- function findStorage(address: string, finder: FindClient, broker: BrokerClient): AsyncIterable<StorageClient> {
-    const storageChannel = new Channel<StorageClient>()
-    const findChannel = new Channel<FindClient>()
-    let pendingFinds = 0
-
-    function findIn(finder?: FindClient) {
-        if (finder) {
-            pendingFinds++
-            findChannel.send(finder)
-        }
+ async function *findStorage(
+    address: string,
+    finder: FindClient,
+    broker: BrokerClient,
+    context: ParallelContext
+): AsyncIterable<StorageClient> {
+    for await (const id of findInFinder(broker, address, finder, context)) {
+        const client = await broker.storage(id)
+        if (client) yield client
     }
-
-    function found(storageClient?: StorageClient) {
-        if (storageClient) {
-            storageChannel.send(storageClient)
-        }
-    }
-
-    async function findFinders() {
-        for await (const finder of findChannel.all()) {
-            pendingFinds--
-            for await (const result of await finder.find(address)) {
-                switch (result.kind) {
-                    case "CLOSER": {
-                        findIn(await broker.find(result.find))
-                        break
-                    }
-                    case "HAS": {
-                        const storageClient = await broker.storage(result.container)
-                        if (storageClient && await storageClient.has(address)) {
-                            found(storageClient)
-                        }
-                        break
-                    }
-                }
-                if (storageChannel.closed || findChannel.closed) {
-                    storageChannel.close()
-                    findChannel.close()
-                }
-            }
-            if (storageChannel.closed || findChannel.closed || pendingFinds == 0) {
-                storageChannel.close()
-                findChannel.close()
-                return
-            }
-        }
-    }
-
-    findIn(finder)
-    findFinders()
-    return storageChannel.all()
  }

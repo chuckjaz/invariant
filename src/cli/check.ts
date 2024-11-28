@@ -3,7 +3,7 @@ import * as path from 'path'
 import { fileExists } from '../common/files'
 import { BrokerWebClient } from '../broker/web/broker_web_client'
 import { BrokerClient } from '../broker/client'
-import { loadConfigutation } from '../config/config'
+import { loadConfigutation, Server } from '../config/config'
 import yargs from 'yargs'
 
 export default {
@@ -38,14 +38,13 @@ async function check(specifiedUrl?: string) {
 
     reportKind('broker', broker)
     reportKind('distribute', broker)
+    reportKind('file layer', broker)
     reportKind('find', broker)
     reportKind('slots', broker)
     reportKind('storage', broker)
 }
 
-type ServersKind = "broker" | "distribute" | "find" | "storage" | "slots"
-
-async function reportKind(kind: ServersKind, broker: BrokerClient) {
+async function reportKind(kind: Server, broker: BrokerClient) {
     for await (const id of await broker.registered(kind)) {
         let pingable: Pingable | undefined
         switch (kind) {
@@ -53,6 +52,9 @@ async function reportKind(kind: ServersKind, broker: BrokerClient) {
             case 'slots': pingable = await broker.slots(id); break;
             case 'find': pingable = await broker.find(id); break;
             case 'broker': pingable = await broker.broker(id); break;
+            case 'file layer':
+            case 'distribute':
+                error("Not supported yet")
         }
         if (!pingable) {
             console.log(`  ${kind}: ${id} was reported by the broker but the broker couldn't find it`)
