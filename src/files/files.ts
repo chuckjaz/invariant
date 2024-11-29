@@ -8,9 +8,9 @@ import { Block, BlockTree, ContentLink, ContentTransform, DirectoryEntry, Entry,
 import { SlotsClient } from "../slots/slot_client";
 import { Data, StorageClient } from "../storage/client";
 import { createHash } from 'node:crypto'
-import { ContentInformation, ContentKind, EntryAttriutes, FileDirectoryEntry, FileLayerClient, Node } from "./file_layer_client";
+import { ContentInformation, ContentKind, EntryAttriutes, FileDirectoryEntry, FilesClient, Node } from "./files_client";
 
-export class FileLayer implements FileLayerClient {
+export class Files implements FilesClient {
     private broker: BrokerClient
     private storage: StorageClient
     private slots: SlotsClient

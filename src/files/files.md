@@ -1,6 +1,6 @@
-# Invariate file layer
+# Invariate files
 
-A file layer is a server that uses invariant servers to implement a posix style file system that can be to read and create file directories.
+A files server uses invariant servers to implement a posix style file system that can be to read and create file directories.
 
 # Values
 
@@ -49,9 +49,9 @@ A string which is the name of a file.
 
 The node ID number.
 
-# `POST /file-layer/mount`
+# `POST /files/mount`
 
-Mount a content link to the file-layer. Once the content link is a mounted the file becomes accessable from the other methods. If the content-link is slot reference then the directory is writable; ohterwise the directory and all its content are read-only. Changing a mounted slot will cause a change request to the associated slot.
+Mount a content link to the files server. Once the content link is a mounted the file becomes accessable from the other methods. If the content-link is slot reference then the directory is writable; ohterwise the directory and all its content are read-only. Changing a mounted slot will cause a change request to the associated slot.
 
 ## Request
 
@@ -61,7 +61,7 @@ The request is a `:content-link`.
 
 The response is a `:node`
 
-# `POST /file-layer/unmount/:node`
+# `POST /files/unmount/:node`
 
 Unmount `:node`.
 
@@ -69,7 +69,7 @@ Unmount `:node`.
 
 The response is a `:content-link`.
 
-# `GET /file-layer/lookup/:node/:name`
+# `GET /files/lookup/:node/:name`
 
 Lookup `:name` in the directory `:node`
 
@@ -77,7 +77,7 @@ Lookup `:name` in the directory `:node`
 
 The response is status 200 and `:node` or 404 if the name is not found
 
-# `GET /file-layer/info/:node`
+# `GET /files/info/:node`
 
 Retrieve information about a `:node`.
 
@@ -85,7 +85,7 @@ Retrieve information about a `:node`.
 
 The response is `:content-info`.
 
-# `POST /file-layer/:node/:name`
+# `POST /files/:node/:name`
 
 Create a new file or directory in the `:node`. `:node` must refer to a directory.
 
@@ -119,7 +119,7 @@ For a `"Directory"`, no content is expected any any supplied is ignored.
 
 The response is a `:node`
 
-# `GET /file-layer/:node`
+# `GET /files/:node`
 
 ## Response
 
@@ -135,7 +135,7 @@ Offset into the file or directory to start; if it is not specified it starts the
 
 The length of the response. If `length` is not secified then the length is the rest of the file or directory. If the node is a file the length is in bytes. For directories it is the number of entries.
 
-# `PUT /file-layer/:node`
+# `PUT /files/:node`
 
 ## Request
 

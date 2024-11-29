@@ -3,22 +3,22 @@ import { error } from "../../common/errors";
 import { PingableClient } from "../../common/pingable_client";
 import { ContentLink } from "../../common/types";
 import { Data } from "../../storage/client";
-import { ContentInformation, ContentKind, EntryAttriutes, FileDirectoryEntry, FileLayerClient, Node } from "../file_layer_client";
+import { ContentInformation, ContentKind, EntryAttriutes, FileDirectoryEntry, FilesClient as FilesClient, Node } from "../files_client";
 
-const fileLayerPrefix = '/file-layer'
-const mountPrefix = `${fileLayerPrefix}/mount`
-const unmountPrefix = `${fileLayerPrefix}/unmount`
-const lookupPrefix = `${fileLayerPrefix}/lookup`
-const infoPrefix = `${fileLayerPrefix}/info`
-const contentPrefix = `${fileLayerPrefix}/content`
-const removePrefix = `${fileLayerPrefix}/remove`
-const attributesPrefix = `${fileLayerPrefix}/attributes`
-const sizePrefix = `${fileLayerPrefix}/size`
-const renamePrefix = `${fileLayerPrefix}/rename`
-const linkPrefix = `${fileLayerPrefix}/link`
-const syncPrefix = `${fileLayerPrefix}/sync`
+const filesPrefix = '/files'
+const mountPrefix = `${filesPrefix}/mount`
+const unmountPrefix = `${filesPrefix}/unmount`
+const lookupPrefix = `${filesPrefix}/lookup`
+const infoPrefix = `${filesPrefix}/info`
+const contentPrefix = `${filesPrefix}/content`
+const removePrefix = `${filesPrefix}/remove`
+const attributesPrefix = `${filesPrefix}/attributes`
+const sizePrefix = `${filesPrefix}/size`
+const renamePrefix = `${filesPrefix}/rename`
+const linkPrefix = `${filesPrefix}/link`
+const syncPrefix = `${filesPrefix}/sync`
 
-export class FileLayerWebClient extends PingableClient implements FileLayerClient {
+export class FilesWebClient extends PingableClient implements FilesClient {
     constructor (url: URL) {
         super(url)
     }
@@ -51,7 +51,7 @@ export class FileLayerWebClient extends PingableClient implements FileLayerClien
     }
 
     async createNode(parent: Node, name: string, kind: ContentKind): Promise<number> {
-        const url = new URL(`${fileLayerPrefix}/${parent}`, this.url)
+        const url = new URL(`${filesPrefix}/${parent}`, this.url)
         let headers = { }
         url.searchParams.append('kind', kind)
         const response = await fetch(url, {
@@ -65,7 +65,7 @@ export class FileLayerWebClient extends PingableClient implements FileLayerClien
     }
 
     async *readFile(node: Node, offset?: number, length?: number): Data {
-        const url = new URL(`${fileLayerPrefix}/${node}`, this.url)
+        const url = new URL(`${filesPrefix}/${node}`, this.url)
         if (offset !== undefined) {
             url.searchParams.append('offset', `${offset}`)
         }
@@ -81,7 +81,7 @@ export class FileLayerWebClient extends PingableClient implements FileLayerClien
     }
 
     async writeFile(node: Node, data: Data, offset?: number, size?: number, executable?: boolean, writable?: boolean, type?: string | null): Promise<number> {
-        const url = new URL(`${fileLayerPrefix}/${node}`, this.url)
+        const url = new URL(`${filesPrefix}/${node}`, this.url)
         let headers = {}
         if (offset !== undefined) {
             url.searchParams.append('offset', `${offset}`)
@@ -121,7 +121,7 @@ export class FileLayerWebClient extends PingableClient implements FileLayerClien
     }
 
     async *readDirectory(node: Node, offset?: number, length?: number): AsyncIterable<FileDirectoryEntry> {
-        const url = new URL(`${fileLayerPrefix}/${node}`, this.url)
+        const url = new URL(`${filesPrefix}/${node}`, this.url)
         if (offset !== undefined) {
             url.searchParams.append('offset', `${offset}`)
         }

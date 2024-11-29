@@ -4,7 +4,7 @@ import { invalid } from "../../common/errors"
 import { contentLinkSchema } from "../../common/schema"
 import { ContentLink } from "../../common/types"
 import { ResponseFunc, route, Route } from "../../common/web"
-import { ContentKind, EntryAttriutes, FileLayerClient, Node } from "../file_layer_client"
+import { ContentKind, EntryAttriutes, FilesClient, Node } from "../files_client"
 import { dataToReadable, jsonStreamToText } from "../../common/parseJson"
 
 const nodeSchema = z.number().int().nonnegative('Expected a node') satisfies Schema
@@ -41,14 +41,14 @@ interface OffsetLength {
     length?: number
 }
 
-export function fileLayerWebHandlers(layer: FileLayerClient): ResponseFunc {
+export function filesWebHandlers(client: FilesClient): ResponseFunc {
     const routes: Route = {
-        'file-layer': [{
+        'files': [{
             'mount': {
                 method: 'POST',
                 body: contentLinkSchema,
                 handler: async (ctx, next, content: ContentLink) => {
-                    ctx.body = await layer.mount(content)
+                    ctx.body = await client.mount(content)
                     ctx.status = 200
                 }
             },
@@ -56,7 +56,7 @@ export function fileLayerWebHandlers(layer: FileLayerClient): ResponseFunc {
                 method: 'POST',
                 params: [nodeSchema],
                 handler: async (ctx, next, node: Node) => {
-                    ctx.body = await layer.unmount(node)
+                    ctx.body = await client.unmount(node)
                     ctx.status = 200
                 }
             },
@@ -65,7 +65,7 @@ export function fileLayerWebHandlers(layer: FileLayerClient): ResponseFunc {
                 params: [nodeSchema],
                 handler: async (ctx, next, node: Node) => {
                     console.log("info:", node)
-                    const result = await layer.info(node)
+                    const result = await client.info(node)
                     if (result) {
                         console.log("info: result:", result)
                         ctx.status = 200
@@ -80,7 +80,7 @@ export function fileLayerWebHandlers(layer: FileLayerClient): ResponseFunc {
                 params: [nodeSchema, convertString],
                 handler: async (ctx, next, parent: number, name: string) => {
                     console.log("lookup:", parent, name)
-                    const result = await layer.lookup(parent, name)
+                    const result = await client.lookup(parent, name)
                     if (result) {
                         console.log("lookup: result:", result)
                         ctx.body = result
@@ -99,7 +99,7 @@ export function fileLayerWebHandlers(layer: FileLayerClient): ResponseFunc {
                 },
                 handler: async (ctx, next, query: OffsetLength, parent: Node) =>{
                     console.log('directory', query, parent)
-                    ctx.body = await allOfStream(layer.readDirectory(parent, query.offset, query.length))
+                    ctx.body = await allOfStream(client.readDirectory(parent, query.offset, query.length))
                     ctx.status = 200
                 }
             },
@@ -107,7 +107,7 @@ export function fileLayerWebHandlers(layer: FileLayerClient): ResponseFunc {
                 method: 'POST',
                 params: [nodeSchema, convertString],
                 handler: async (ctx, next, parent: Node, name: string) => {
-                    ctx.body = await layer.removeNode(parent, name)
+                    ctx.body = await client.removeNode(parent, name)
                     ctx.status = 200
                 }
             },
@@ -116,7 +116,7 @@ export function fileLayerWebHandlers(layer: FileLayerClient): ResponseFunc {
                 params: [nodeSchema],
                 body: attributesSchema,
                 handler: async (ctx, next, node, attributes: EntryAttriutes) => {
-                    await layer.setAttributes(node, attributes)
+                    await client.setAttributes(node, attributes)
                     ctx.body = ''
                     ctx.status = 200
                 }
@@ -125,7 +125,7 @@ export function fileLayerWebHandlers(layer: FileLayerClient): ResponseFunc {
                 method: 'PUT',
                 params: [nodeSchema, nonNegativeIntSchema],
                 handler: async (ctx, next, node, size) => {
-                    await layer.setSize(node, size)
+                    await client.setSize(node, size)
                     ctx.body = ''
                     ctx.status = 200
                 }
@@ -141,7 +141,7 @@ export function fileLayerWebHandlers(layer: FileLayerClient): ResponseFunc {
                     const newParent = query.newParent
                     const newName = query.newName
                     ctx.body = ''
-                    if (newName === undefined || newParent === undefined || await layer.rename(parent, name, newParent, newName)) {
+                    if (newName === undefined || newParent === undefined || await client.rename(parent, name, newParent, newName)) {
                         ctx.status = 404
                     } else {
                         ctx.status = 200
@@ -155,7 +155,7 @@ export function fileLayerWebHandlers(layer: FileLayerClient): ResponseFunc {
                 handler: async (ctx, next, parent, query: { node?: Node }, name: string) => {
                     const node = query.node
                     ctx.body = ''
-                    if (node === undefined || await layer.link(parent, node, name)) {
+                    if (node === undefined || await client.link(parent, node, name)) {
                         ctx.status = 404
                     } else {
                         ctx.status = 200
@@ -165,7 +165,7 @@ export function fileLayerWebHandlers(layer: FileLayerClient): ResponseFunc {
             'sync': {
                 method: 'PUT',
                 handler: async (ctx, next) => {
-                    await layer.sync()
+                    await client.sync()
                     ctx.body = ''
                     ctx.status = 200
                 }
@@ -178,7 +178,7 @@ export function fileLayerWebHandlers(layer: FileLayerClient): ResponseFunc {
                 'length': offsetOrLength
             },
             handler: async (ctx, next, query: OffsetLength, node: number) => {
-                ctx.body = dataToReadable(layer.readFile(node, query.offset, query.length))
+                ctx.body = dataToReadable(client.readFile(node, query.offset, query.length))
                 ctx.status = 200
             }
         },{
@@ -189,7 +189,7 @@ export function fileLayerWebHandlers(layer: FileLayerClient): ResponseFunc {
                 'length': offsetOrLength
             },
             handler: async (ctx, next, query: OffsetLength, node: number) => {
-                ctx.body = await layer.writeFile(node, dataFromReadable(ctx.req), query.offset, query.length)
+                ctx.body = await client.writeFile(node, dataFromReadable(ctx.req), query.offset, query.length)
                 ctx.state = 200
             }
         }, {
@@ -199,7 +199,7 @@ export function fileLayerWebHandlers(layer: FileLayerClient): ResponseFunc {
                 'kind': contentKind,
             },
             handler: async (ctx, next, query, parent, name) => {
-                ctx.body = await layer.createNode(parent, name, query.kind)
+                ctx.body = await client.createNode(parent, name, query.kind)
                 ctx.status = 200
             }
         }]

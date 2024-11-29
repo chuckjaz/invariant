@@ -8,13 +8,13 @@ export interface Configuration {
     servers?: ServerConfiguration[]
 }
 
-export type Server = "broker" | "distribute" | "find" | "file layer" | "slots" | "storage"
+export type Server = "broker" | "distribute" | "find" | "files" | "slots" | "storage"
 
 export type ServerConfiguration =
     BrokerConfiguration |
     DistirbuteConfiguration |
     FindConfiguration |
-    FileLayerConfiguration |
+    FilesConfiguration |
     SlotsConfiguration |
     StorageConfiguration
 
@@ -35,8 +35,8 @@ export interface DistirbuteConfiguration extends CommonServerConfiguration {
     server: "distribute"
 }
 
-export interface FileLayerConfiguration extends CommonServerConfiguration {
-    server: "file layer"
+export interface FilesConfiguration extends CommonServerConfiguration {
+    server: "files"
     syncFrequency?: number
 }
 
@@ -113,9 +113,9 @@ export async function loadConfigutation(): Promise<Configuration> {
                         url
                     })
                     break
-                case "file layer":
-                    if (!server.storage) error("File layer requires a storage in the configuraton")
-                    if (!server.slots) error("File layer requires a slots in the configuration")
+                case "files":
+                    if (!server.storage) error("Files require a storage in the configuraton")
+                    if (!server.slots) error("Files require a slots in the configuration")
                     servers.push({
                         server: server.server,
                         id: server.id,

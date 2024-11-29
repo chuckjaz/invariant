@@ -38,7 +38,7 @@ async function check(specifiedUrl?: string) {
 
     reportKind('broker', broker)
     reportKind('distribute', broker)
-    reportKind('file layer', broker)
+    reportKind('files', broker)
     reportKind('find', broker)
     reportKind('slots', broker)
     reportKind('storage', broker)
@@ -52,7 +52,7 @@ async function reportKind(kind: Server, broker: BrokerClient) {
             case 'slots': pingable = await broker.slots(id); break;
             case 'find': pingable = await broker.find(id); break;
             case 'broker': pingable = await broker.broker(id); break;
-            case 'file layer':
+            case 'files':
             case 'distribute':
                 error("Not supported yet")
         }

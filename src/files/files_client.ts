@@ -34,7 +34,7 @@ export interface EntryAttriutes {
     type?: string | null
 }
 
-export interface FileLayerClient {
+export interface FilesClient {
     mount(content: ContentLink): Promise<Node>
     unmount(node: Node): Promise<ContentLink>
 

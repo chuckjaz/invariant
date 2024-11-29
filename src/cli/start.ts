@@ -74,10 +74,10 @@ async function startBroker(config: ServerConfiguration, broker?: BrokerClient): 
     }
 }
 
-async function startFileLayer(config: ServerConfiguration, broker?: BrokerClient) {
-    console.log("Starting file layer server")
-    if (config.server != "file layer") error("Unexpected configuration");
-    if (!broker) error("File layer requires a broker connection to be configured");
+async function startFiles(config: ServerConfiguration, broker?: BrokerClient) {
+    console.log("Starting files server")
+    if (config.server != "files") error("Unexpected configuration");
+    if (!broker) error("Files require a broker connection to be configured");
 
 
     const app = new Koa()

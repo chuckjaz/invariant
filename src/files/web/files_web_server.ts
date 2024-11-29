@@ -1,10 +1,10 @@
 import Koa from 'koa'
-import { getBrokerUrl, getFileLayerUrl, getSlotsUrl } from '../../common/config'
+import { getBrokerUrl, getFilesUrl, getSlotsUrl } from '../../common/config'
 import { BrokerWebClient } from '../../broker/web/broker_web_client'
-import { FileLayer } from '../file_layer'
+import { Files } from '../files'
 import { normalizeCode } from '../../common/codes'
 import { mockSlots } from '../../slots/mock/slots_mock_client'
-import { fileLayerWebHandlers } from './file_layer_web_handler'
+import { filesWebHandlers } from './files_web_handler'
 import { logHandler } from '../../common/web'
 
 const app = new Koa()
@@ -22,10 +22,10 @@ if (!rootId) {
     error("Expected a slot ID parameter")
 }
 
-const fileLayerUrl = getFileLayerUrl()
+const filesUrl = getFilesUrl()
 
 async function startup() {
-    console.log("Starting on", fileLayerUrl)
+    console.log("Starting on", filesUrl)
     // Create the broker
     const broker = new BrokerWebClient(brokerUrl)
 
@@ -37,18 +37,18 @@ async function startup() {
 
     const slots = mockSlots()
 
-    const layer = new FileLayer(storage, slots, broker, 500)
-    await layer.mount({ address: rootId })
+    const files = new Files(storage, slots, broker, 500)
+    await files.mount({ address: rootId })
 
-    const log = logHandler('file-layer')
-    const handlers = fileLayerWebHandlers(layer)
+    const log = logHandler('files')
+    const handlers = filesWebHandlers(files)
 
     app.use(log)
     app.use(handlers)
     console.log("Fully started")
 }
 
-const port = parseInt(fileLayerUrl.port)
+const port = parseInt(filesUrl.port)
 app.listen(port)
 startup().catch(e => error(e.message))
 
