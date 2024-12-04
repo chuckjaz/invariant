@@ -26,7 +26,7 @@ export interface FileDirectoryEntry {
     node: number
 }
 
-export interface EntryAttriutes {
+export interface EntryAttributes {
     executable?: boolean
     writable?: boolean
     modifyTime?: number
@@ -49,7 +49,7 @@ export interface FilesClient {
     readDirectory(node: Node, offset?: number, length?: number): AsyncIterable<FileDirectoryEntry>
     createNode(parent: Node, name: string, kind: ContentKind): Promise<Node>
     removeNode(parent: Node, name: string): Promise<boolean>
-    setAttributes(node: Node, attributes: EntryAttriutes): Promise<void>
+    setAttributes(node: Node, attributes: EntryAttributes): Promise<void>
     rename(parent: Node, name: string,  newParent: Node, newName: string): Promise<boolean>
     link(parent: Node, node: Node, name: string): Promise<boolean>
 

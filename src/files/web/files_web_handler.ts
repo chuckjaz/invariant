@@ -4,7 +4,7 @@ import { invalid } from "../../common/errors"
 import { contentLinkSchema } from "../../common/schema"
 import { ContentLink } from "../../common/types"
 import { ResponseFunc, route, Route } from "../../common/web"
-import { ContentKind, EntryAttriutes, FilesClient, Node } from "../files_client"
+import { ContentKind, EntryAttributes, FilesClient, Node } from "../files_client"
 import { dataToReadable, jsonStreamToText } from "../../common/parseJson"
 
 const nodeSchema = z.number().int().nonnegative('Expected a node') satisfies Schema
@@ -115,7 +115,7 @@ export function filesWebHandlers(client: FilesClient): ResponseFunc {
                 method: 'PUT',
                 params: [nodeSchema],
                 body: attributesSchema,
-                handler: async (ctx, next, node, attributes: EntryAttriutes) => {
+                handler: async (ctx, next, node, attributes: EntryAttributes) => {
                     await client.setAttributes(node, attributes)
                     ctx.body = ''
                     ctx.status = 200

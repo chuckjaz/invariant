@@ -1,4 +1,4 @@
-# Invariate files
+# Invariant files
 
 A files server uses invariant servers to implement a posix style file system that can be to read and create file directories.
 
@@ -51,7 +51,7 @@ The node ID number.
 
 # `POST /files/mount`
 
-Mount a content link to the files server. Once the content link is a mounted the file becomes accessable from the other methods. If the content-link is slot reference then the directory is writable; ohterwise the directory and all its content are read-only. Changing a mounted slot will cause a change request to the associated slot.
+Mount a content link to the files server. Once the content link is a mounted the file becomes accessible from the other methods. If the content-link is slot reference then the directory is writable; otherwise the directory and all its content are read-only. Changing a mounted slot will cause a change request to the associated slot.
 
 ## Request
 
@@ -93,7 +93,7 @@ Create a new file or directory in the `:node`. `:node` must refer to a directory
 
 #### `Content-Type`
 
-If specified, nade the `kind` is `"File"`, the content type is recorded in the `:node` directory.
+If specified, the `kind` is `"File"`, the content type is recorded in the `:node` directory.
 
 ### Query parameters
 
@@ -133,7 +133,7 @@ Offset into the file or directory to start; if it is not specified it starts the
 
 #### `length=:number`
 
-The length of the response. If `length` is not secified then the length is the rest of the file or directory. If the node is a file the length is in bytes. For directories it is the number of entries.
+The length of the response. If `length` is not specified then the length is the rest of the file or directory. If the node is a file the length is in bytes. For directories it is the number of entries.
 
 # `PUT /files/:node`
 
@@ -159,7 +159,7 @@ If offset is specified the write starts at the `offset` bytes into the file.
 
 #### `size=:number`
 
-If specified the size will be at least `size` bytes. If the `size` is less than the size of the file then the file is truncated to the size. If the `size` is larger than the size of the file the size is zero filled to `size`. After the file is made `size` long, the rest of the write operation is performed. To just set the size, include the `size` query paraemter but no content in the request.
+If specified the size will be at least `size` bytes. If the `size` is less than the size of the file then the file is truncated to the size. If the `size` is larger than the size of the file the size is zero filled to `size`. After the file is made `size` long, the rest of the write operation is performed. To just set the size, include the `size` query parameter but no content in the request.
 
 #### `writeable=:boolean`
 

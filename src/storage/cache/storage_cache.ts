@@ -11,19 +11,19 @@ export class StorageCache implements StorageClient {
     private sizes = new Map<string, number>()
     private limit: number
     private currentSize: number = 0
-    private evictionFrequence: number
+    private evictionFrequency: number
     private stopped = false
 
     constructor(
         writeThrough: StorageClient,
         backingStorage: ManagedStorageClient,
         limit: number = 100 * 1024 * 1024,
-        evictionFequence: number = 1000
+        evictionFrequency: number = 1000
     ) {
         this.writeThrough = writeThrough
         this.backingStore = backingStorage
         this.limit = limit
-        this.evictionFrequence = evictionFequence
+        this.evictionFrequency = evictionFrequency
         this.scheduleBackingRead()
     }
 
@@ -143,7 +143,7 @@ export class StorageCache implements StorageClient {
     }
 
     private scheduleEviction() {
-        this.scheduleTask(this.evictionTask, this.evictionFrequence, () => this.currentSize > this.limit)
+        this.scheduleTask(this.evictionTask, this.evictionFrequency, () => this.currentSize > this.limit)
     }
 
     private evictionTask = async () => {

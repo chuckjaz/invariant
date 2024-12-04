@@ -8,7 +8,7 @@ import { Block, BlockTree, ContentLink, ContentTransform, DirectoryEntry, Entry,
 import { SlotsClient } from "../slots/slot_client";
 import { Data, StorageClient } from "../storage/client";
 import { createHash } from 'node:crypto'
-import { ContentInformation, ContentKind, EntryAttriutes, FileDirectoryEntry, FilesClient, Node } from "./files_client";
+import { ContentInformation, ContentKind, EntryAttributes, FileDirectoryEntry, FilesClient, Node } from "./files_client";
 
 export class Files implements FilesClient {
     private broker: BrokerClient
@@ -21,7 +21,7 @@ export class Files implements FilesClient {
     private parents = new Map<Node, Node>()
     private infos = new Map<Node, ContentInformation>()
     private overrides = new Map<Node, BlockOverride[]>()
-    private tranforms =  new Map<Node, (data: Data) => Data>()
+    private transforms =  new Map<Node, (data: Data) => Data>()
     private invalidDirectories = new Set<Node>()
     private slotMounts = new Map<Node, string>()
     private locks = new Map<Node, ReadWriteLock>()
@@ -211,7 +211,7 @@ export class Files implements FilesClient {
         }
     }
 
-    async setAttributes(node: Node, attributes: EntryAttriutes): Promise<void> {
+    async setAttributes(node: Node, attributes: EntryAttributes): Promise<void> {
         const parent = nRequired(this.parents.get(node))
         const lock = nRequired(this.locks.get(parent))
         await lock.writeLock()
@@ -300,12 +300,12 @@ export class Files implements FilesClient {
     }
 
     private addTransform(node: Node, tx: (data: Data) => Data) {
-        const previous = this.tranforms.get(node)
+        const previous = this.transforms.get(node)
         if (previous !== undefined) {
-            this.tranforms.set(node, data => tx(previous(data)))
+            this.transforms.set(node, data => tx(previous(data)))
             this.overrides.delete(node)
         } else {
-            this.tranforms.set(node, tx)
+            this.transforms.set(node, tx)
         }
     }
 
@@ -321,7 +321,7 @@ export class Files implements FilesClient {
             this.overrides.delete(node)
             this.parents.delete(node)
             this.infos.delete(node)
-            this.tranforms.delete(node)
+            this.transforms.delete(node)
             this.invalidDirectories.delete(node)
             this.slotMounts.delete(node)
             this.locks.delete(node)
@@ -331,7 +331,7 @@ export class Files implements FilesClient {
     private async *readFileDataLocked(node: Node): Data {
         const content = this.contentMap.get(node)
         let data = content ? this.readContentLink(content) : dataFromBuffers([])
-        const transforms = this.tranforms.get(node)
+        const transforms = this.transforms.get(node)
         if (transforms) {
             data = transforms(data)
         }
@@ -343,11 +343,11 @@ export class Files implements FilesClient {
         if (overrides === undefined) {
             const newOverrides = [override]
             this.overrides.set(node, newOverrides)
-            const previous = this.tranforms.get(node)
+            const previous = this.transforms.get(node)
             if (previous === undefined) {
-                this.tranforms.set(node, data => overrideData(newOverrides, data))
+                this.transforms.set(node, data => overrideData(newOverrides, data))
             } else {
-                this.tranforms.set(node, data => overrideData(newOverrides, previous(data)))
+                this.transforms.set(node, data => overrideData(newOverrides, previous(data)))
             }
         } else {
             overrides.push(override)
@@ -497,7 +497,7 @@ export class Files implements FilesClient {
 
     private async doSync(previousSync: Promise<void>) {
         await previousSync
-        const nodes = [...this.tranforms.keys()]
+        const nodes = [...this.transforms.keys()]
         for (const node of nodes) {
             await this.syncFile(node)
         }
@@ -592,7 +592,7 @@ export class Files implements FilesClient {
             info.size = dataBlock.size
             this.contentMap.set(node, dataBlock.content)
             this.overrides.delete(node)
-            this.tranforms.delete(node)
+            this.transforms.delete(node)
             const parent = this.parents.get(node)
             if (parent !== undefined) {
                 this.invalidDirectories.add(parent)

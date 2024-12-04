@@ -11,7 +11,7 @@ import { Data, StorageClient } from '../storage/client';
 import { dataFromBuffers, readAllData } from '../common/data';
 import { normalizeCode } from '../common/codes';
 import { error } from '../common/errors';
-import { loadConfigutation } from '../config/config';
+import { loadConfiguration } from '../config/config';
 import { BrokerClient } from '../broker/client';
 import { BrokerWebClient } from '../broker/web/broker_web_client';
 import { StorageWebClient } from '../storage/web/storage_web_client';
@@ -75,7 +75,7 @@ async function findStorage(
             return init
         } : undefined)
     }
-    const configuration = await loadConfigutation()
+    const configuration = await loadConfiguration()
     let brokerClient: BrokerClient
     if (configuration.broker) {
         brokerClient = new BrokerWebClient(configuration.broker)
@@ -104,8 +104,8 @@ async function upload(directory?: string, all?: boolean, storageSpec?: string, a
         ig.add('.git')
         const ignoreFile = path.join(directory, '.gitignore')
         if (await fileExists(ignoreFile)) {
-            const ingoreFileText = await fs.readFile(ignoreFile, 'utf-8')
-            ig.add(ingoreFileText)
+            const ignoreFileText = await fs.readFile(ignoreFile, 'utf-8')
+            ig.add(ignoreFileText)
         }
     }
 

@@ -41,7 +41,7 @@ const delayValidationTime = 60 * 1000
 const finders: string[][] = []
 
 const findGetPrefix = '/find/'
-const findPutPrefx = '/put'
+const findPutPrefix = '/put'
 
 app.use(async function (ctx,  next) {
     if (ctx.path.startsWith(findGetPrefix) && ctx.method == 'GET') {
@@ -290,7 +290,7 @@ async function backgroundResolver() {
     while (true) {
         const idToFind = await findQueue.pop()
         if (has.has(idToFind)) {
-            // We already know abou this one
+            // We already know about this one
             continue
         }
 

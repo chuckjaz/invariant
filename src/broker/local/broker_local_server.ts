@@ -27,7 +27,7 @@ export class LocalBrokerServer implements BrokerServer {
         if (this.infoPath) {
             this.restore().catch(e => console.error("Broker could not load previous data", e))
         }
-        this.verifyIds().catch(e => console.error("Broker no longer varifying ids", e))
+        this.verifyIds().catch(e => console.error("Broker no longer verifying ids", e))
     }
 
     stop() {
@@ -71,7 +71,7 @@ export class LocalBrokerServer implements BrokerServer {
         async function validate() {
             const isValid = await verifyLive(entry.url, entry.id)
             if (!isValid) {
-                console.log("Deleting", id, "as it is not respondoing on", entry.url)
+                console.log("Deleting", id, "as it is not responding on", entry.url)
                 that.info.delete(id)
                 that.save().catch(e => console.error(e))
             } else {

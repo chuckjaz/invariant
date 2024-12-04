@@ -3,7 +3,7 @@ import { error } from "../../common/errors";
 import { PingableClient } from "../../common/pingable_client";
 import { ContentLink } from "../../common/types";
 import { Data } from "../../storage/client";
-import { ContentInformation, ContentKind, EntryAttriutes, FileDirectoryEntry, FilesClient as FilesClient, Node } from "../files_client";
+import { ContentInformation, ContentKind, EntryAttributes, FileDirectoryEntry, FilesClient as FilesClient, Node } from "../files_client";
 
 const filesPrefix = '/files'
 const mountPrefix = `${filesPrefix}/mount`
@@ -142,7 +142,7 @@ export class FilesWebClient extends PingableClient implements FilesClient {
         error(`Could not remove node: ${response.status}`)
     }
 
-    async setAttributes(node: Node, attributes: EntryAttriutes): Promise<void> {
+    async setAttributes(node: Node, attributes: EntryAttributes): Promise<void> {
         const url = new URL(`${attributesPrefix}/${node}`, this.url)
         const response = await fetch(url, {
             method: 'POST',

@@ -3,7 +3,7 @@ import * as path from 'path'
 import { fileExists } from '../common/files'
 import { BrokerWebClient } from '../broker/web/broker_web_client'
 import { BrokerClient } from '../broker/client'
-import { loadConfigutation, Server } from '../config/config'
+import { loadConfiguration, Server } from '../config/config'
 import yargs from 'yargs'
 
 export default {
@@ -24,7 +24,7 @@ async function check(specifiedUrl?: string) {
         error(notConfigured)
     }
 
-    const configuration = await loadConfigutation()
+    const configuration = await loadConfiguration()
 
     const brokerUrl = (specifiedUrl ? new URL(specifiedUrl) : undefined) ?? configuration.broker
     if (!brokerUrl) {
@@ -33,7 +33,7 @@ async function check(specifiedUrl?: string) {
     const broker = new BrokerWebClient(brokerUrl)
     const {id: brokerId, time } = await timePing('Broker', broker)
     if (!brokerId) {
-        error(brokerNotResposnding(brokerUrl))
+        error(brokerNotResponding(brokerUrl))
     }
 
     reportKind('broker', broker)
@@ -79,7 +79,7 @@ async function timePing(name: string, pingable: Pingable, id?: string): Promise<
             console.error(`${name}: ${id} reported ${ping} as id`)
         }
     } else {
-        console.log(`${name}: Not repsponding after - ${time}ms`)
+        console.log(`${name}: Not responding after - ${time}ms`)
     }
     return { id: ping, time }
 }
@@ -114,7 +114,7 @@ Try running,
 to create the initial configuration file
 `
 
-function brokerNotResposnding(url: URL): string {
+function brokerNotResponding(url: URL): string {
     return `Broker is not responding.
 
 The broker at ${url} is not responding.`

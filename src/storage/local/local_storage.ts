@@ -31,8 +31,8 @@ export class LocalStorage implements ManagedStorageClient {
         return fileExists(this.toAddressPath(address))
     }
 
-    async put(addrss: string, data: Data): Promise<boolean> {
-        return await this.receiveFile(data, addrss) != false
+    async put(address: string, data: Data): Promise<boolean> {
+        return await this.receiveFile(data, address) != false
     }
 
     async post(data: Data): Promise<string | false> {

@@ -12,7 +12,7 @@ export type Server = "broker" | "distribute" | "find" | "files" | "slots" | "sto
 
 export type ServerConfiguration =
     BrokerConfiguration |
-    DistirbuteConfiguration |
+    DistributeConfiguration |
     FindConfiguration |
     FilesConfiguration |
     SlotsConfiguration |
@@ -31,7 +31,7 @@ export interface BrokerConfiguration extends CommonServerConfiguration {
     primary?: boolean
 }
 
-export interface DistirbuteConfiguration extends CommonServerConfiguration {
+export interface DistributeConfiguration extends CommonServerConfiguration {
     server: "distribute"
 }
 
@@ -76,7 +76,7 @@ function configurationConfigPath(): string {
     return path.join(configurationPath(), 'config.json')
 }
 
-export async function loadConfigutation(): Promise<Configuration> {
+export async function loadConfiguration(): Promise<Configuration> {
     const location = configurationConfigPath()
     const jsonText = await fs.readFile(location, 'utf-8')
     const json = JSON.parse(jsonText) as ConfigurationJson
@@ -114,7 +114,7 @@ export async function loadConfigutation(): Promise<Configuration> {
                     })
                     break
                 case "files":
-                    if (!server.storage) error("Files require a storage in the configuraton")
+                    if (!server.storage) error("Files require a storage in the configuration")
                     if (!server.slots) error("Files require a slots in the configuration")
                     servers.push({
                         server: server.server,

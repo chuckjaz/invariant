@@ -52,7 +52,7 @@ describe("files", () => {
         }
     })
     it("can read an encrypted directory", async () => {
-        const transforms = [decypherTx()]
+        const transforms = [decipherTx()]
         const [files, node] = await filesWithRandomContent({ transforms })
         try {
             await validateDirectory(files, node)
@@ -61,7 +61,7 @@ describe("files", () => {
         }
     })
     it("can read a compressed, encrypted directory", async () => {
-        const transforms = [decypherTx(), decompressTx()]
+        const transforms = [decipherTx(), decompressTx()]
         const [files, node] = await filesWithRandomContent({ transforms })
         try {
             await validateDirectory(files, node)
@@ -70,7 +70,7 @@ describe("files", () => {
         }
     })
     it("can read a deep compressed, encrypted directory", async () => {
-        const transforms = [decypherTx(), decompressTx()]
+        const transforms = [decipherTx(), decompressTx()]
         const [files, node] = await filesWithRandomContent({ transforms, depth: 4 })
         try {
             await validateDirectory(files, node)
@@ -184,7 +184,7 @@ describe("files", () => {
 
 })
 
-function decypherTx(): ContentTransform {
+function decipherTx(): ContentTransform {
     const key = randomBytes(32).toString('hex')
     const iv = randomBytes(16).toString('hex')
     return { kind: "Decipher", algorithm: "aes-256-cbc", key, iv }

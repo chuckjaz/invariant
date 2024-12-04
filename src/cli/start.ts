@@ -1,7 +1,7 @@
 import Koa from 'koa'
 import { Server as HttpServer} from 'node:http'
 import { CommandModule } from "yargs"
-import { loadConfigutation, Server, ServerConfiguration } from "../config/config"
+import { loadConfiguration, Server, ServerConfiguration } from "../config/config"
 import { BrokerClient } from '../broker/client'
 import { BrokerWebClient } from '../broker/web/broker_web_client'
 import { logHandler } from '../common/web'
@@ -13,7 +13,7 @@ import { error } from '../common/errors'
 
 export default {
     command: 'start [service]',
-    describe: `Start configurated services`,
+    describe: `Start configured services`,
     builder: yargs => {
         return yargs.positional('service', {
             describe: 'The service to start, or all to start all configured services',
@@ -25,7 +25,7 @@ export default {
 } satisfies CommandModule
 
 async function start(choice: string) {
-    const configuration = await loadConfigutation()
+    const configuration = await loadConfiguration()
     const servers = configuration.servers
     if (servers) {
         console.log('Starting services...')

@@ -40,8 +40,8 @@ async function upload(directory: string) {
     const ig = ignore().add('.git')
     const ignoreFile = path.join(directory, '.gitignore')
     if (await fileExists(ignoreFile)) {
-        const ingoreFileText = await fs.readFile(ignoreFile, 'utf-8')
-        ig.add(ingoreFileText)
+        const ignoreFileText = await fs.readFile(ignoreFile, 'utf-8')
+        ig.add(ignoreFileText)
     }
     async function readDirectory(directory: string): Promise<string> {
         const entries = await fs.opendir(directory)

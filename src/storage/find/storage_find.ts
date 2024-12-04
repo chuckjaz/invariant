@@ -56,7 +56,7 @@ export class BlockFindingStorage implements StorageClient {
         if (backingStorage) {
             if (await backingStorage.has(address)) return true
             const result = await backingStorage.put(address, data)
-            if (result) await this.nofityFinderOf(address);
+            if (result) await this.notifyFinderOf(address);
             return result
         }
         return false
@@ -66,7 +66,7 @@ export class BlockFindingStorage implements StorageClient {
         const backingStorage = this.backingStorage
         if (backingStorage) {
             const result = await backingStorage.post(data)
-            if (result) await this.nofityFinderOf(result);
+            if (result) await this.notifyFinderOf(result);
             return result
         }
         return false
@@ -76,7 +76,7 @@ export class BlockFindingStorage implements StorageClient {
         return false
     }
 
-    private async nofityFinderOf(address: string) {
+    private async notifyFinderOf(address: string) {
         const backingId = await this.backingStorageId()
         if (backingId) this.finder.has(backingId, [address]);
     }
