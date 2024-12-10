@@ -3,7 +3,7 @@ import ignore, { Ignore } from "ignore";
 import { ContentLink } from "../../common/types";
 import { Data, StorageClient } from "../../storage/client";
 import { Node, ContentInformation, FileDirectoryEntry, ContentKind, EntryAttributes, FilesClient } from "../files_client";
-import { jsonFromData, readAllData } from '../../common/data';
+import { jsonFromData } from '../../common/data';
 import z from 'zod';
 import { contentLinkSchema } from '../../common/schema';
 import { Files } from '../files';
@@ -13,9 +13,11 @@ import { dataToString } from '../../common/parseJson';
 import { invalid } from '../../common/errors';
 
 export interface FileLayer {
+    kind: LayerKind
     predicate: (name: string) => boolean
     client: FilesClient
-    layerFor: (name: string) => FileLayer
+    node?: Node
+    layerFor: (name: string, client: FilesClient, node: Node) => FileLayer
 }
 
 /**
@@ -24,15 +26,15 @@ export interface FileLayer {
  * @param client The client to direct all nodes to
  * @returns a file layer that accepts all nodes.
  */
-export function baseLayer(client: FilesClient): FileLayer {
-    return { predicate: () => true, client, layerFor: () => baseLayer(client) }
+export function baseLayer(client: FilesClient, node?: Node): FileLayer {
+    return { kind: LayerKind.Base, predicate: () => true, client, node, layerFor: (_, __, node) => baseLayer(client, node) }
 }
 
 /**
  * Construct a void file layer that doesn't accept any files.
  */
 export function voidLayer(client: FilesClient): FileLayer {
-    return { predicate: () => false, client, layerFor: () => voidLayer(client) }
+    return { kind: LayerKind.Base, predicate: () => false, client, layerFor: () => voidLayer(client) }
 }
 
 /**
@@ -42,29 +44,35 @@ export function voidLayer(client: FilesClient): FileLayer {
  * @param client The to direct all request to for nodes that are not ignored.
  * @returns an ignore file layer
  */
-export function ignoreLayer(ignore: Ignore, client: FilesClient): FileLayer {
-    function ignoreLayerFor(directory: string): FileLayer {
+export function ignoreLayer(ignore: Ignore, client: FilesClient, node?: Node): FileLayer {
+    function ignoreLayerFor(directory: string, client: FilesClient, node?: Node): FileLayer {
         return {
+            kind: LayerKind.Ignore,
             predicate: name => !ignore.ignores(path.join(directory, name)),
             client,
-            layerFor: name => ignoreLayerFor(path.join(directory, name))
+            node,
+            layerFor: (name, layerClient, node) =>
+                ignoreLayerFor(path.join(directory, name), client, client == layerClient ? node : undefined)
         }
     }
-    return ignoreLayerFor('')
+    return ignoreLayerFor('', client, node)
 }
 
 /**
  * Construct an accepts file layer that accepts files. It is an inverted version of ignore.
  */
-export function acceptsLayer(accept: Ignore, client: FilesClient): FileLayer {
-    function acceptLayerFor(directory: string): FileLayer {
+export function acceptsLayer(accept: Ignore, client: FilesClient, node?: Node): FileLayer {
+    function acceptLayerFor(directory: string, client: FilesClient, node?: Node): FileLayer {
         return {
+            kind: LayerKind.Accepts,
             predicate: name => accept.ignores(path.join(directory, name)),
             client,
-            layerFor: name => acceptLayerFor(path.join(directory, name))
+            node,
+            layerFor: (name, layerClient, node) =>
+                acceptLayerFor(path.join(directory, name), client, client == layerClient ? node : undefined)
         }
     }
-    return acceptLayerFor('')
+    return acceptLayerFor('', client, node)
 }
 
 export enum LayerKind {
@@ -135,19 +143,13 @@ interface Realizable {
 
 class LayeredDirectory  {
     protected fileLayers: FileLayer[]
-    private directoryNodes: (Node | undefined)[] = []
-    private parent: Realizable
+    private parent?: Realizable
     private name: string
 
-    constructor(fileLayers: FileLayer[], parent: Realizable | (Node | undefined)[], name: string) {
+    constructor(fileLayers: FileLayer[], name: string, parent?: Realizable) {
         this.fileLayers = fileLayers
         this.name = name
-        if (Array.isArray(parent)) {
-            this.directoryNodes = parent
-            this.parent = this
-        } else {
-            this.parent = parent
-        }
+        this.parent = parent
     }
 
     private select(name: string): [FileLayer, number] {
@@ -172,9 +174,9 @@ class LayeredDirectory  {
         return [layer.client, node]
     }
 
-    nested(name: string): LayeredDirectory {
-        const nestedLayers = this.fileLayers.map(layer => layer.layerFor(name))
-        return new LayeredDirectory(nestedLayers, this, name)
+    nested(name: string, client: FilesClient, node: Node): LayeredDirectory {
+        const nestedLayers = this.fileLayers.map(layer => layer.layerFor(name, client, node))
+        return new LayeredDirectory(nestedLayers, name, this)
     }
 
     async *readDirectory(): AsyncIterable<[string, ClientNode, ContentKind]> {
@@ -193,19 +195,29 @@ class LayeredDirectory  {
     }
 
     async findDirectoryNode(client: FilesClient, index: number): Promise<Node | undefined> {
-        let directoryNode = this.directoryNodes[index]
+        const layer = this.fileLayers[index]
+        let directoryNode = layer.node
         if (directoryNode === undefined) {
-            const parent = await this.parent.findDirectoryNode(client, index)
+            const parent = await nRequired(this.parent).findDirectoryNode(client, index)
             if (parent == undefined) return undefined;
             const newDirectoryNode = await client.lookup(parent, this.name)
             if (newDirectoryNode === undefined) return undefined;
-            this.directoryNodes[index] = newDirectoryNode
+            layer.node = newDirectoryNode
         }
         return directoryNode
     }
 
+    async realizeNode(layer: FileLayer): Promise<Node> {
+        let node = layer.node
+        if (!node) {
+            const index = this.fileLayers.indexOf(layer)
+            node = await this.realizeFor(layer.client, index)
+        }
+        return node
+    }
+
     async realizeFor(client: FilesClient, index: number): Promise<Node> {
-        const parent = await this.parent.realizedDirectoryNode(client, index)
+        const parent = await nRequired(this.parent).realizedDirectoryNode(client, index)
         const directoryNode = await client.lookup(parent, this.name)
         if (directoryNode === undefined) {
             const realizedNode = await client.createNode(parent, this.name, ContentKind.Directory)
@@ -215,12 +227,13 @@ class LayeredDirectory  {
     }
 
     async realizedDirectoryNode(client: FilesClient, index: number): Promise<Node> {
-        let parent = this.directoryNodes[index]
-        if (parent === undefined) {
-            parent = await this.parent.realizeFor(client, index)
-            this.directoryNodes[index] = parent
+        const layer = this.fileLayers[index]
+        let directoryNode = layer.node
+        if (directoryNode === undefined) {
+            directoryNode = await nRequired(this.parent).realizeFor(client, index)
+            layer.node = directoryNode
         }
-        return parent
+        return directoryNode
     }
 
     async sync(): Promise<void> {
@@ -244,7 +257,6 @@ export class LayeredFiles implements FilesClient {
     private nodeMap = new Map<Node, ClientNode>()
     private invertNodeMap = new Map<FilesClient, Map<Node, Node>>()
     private directories = new Map<Node, LayeredDirectory>()
-    private mountedContent?: ContentLink
 
     constructor (
         controlPlane: FilesClient,
@@ -265,7 +277,7 @@ export class LayeredFiles implements FilesClient {
         const controlPlane = this.controlPlane
         const controlNode = await controlPlane.mount(content)
 
-        const layerNode = await this.lookup(controlNode, '.layer')
+        const layerNode = await controlPlane.lookup(controlNode, '.layers')
         if (layerNode === undefined) invalid("Invalid control plain, does not contain a .layer file");
         const layerDescriptions = await jsonFromData(fileLayerDescriptionsSchema, controlPlane.readFile(layerNode))
         if (layerDescriptions == undefined) invalid("Incorrect layer schema");
@@ -274,7 +286,6 @@ export class LayeredFiles implements FilesClient {
 
         // Create and mount the layers from the specification
         const fileLayers: FileLayer[] = []
-        const fileRoots: Node[] = []
         for (const layerDescription of layerDescriptions) {
             let client: FilesClient
             let layerRoot: Node
@@ -293,14 +304,14 @@ export class LayeredFiles implements FilesClient {
             let layer: FileLayer
             switch (layerDescription.kind) {
                 case "Base":
-                    layer = baseLayer(client)
+                    layer = baseLayer(client, layerRoot)
                     break
                 case "Accept": {
                     const ig = ignore()
                     if (layerDescription.accepts) {
                         ig.add(layerDescription.accepts)
                     }
-                    layer = acceptsLayer(ig, client)
+                    layer = acceptsLayer(ig, client, layerRoot)
                     break
                 }
                 case "Ignore": {
@@ -316,17 +327,16 @@ export class LayeredFiles implements FilesClient {
                             ig.add(ignoreText)
                         }
                     }
-                    layer = ignoreLayer(ig, client)
+                    layer = ignoreLayer(ig, client, layerRoot)
+                    break
                 }
                 default: invalid(`Invalid layer specification`)
             }
             fileLayers.push(layer)
-            fileRoots.push(layerRoot)
         }
 
-        const directory = new LayeredDirectory(fileLayers, fileRoots, '')
+        const directory = new LayeredDirectory(fileLayers, '')
         this.directories.set(rootNode, directory)
-        this.mountedContent = content
         return rootNode
     }
 
@@ -341,7 +351,7 @@ export class LayeredFiles implements FilesClient {
             const node = this.mapNode(client, clientNode)
             const info = await client.info(clientNode)
             if (info && info.kind == ContentKind.Directory) {
-                this.ensureDirectory(directory, node, name)
+                this.ensureDirectory(directory, node, name, client, clientNode)
             }
             return node
         }
@@ -380,7 +390,9 @@ export class LayeredFiles implements FilesClient {
         let index = 0
         for await (const [name, {client, node: clientNode}, kind] of directory.readDirectory()) {
             const node = this.mapNode(client, clientNode)
-            if (kind == ContentKind.Directory) this.ensureDirectory(directory, node, name);
+            if (kind == ContentKind.Directory) {
+                this.ensureDirectory(directory, node, name, client, clientNode)
+            }
             if (index >= start) yield { name, node, kind };
             index++
             if (index >= end) break
@@ -389,12 +401,12 @@ export class LayeredFiles implements FilesClient {
 
     async createNode(parent: Node, name: string, kind: ContentKind): Promise<Node> {
         const directory = nRequired(this.directories.get(parent))
-        const { node: clientParent } = nRequired(this.nodeMap.get(parent))
-        const layer = directory.layerFor(name)
-        const clientNode = await layer.client.createNode(clientParent, name, kind)
+        const layer = directory.layerFor(name + (kind == ContentKind.Directory ? '/' : ''))
+        const directoryNode = await directory.realizeNode(layer)
+        const clientNode = await layer.client.createNode(directoryNode, name, kind)
         const node = this.mapNode(layer.client, clientNode)
         if (kind == ContentKind.Directory) {
-            this.ensureDirectory(directory, node, name)
+            this.ensureDirectory(directory, node, name, layer.client, clientNode)
         }
         return node
     }
@@ -474,9 +486,15 @@ export class LayeredFiles implements FilesClient {
         }
     }
 
-    private ensureDirectory(parent: LayeredDirectory, node: Node, name: string) {
+    private ensureDirectory(
+        parent: LayeredDirectory,
+        node: Node,
+        name: string,
+        filesClient: FilesClient,
+        clientNode: Node
+    ) {
         if (this.directories.has(node)) return;
-        this.directories.set(node, parent.nested(name))
+        this.directories.set(node, parent.nested(name, filesClient, clientNode))
     }
 
     private allocNode(): Node {

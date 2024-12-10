@@ -2,7 +2,6 @@ import { mockBroker, MockBrokerClient } from "../broker/mock/client"
 import { stringsToData } from "../common/data"
 import { FindClient } from "../find/client"
 import { findServer } from "../find/server"
-import { StorageClient } from "../storage/client"
 import { mockStorage, MockStorageClient } from "../storage/mock"
 import { Distribute } from "./distribute"
 
@@ -15,9 +14,9 @@ describe("distribute", () => {
     })
     it("can register storages", async () => {
         const [broker, storages] = await storagesAndBroker(30)
-        const distirbutor = new Distribute(broker)
-        await distirbutor.register(str(storages.map(s => s.id)))
-        distirbutor.close()
+        const distributor = new Distribute(broker)
+        await distributor.register(str(storages.map(s => s.id)))
+        distributor.close()
     })
     it("can distribute", async () => {
         const [distributor, broker, storages, finder] = await mockDistributor(20)
@@ -37,9 +36,9 @@ describe("distribute", () => {
 
 async function mockDistributor(size: number): Promise<[Distribute, MockBrokerClient, MockStorageClient[], FindClient]> {
     const [broker, storages, finder] = await storagesAndBroker(size)
-    const distirbutor = new Distribute(broker)
-    await distirbutor.register(str(storages.map(s => s.id)))
-    return [distirbutor, broker, storages, finder]
+    const distributor = new Distribute(broker)
+    await distributor.register(str(storages.map(s => s.id)))
+    return [distributor, broker, storages, finder]
 }
 
 async function createBlocks(

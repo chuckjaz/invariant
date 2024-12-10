@@ -512,6 +512,7 @@ export class Files implements FilesClient {
                 this.invalidDirectories.add(current)
                 const newCurrent = this.parents.get(current)
                 if (newCurrent === undefined) break
+                current = newCurrent
             }
             roots.add(current)
         }
@@ -535,7 +536,7 @@ export class Files implements FilesClient {
             for (const [name, entryNode] of entries) {
                 const info = this.infos.get(entryNode)
                 if (!info) error(`Could not find info for ${name} in directory node ${node}, file node: ${entryNode}`);
-                const content = this.contentMap.get(node)
+                const content = this.contentMap.get(entryNode)
                 if (!content) error(`Could not find content for ${name} in directory node ${node}, file node: ${entryNode}`);
                 if (info.kind == ContentKind.Directory) {
                     const directoryEntry: DirectoryEntry = {

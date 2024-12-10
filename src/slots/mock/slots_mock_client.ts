@@ -50,7 +50,7 @@ export class MockSlotsServer implements SlotsClient {
 
     private required(id: string): SlotsGetResponse[] {
         const responses = this.slots.get(id)
-        if (!responses || responses.length == 0) throw Error(`Unkonwn ${id}`);
+        if (!responses || responses.length == 0) throw Error(`Unknown ${id}`);
         return responses
     }
 }
