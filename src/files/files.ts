@@ -183,6 +183,9 @@ export class Files implements FilesClient {
             this.invalidDirectories.add(parent)
             if (kind == ContentKind.Directory) {
                 this.directories.set(node, new Map())
+                this.transforms.set(node, () => dataFromString("[]"))
+            } else {
+                this.transforms.set(node, () => dataFromString(""))
             }
             this.scheduleSync()
             return node
