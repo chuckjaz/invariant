@@ -55,3 +55,11 @@ export interface FilesClient {
 
     sync(): Promise<void>
 }
+
+export interface ContentReader {
+    readContentLink(content: ContentLink): Data
+}
+
+export interface ContentWriter {
+    writeContentLink(data: Data): Promise<ContentLink>
+}

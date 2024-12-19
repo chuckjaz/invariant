@@ -8,9 +8,9 @@ import { Block, BlockTree, ContentLink, ContentTransform, DirectoryEntry, Entry,
 import { SlotsClient } from "../slots/slot_client";
 import { Data, StorageClient } from "../storage/client";
 import { createHash } from 'node:crypto'
-import { ContentInformation, ContentKind, EntryAttributes, FileDirectoryEntry, FilesClient, Node } from "./files_client";
+import { ContentInformation, ContentKind, ContentReader, EntryAttributes, FileDirectoryEntry, FilesClient, Node } from "./files_client";
 
-export class Files implements FilesClient {
+export class Files implements FilesClient, ContentReader {
     private broker: BrokerClient
     private storage: StorageClient
     private slots: SlotsClient
@@ -396,7 +396,7 @@ export class Files implements FilesClient {
         return entries
     }
 
-    private async *readContentLink(content: ContentLink): Data {
+    async *readContentLink(content: ContentLink): Data {
         let address: string
         if (content.slot) {
             const current = await this.slots.get(content.address)
@@ -420,6 +420,12 @@ export class Files implements FilesClient {
         }
 
         yield *data
+    }
+
+    async writeContentLink(data: Data): Promise<ContentLink> {
+        const block = await this.writeData(data)
+        if (!block) error("Could not write data");
+        return block.content
     }
 
     private transformReadData(address: string, data: Data, transforms: ContentTransform[]): Data {
@@ -561,7 +567,7 @@ export class Files implements FilesClient {
             }
             directoryEntries.sort((a, b) => stringCompare(a.name, b.name))
             const directoryEntriesText = JSON.stringify(directoryEntries)
-            const directoryBlock = await this.writeData(node, dataFromString(directoryEntriesText))
+            const directoryBlock = await this.writeData(dataFromString(directoryEntriesText), node)
             if (!directoryBlock) return
             const previous = this.contentMap.get(node)
             this.contentMap.set(node, directoryBlock.content)
@@ -589,7 +595,7 @@ export class Files implements FilesClient {
         await lock.writeLock()
         try {
             const data = this.readFileDataLocked(node)
-            const dataBlock = await this.writeData(node, data)
+            const dataBlock = await this.writeData(data, node)
             if (!dataBlock) return
             const info = nRequired(this.infos.get(node))
             info.etag = dataBlock.content.expected ?? dataBlock.content.address
@@ -606,7 +612,7 @@ export class Files implements FilesClient {
         }
     }
 
-    private async writeData(node: Node, data: Data): Promise<Block | undefined> {
+    private async writeData(data: Data, node?: Node): Promise<Block | undefined> {
         const pieceLimit = 1024 * 1024
         const hash = createHash('sha256')
         data = hashTransform(data, hash)
@@ -623,7 +629,7 @@ export class Files implements FilesClient {
             const address = await that.storage.post(dataFromBuffers(buffers))
             buffers.length = 0
             if (!address) {
-                console.error(`Could not save ${address}, writes to ${node} were lost`)
+                console.error(`Could not save ${address}${ node ? `, writes to ${node} were lost` : ''}`)
                 return false
             }
             const content: ContentLink = { address }
@@ -647,7 +653,7 @@ export class Files implements FilesClient {
         }
         const blocksText = JSON.stringify(blocks)
         const blocksData = dataFromString(blocksText)
-        const blocksBlock = await this.writeData(node, blocksData)
+        const blocksBlock = await this.writeData(blocksData, node)
         if (blocksBlock === undefined) return
         const expected = hash.digest().toString('hex')
         const transforms: ContentTransform[] = [{ kind: "Blocks" }]

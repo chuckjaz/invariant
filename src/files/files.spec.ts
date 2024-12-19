@@ -34,7 +34,7 @@ describe("files", () => {
             files.stop()
         }
     })
-    it ("can read a directory", async () => {
+    it("can read a directory", async () => {
         const [files, node] = await filesWithRandomContent()
         try {
             await validateDirectory(files, node)
