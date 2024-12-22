@@ -106,11 +106,15 @@ async function startFiles(config: ServerConfiguration, broker?: BrokerClient) {
     if (!slots) error("Could not find a slots server");
 
     const files = new Files(storage, slots, broker, config.syncFrequency)
+
+    if (config.mount) {
+        await files.mount(config.mount)
+    }
     const filesHandlers = filesWebHandlers(files)
     const app = new Koa()
     app.use(logHandler("files"))
     app.use(filesHandlers)
-    const httpServer = app.listen()
+    const httpServer = app.listen(config.port)
     listening("Files", config.id, httpServer)
 }
 
@@ -174,7 +178,7 @@ interface PingClient {
     ping(): Promise<string | undefined>
 }
 
-async function firstServer<S extends PingClient>(
+export async function firstServer<S extends PingClient>(
     broker: BrokerClient,
     kind: string,
     get: (id: string) => Promise<S | undefined>
@@ -189,14 +193,14 @@ async function firstServer<S extends PingClient>(
     }
 }
 
-async function firstStorage(broker: BrokerClient): Promise<StorageClient | undefined> {
+export async function firstStorage(broker: BrokerClient): Promise<StorageClient | undefined> {
     return firstServer(broker, 'storage', id => broker.storage(id))
 }
 
-async function firstFinder(broker: BrokerClient): Promise<FindClient | undefined> {
+export async function firstFinder(broker: BrokerClient): Promise<FindClient | undefined> {
     return firstServer(broker, 'find', id => broker.find(id))
 }
 
-async function firstSlots(broker: BrokerClient): Promise<SlotsClient | undefined> {
+export async function firstSlots(broker: BrokerClient): Promise<SlotsClient | undefined> {
     return firstServer(broker, 'slots', id => broker.slots(id))
 }

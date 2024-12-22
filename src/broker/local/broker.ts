@@ -16,7 +16,7 @@ const app = new Koa()
 export default app
 
 const brokerPrefix = '/broker/'
-const brokerLocationPrefx = brokerPrefix + 'location/'
+const brokerLocationPrefix = brokerPrefix + 'location/'
 const brokerRegisteredPrefix = brokerPrefix + 'registered/'
 const brokerRegisterPrefix = brokerPrefix + 'register/'
 
@@ -67,15 +67,15 @@ app.use(async function (ctx,  next) {
                     save().catch(e => console.log(e))
                     ctx.body = { id: myId.id.toString('hex') }
                 } else {
-                    console.log(400, `URL ${entry.url} is not reacable`)
+                    console.log(400, `URL ${entry.url} is not reachable`)
                     ctx.throw(400, `Url "${entry.url}" is not reachable`)
                 }
                 return
             }
         }
     }
-    if (ctx.path.startsWith(brokerLocationPrefx) && ctx.method == 'GET') {
-        const id = trimTrailingSlash(ctx.path.slice(brokerLocationPrefx.length))
+    if (ctx.path.startsWith(brokerLocationPrefix) && ctx.method == 'GET') {
+        const id = trimTrailingSlash(ctx.path.slice(brokerLocationPrefix.length))
         console.log('getting:', id)
         const result = info.get(id)
         console.log('result:', result)

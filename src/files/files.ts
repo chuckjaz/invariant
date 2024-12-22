@@ -60,6 +60,7 @@ export class Files implements FilesClient, ContentReader {
         }
         this.infos.set(node, info)
         this.mounts.add(node)
+        await this.ensureDirectory(node)
         return node
     }
 

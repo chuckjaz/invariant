@@ -33,8 +33,8 @@ export class PingableClient {
             const text = await response.text()
             try {
                 return JSON.parse(text) as T
-            } finally {
-                throw new Error("Invalid JSON format received")
+            } catch(e) {
+                throw new Error(`Invalid JSON format received: ${e}`)
             }
         } else {
             throw new Error(`Could not receive JSON: ${response.status}`)
