@@ -19,7 +19,9 @@ export class PingableClient {
                 this.id = id
                 return id
             }
-        } catch {}
+        } catch(e) {
+            console.error('ping error', e)
+        }
     }
 
     protected async getJson<T>(prefix: string): Promise<T> {

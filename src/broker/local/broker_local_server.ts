@@ -6,6 +6,7 @@ import { verifyLive } from "../../common/verify";
 import { BrokerServer } from "../server";
 import { fileExists } from '../../common/files';
 import { delay } from '../../common/delay';
+import { invalid } from '../../common/errors';
 
 interface Information {
     id: string
@@ -49,8 +50,13 @@ export class LocalBrokerServer implements BrokerServer {
 
     async register(id: string, url: URL, kind?: string): Promise<BrokerRegisterResponse | undefined> {
         const existingInfo = this.info.get(id)
-        if (existingInfo) return undefined
-        this.info.set(id, { id, kind, url: url.toString(), lastVerified: 0 })
+        if (existingInfo) {
+            existingInfo.kind = kind
+            existingInfo.url = url.toString()
+            existingInfo.lastVerified = 0
+        } else {
+            this.info.set(id, { id, kind, url: url.toString(), lastVerified: 0 })
+        }
         return { id }
     }
 

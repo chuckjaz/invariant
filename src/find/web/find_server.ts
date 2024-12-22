@@ -13,7 +13,7 @@ export default app
 
 const idPrefix = '/id/'
 const findGetPrefix = '/find/'
-const findHasPrefx = '/find/has/'
+const findHasPrefix = '/find/has/'
 const findNotifyPrefix = '/find/notify/'
 
 let server: FindClient
@@ -25,7 +25,7 @@ app.use(async function (ctx, next) {
         ctx.status = 200
         ctx.body = serverId
         return
-    } else if (ctx.path.startsWith(findHasPrefx) && ctx.method == 'PUT') {
+    } else if (ctx.path.startsWith(findHasPrefix) && ctx.method == 'PUT') {
         const requestText = await text(ctx)
         const request = safeParseJson(requestText) as FindHasRequest
         const container = normalizeCode(request.container)

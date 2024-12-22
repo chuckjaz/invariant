@@ -8,15 +8,17 @@ import { jsonBackwardStream, textStreamFromFileBackward } from "../../common/par
 import { fileExists } from "../../common/files";
 import { normalizeCode } from "../../common/codes";
 import { lock } from "../../common/lock";
+import { randomId } from "../../common/id";
 
 const verify = promisify(vfy)
 
 export class LocalSlots implements SlotsClient {
-    id = randomBytes(32).toString('hex')
+    id: string
     private directory: string
 
-    constructor(directory: string) {
+    constructor(directory: string, id?: string) {
         this.directory = directory
+        this.id = id ?? randomId()
     }
 
     async ping(): Promise<string | undefined> {

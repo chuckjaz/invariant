@@ -89,7 +89,7 @@ export async function route(route: Route, ctx: Ctx, next: Next): Promise<void> {
             const body = await jsonFromData(handler.body, dataFromReadable(ctx.req))
             args.push(body)
         }
-        console.log("route handler args", args)
+        // console.log("route handler args", args)
         await handler.handler(ctx, next, ...args)
     }
 

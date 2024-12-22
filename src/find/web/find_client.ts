@@ -5,9 +5,9 @@ import { FindClient, FindResult, FindResultItem } from "../client";
 
 const findPrefix = '/find/'
 const findHasPrefix = '/find/has/'
-const findNotifyPrefix = '/find/noify/'
+const findNotifyPrefix = '/find/notify/'
 
-export class Find  extends PingableClient implements FindClient {
+export class Find extends PingableClient implements FindClient {
 
     constructor(url: URL, id?: string) {
         super(url, id)

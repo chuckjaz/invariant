@@ -10,6 +10,18 @@ import { LocalStorage } from '../storage/local/local_storage'
 import { LocalBrokerServer } from '../broker/local/broker_local_server'
 import { brokerHandlers } from '../broker/web/broker_web_handler'
 import { error } from '../common/errors'
+import { Files } from '../files/files'
+import { StorageClient } from '../storage/client'
+import { FindClient } from '../find/client'
+import { BlockFindingStorage } from '../storage/find/storage_find'
+import { StorageCache } from '../storage/cache/storage_cache'
+import { SlotsClient } from '../slots/slot_client'
+import { mockSlots } from '../slots/mock/slots_mock_client'
+import { filesWebHandlers } from '../files/web/files_web_handler'
+import { LocalSlots } from '../slots/local/slots_local'
+import { slotsHandler } from '../slots/web/slots_web_handler'
+import { findHandlers } from '../find/web/find_handlers'
+import { findServer } from '../find/server'
 
 export default {
     command: 'start [service]',
@@ -34,6 +46,7 @@ async function start(choice: string) {
             const server = service.server
             if (server == choice || choice == "all") {
                 const fn = starters[server]
+                if (!fn) error(`Unknown server ${server} in configuration`)
                 const primary = await fn(service, broker)
                 if (primary && server == "broker" && service.primary) {
                     broker = primary
@@ -47,7 +60,10 @@ async function start(choice: string) {
 
 const starters: { [index: string]: (config: ServerConfiguration, broker?: BrokerClient) => Promise<any>} = {
     'broker': startBroker,
-    'storage': startStorage
+    'storage': startStorage,
+    'files': startFiles,
+    'slots': startSlots,
+    'find': startFind,
 }
 
 function listening(name: string, id: string, httpServer: HttpServer, directory?: string): number {
@@ -78,9 +94,24 @@ async function startFiles(config: ServerConfiguration, broker?: BrokerClient) {
     console.log("Starting files server")
     if (config.server != "files") error("Unexpected configuration");
     if (!broker) error("Files require a broker connection to be configured");
+    let storage = await findStorage(broker)
+    if (!storage) error("Could not find a storage to use");
 
+    if (config.cache) {
+        const backingStorage = new LocalStorage(config.cache.directory)
+        storage = new StorageCache(storage, backingStorage, config.cache.size)
+    }
 
+    const slots = config.mount?.slot ? await firstSlots(broker) : mockSlots()
+    if (!slots) error("Could not find a slots server");
+
+    const files = new Files(storage, slots, broker, config.syncFrequency)
+    const filesHandlers = filesWebHandlers(files)
     const app = new Koa()
+    app.use(logHandler("files"))
+    app.use(filesHandlers)
+    const httpServer = app.listen()
+    listening("Files", config.id, httpServer)
 }
 
 async function startStorage(config: ServerConfiguration, broker?: BrokerClient) {
@@ -97,4 +128,75 @@ async function startStorage(config: ServerConfiguration, broker?: BrokerClient) 
     if (broker && config.url) {
         broker.register(config.id, config.url, 'storage').catch(e => console.error(e))
     }
+}
+
+async function startSlots(config: ServerConfiguration, broker?: BrokerClient) {
+    console.log("Starting slots server")
+    if (config.server != 'slots') error("Unexpected slots configuration")
+    const app = new Koa()
+    const client = new LocalSlots(config.directory, config.id)
+    const httpServer = app.listen(config.port)
+    const handlers = slotsHandler(client)
+    app.use(logHandler('slots'))
+    app.use(handlers)
+    listening("Slots", config.id, httpServer, config.directory)
+
+    if (broker && config.url) {
+        broker.register(config.id, config.url, 'slots').catch(e => console.error(e))
+    }
+}
+
+async function startFind(config: ServerConfiguration, broker?: BrokerClient) {
+    console.log("Starting find server")
+    if (config.server != 'find') error("Unexpected find configuration");
+    if (!broker) error("Find server requires a broker")
+    const app = new Koa()
+    const client = await findServer(broker, config.id)
+    const httpServer = app.listen(config.port)
+    const handlers = findHandlers(client, broker)
+    app.use(logHandler('Find'))
+    app.use(handlers)
+    listening("Find", config.id, httpServer)
+
+    if (config.url) {
+        broker.register(config.id, config.url, 'find').catch(e => console.error(e))
+    }
+}
+
+async function findStorage(broker: BrokerClient): Promise<StorageClient | undefined> {
+    const finder = await firstFinder(broker)
+    const storage = await firstStorage(broker);
+    if (!finder) return storage
+    return new BlockFindingStorage(broker, finder, storage)
+}
+
+interface PingClient {
+    ping(): Promise<string | undefined>
+}
+
+async function firstServer<S extends PingClient>(
+    broker: BrokerClient,
+    kind: string,
+    get: (id: string) => Promise<S | undefined>
+): Promise<S | undefined> {
+    const ids = await broker.registered(kind)
+    for await (const id of ids) {
+        const server = await get(id)
+        if (!server) continue
+        const ping = await server.ping()
+        if (!ping) continue
+        return server
+    }
+}
+
+async function firstStorage(broker: BrokerClient): Promise<StorageClient | undefined> {
+    return firstServer(broker, 'storage', id => broker.storage(id))
+}
+
+async function firstFinder(broker: BrokerClient): Promise<FindClient | undefined> {
+    return firstServer(broker, 'find', id => broker.find(id))
+}
+
+async function firstSlots(broker: BrokerClient): Promise<SlotsClient | undefined> {
+    return firstServer(broker, 'slots', id => broker.slots(id))
 }

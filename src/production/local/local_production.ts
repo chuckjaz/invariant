@@ -43,8 +43,10 @@ export class LocalProduction implements ProductionClient {
 
     private async loadResultsFor(task: string, input: string) {
         const taskDirectory = path.join(this.directory, addressToDirectory(task))
-        if (!await directoryExists(taskDirectory)) return
-        const resultFile = path.join(taskDirectory, input.slice(0, 4))
+        if (!await directoryExists(taskDirectory)) {
+            return
+        }
+        const resultFile = path.join(taskDirectory, input.slice(0, 2))
         if (await fileExists(resultFile)) {
             const taskMap = this.taskMapFor(task)
             const resultsText = await fs.readFile(resultFile, 'utf-8')
@@ -61,7 +63,7 @@ export class LocalProduction implements ProductionClient {
             await fs.mkdir(taskDirectory, { recursive: true })
         }
         const resultFile = path.join(taskDirectory, input.slice(0, 2))
-        fs.appendFile(resultFile, `${input}=${output}\n`, 'utf-8')
+        await fs.appendFile(resultFile, `${input}=${output}\n`, 'utf-8')
     }
 
     private taskMapFor(task: string): Map<string, string> {

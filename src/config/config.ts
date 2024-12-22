@@ -2,6 +2,7 @@ import { homedir } from 'node:os'
 import * as path from 'path'
 import * as fs from 'node:fs/promises'
 import { error } from '../common/errors'
+import { ContentLink } from '../common/types'
 
 export interface Configuration {
     broker?: URL
@@ -38,6 +39,11 @@ export interface DistributeConfiguration extends CommonServerConfiguration {
 export interface FilesConfiguration extends CommonServerConfiguration {
     server: "files"
     syncFrequency?: number
+    mount?: ContentLink
+    cache?: {
+        directory: string,
+        size: number
+    }
 }
 
 export interface FindConfiguration extends CommonServerConfiguration {
@@ -61,6 +67,8 @@ interface ServerConfigurationJson {
     primary?: boolean
     storage?: string
     slots?: string
+    mount?: any
+    cache?: any
     syncFrequency?: number
 }
 
@@ -114,14 +122,14 @@ export async function loadConfiguration(): Promise<Configuration> {
                     })
                     break
                 case "files":
-                    if (!server.storage) error("Files require a storage in the configuration")
-                    if (!server.slots) error("Files require a slots in the configuration")
                     servers.push({
-                        server: server.server,
+                        server: "files",
                         id: server.id,
                         port: server.port,
                         directory,
                         url,
+                        mount: server.mount,
+                        cache: server.cache,
                         syncFrequency: server.syncFrequency
                     })
                     break

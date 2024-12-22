@@ -6,7 +6,7 @@ import { findServer as rawFindServer } from "./server"
 import { randomBytes } from 'node:crypto'
 
 function findServer(broker: BrokerClient): Promise<FindClient> {
-    return rawFindServer(broker, { startAwaiter: p => p })
+    return rawFindServer(broker, undefined, { startAwaiter: p => p })
 }
 
 describe('find/server', () => {

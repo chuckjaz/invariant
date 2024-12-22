@@ -18,10 +18,10 @@ async function defaultStartAwaiter(promise: Promise<void>): Promise<void> {
 
 const defaultOptions = { parallelism: 20, queryDelay: 60 * 1000, now: Date.now, startAwaiter: defaultStartAwaiter }
 
-export async function findServer(broker: BrokerClient, _options?: FindServerOptions): Promise<FindClient> {
+export async function findServer(broker: BrokerClient, id?: string, _options?: FindServerOptions): Promise<FindClient> {
     const options = { ...defaultOptions, ...(_options ?? { }) }
     const myId = randomBytes(32)
-    const textId = myId.toString('hex')
+    const textId = id ?? myId.toString('hex')
     const finds: string[][] = []
     const have = new Map<string, Set<string>>()
     let lastBrokerQuery = 0

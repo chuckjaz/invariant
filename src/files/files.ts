@@ -27,11 +27,11 @@ export class Files implements FilesClient, ContentReader {
     private locks = new Map<Node, ReadWriteLock>()
     private nextNode = 1
 
-    constructor(storage: StorageClient, slots: SlotsClient, broker: BrokerClient, syncFrequency: number) {
+    constructor(storage: StorageClient, slots: SlotsClient, broker: BrokerClient, syncFrequency?: number) {
         this.storage = storage
         this.slots = slots
         this.broker = broker
-        this.syncFrequency = syncFrequency
+        this.syncFrequency = syncFrequency ?? 5000
     }
 
     async mount(content: ContentLink, executable?: boolean, writable?: boolean): Promise<Node> {
