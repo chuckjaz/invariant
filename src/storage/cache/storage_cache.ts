@@ -170,7 +170,6 @@ export class StorageCache implements StorageClient {
         }
         const tracker = new TaskTracker(task)
         this.pendingTasks.set(task, tracker)
-        const myId = tracker.id
         if (!condition || condition()) {
             tracker.timeout = setTimeout(async () => {
                 await tracker.run()

@@ -1,7 +1,7 @@
 import { mockBroker } from "../../broker/mock/mock_broker_client"
 import { dataToString } from "../../common/parseJson"
 import { Data } from "../client"
-import { mockStorage } from "./client"
+import { mockStorage } from "./storage_mock_client"
 import { createHash } from 'node:crypto'
 
 describe('storage/mock/client', () => {
