@@ -1,4 +1,4 @@
-import { BrokerClient } from "../../broker/client";
+import { BrokerClient } from "../../broker/broker_client";
 import { findInFinder } from "../../common/findInFinder";
 import { randomId } from "../../common/id";
 import { ParallelContext } from "../../common/parallel_context";

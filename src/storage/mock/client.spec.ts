@@ -1,4 +1,4 @@
-import { mockBroker } from "../../broker/mock/client"
+import { mockBroker } from "../../broker/mock/mock_broker_client"
 import { dataToString } from "../../common/parseJson"
 import { Data } from "../client"
 import { mockStorage } from "./client"

@@ -1,4 +1,4 @@
-import { mockBroker, MockBrokerClient } from "../broker/mock/client"
+import { mockBroker, MockBrokerClient } from "../broker/mock/mock_broker_client"
 import { stringsToData } from "../common/data"
 import { FindClient } from "../find/client"
 import { findServer } from "../find/server"

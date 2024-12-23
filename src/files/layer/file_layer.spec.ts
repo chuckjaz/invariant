@@ -1,4 +1,4 @@
-import { mockBroker } from "../../broker/mock/client"
+import { mockBroker } from "../../broker/mock/mock_broker_client"
 import { allOfStream, dataFromBuffers, stringsToData } from "../../common/data"
 import { delay } from "../../common/delay"
 import { error } from "../../common/errors"

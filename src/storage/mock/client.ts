@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { Data, ManagedStorageClient, StorageClient, StorageBlock } from "../client";
 import { normalizeCode } from '../../common/codes';
 import { hashTransform } from '../../common/data';
-import { BrokerClient } from '../../broker/client';
+import { BrokerClient } from '../../broker/broker_client';
 
 export interface MockStorageClient extends ManagedStorageClient {
     id: string

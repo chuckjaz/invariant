@@ -1,4 +1,4 @@
-import { BrokerClient } from "../broker/client";
+import { BrokerClient } from "../broker/broker_client";
 import { BlockOverride, brotliDecompressData, dataFromBuffers, decipherData, hashTransform, inflateData, jsonFromData, limitData, measureTransform, overrideData, readAllData, setDataSize, splitData, unzipData, validateData } from "../common/data";
 import { error, invalid } from "../common/errors";
 import { dataFromString } from "../common/parseJson";

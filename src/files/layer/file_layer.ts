@@ -8,7 +8,7 @@ import z from 'zod';
 import { contentLinkSchema } from '../../common/schema';
 import { Files } from '../files';
 import { SlotsClient } from '../../slots/slot_client';
-import { BrokerClient } from '../../broker/client';
+import { BrokerClient } from '../../broker/broker_client';
 import { dataToString } from '../../common/parseJson';
 import { invalid } from '../../common/errors';
 

@@ -1,4 +1,4 @@
-import { BrokerClient } from "../broker/client"
+import { BrokerClient } from "../broker/broker_client"
 import { dataToString, safeParseJson } from "../common/parseJson"
 import { BlockTree, ContentLink, Entry, EntryKind } from "../common/types"
 import { FindClient } from "../find/client"

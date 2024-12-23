@@ -1,5 +1,5 @@
-import { BrokerClient } from "../broker/client"
-import { mockBroker } from "../broker/mock/client"
+import { BrokerClient } from "../broker/broker_client"
+import { mockBroker } from "../broker/mock/mock_broker_client"
 import { brotliCompressData, cipherData, dataFromBuffers, deflateData, hashTransform, jsonFromData, measureTransform, readAllData, splitData, validateData, zipData } from "../common/data"
 import { delay } from "../common/delay"
 import { error, invalid } from "../common/errors"

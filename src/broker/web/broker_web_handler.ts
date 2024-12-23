@@ -3,7 +3,7 @@ import { allOfStream } from "../../common/data";
 import { idSchema } from "../../common/schema";
 import { BrokerRegisterRequest } from "../../common/types";
 import { ResponseFunc, route, Route } from "../../common/web";
-import { BrokerServer } from '../server';
+import { BrokerServer } from '../broker_server';
 import { z } from 'zod'
 
 function kindConverter(value: string | string[] | undefined): string | undefined {

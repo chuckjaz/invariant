@@ -1,5 +1,5 @@
 import z from "zod";
-import { BrokerClient } from "../../broker/client";
+import { BrokerClient } from "../../broker/broker_client";
 import { ResponseFunc, route, Route } from "../../common/web";
 import { FindClient } from "../client";
 import { idSchema } from "../../common/schema";

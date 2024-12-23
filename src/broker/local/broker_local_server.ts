@@ -3,7 +3,7 @@ import { readFile, writeFile } from 'fs/promises'
 import { randomId } from "../../common/id";
 import { BrokerLocationResponse, BrokerRegisterResponse } from "../../common/types";
 import { verifyLive } from "../../common/verify";
-import { BrokerServer } from "../server";
+import { BrokerServer } from "../broker_server";
 import { fileExists } from '../../common/files';
 import { delay } from '../../common/delay';
 

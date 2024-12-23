@@ -2,7 +2,7 @@ import Koa from 'koa'
 import { Server as HttpServer} from 'node:http'
 import { CommandModule } from "yargs"
 import { loadConfiguration, Server, ServerConfiguration } from "../config/config"
-import { BrokerClient } from '../broker/client'
+import { BrokerClient } from '../broker/broker_client'
 import { BrokerWebClient } from '../broker/web/broker_web_client'
 import { logHandler } from '../common/web'
 import { storageHandlers } from '../storage/web/storage_web_handlers'

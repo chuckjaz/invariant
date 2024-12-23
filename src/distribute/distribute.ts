@@ -1,4 +1,4 @@
-import { BrokerClient } from "../broker/client";
+import { BrokerClient } from "../broker/broker_client";
 import { take } from "../common/data";
 import { ParallelContext } from "../common/parallel_context";
 import {

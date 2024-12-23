@@ -1,4 +1,4 @@
-import { BrokerClient } from "../broker/client"
+import { BrokerClient } from "../broker/broker_client"
 import { randomBytes } from 'node:crypto'
 import { FindClient, FindResult, FindResultItem } from "./client"
 import { Channel } from "../common/channel"

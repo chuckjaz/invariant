@@ -2,7 +2,7 @@ import { homedir } from 'node:os'
 import * as path from 'path'
 import { fileExists } from '../common/files'
 import { BrokerWebClient } from '../broker/web/broker_web_client'
-import { BrokerClient } from '../broker/client'
+import { BrokerClient } from '../broker/broker_client'
 import { loadConfiguration, Server } from '../config/config'
 import yargs from 'yargs'
 

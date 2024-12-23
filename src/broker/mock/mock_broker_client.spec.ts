@@ -1,6 +1,6 @@
 import { mockStorage } from "../../storage/mock"
-import { BrokerClient } from "../client"
-import { mockBroker } from "./client"
+import { BrokerClient } from "../broker_client"
+import { mockBroker } from "./mock_broker_client"
 
 describe('broker/mock/client', () => {
   it('can create a mock broker client', async () => {

@@ -9,7 +9,7 @@ import { SlotsClient } from "../../slots/slot_client";
 import { SlotsWebClient } from "../../slots/web/slots_web_client";
 import { StorageClient } from "../../storage/client";
 import { StorageWebClient } from "../../storage/web/storage_web_client";
-import { BrokerClient } from "../client";
+import { BrokerClient } from "../broker_client";
 
 const brokerLocationPrefix = '/broker/location/'
 const brokerRegisteredPrefix = '/broker/registered/'

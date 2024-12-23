@@ -12,7 +12,7 @@ import { dataFromBuffers, readAllData } from '../common/data';
 import { normalizeCode } from '../common/codes';
 import { error } from '../common/errors';
 import { loadConfiguration } from '../config/config';
-import { BrokerClient } from '../broker/client';
+import { BrokerClient } from '../broker/broker_client';
 import { BrokerWebClient } from '../broker/web/broker_web_client';
 import { StorageWebClient } from '../storage/web/storage_web_client';
 

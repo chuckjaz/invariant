@@ -1,5 +1,5 @@
-import { BrokerClient } from "../broker/client"
-import { mockBroker, MockBrokerClient } from "../broker/mock/client"
+import { BrokerClient } from "../broker/broker_client"
+import { mockBroker, MockBrokerClient } from "../broker/mock/mock_broker_client"
 import { delay } from "../common/delay"
 import { FindClient } from "./client"
 import { findServer as rawFindServer } from "./server"

@@ -1,4 +1,4 @@
-import { BrokerClient } from "../broker/client";
+import { BrokerClient } from "../broker/broker_client";
 import { FindClient } from "../find/client";
 import { Channel } from "./channel";
 import { ParallelContext } from "./parallel_context";
