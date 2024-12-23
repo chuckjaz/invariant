@@ -42,11 +42,11 @@ If `true`, `address` is the `:id:` of the slot that contains that actual content
 ## `key`
 
 The key to use to decrypt the data referenced by `address`. This key is for the entire content linked unless
-overriden by a block list that contains a different content link.
+overridden by a block list that contains a different content link.
 
 ## `algorithm`
 
-The encryption algorithm that was used to encrypt the content. The algorithim should be a commonly implemented encryption algorithm such as those supported by open ssl.
+The encryption algorithm that was used to encrypt the content. The algorithm should be a commonly implemented encryption algorithm such as those supported by open ssl.
 
 ## `salt`
 
@@ -66,7 +66,7 @@ The length of the block. The default is the rest of the content after `offset`.
 
 ## `primary`
 
-The primary block store for the linked content. Is the considered the primary source of the content. However, this should only be used if a finder cannot otherwise find it as it is more likely a findeer will find a geographically closer location for the content.
+The primary block store for the linked content. Is the considered the primary source of the content. However, this should only be used if a finder cannot otherwise find it as it is more likely a finder will find a geographically closer location for the content.
 
 # `:entries`
 
@@ -101,7 +101,7 @@ The kind of the entry, either a file entry or a directory entry.
 
 ## `name`
 
-The name of the file. The file tree does not give special names or otherwise restrict the value of a name nor is the name validated. However, the `name` should be restricted to using characters that are commonly supported to avoid compatibilty issues when a file tree is mapped to a operating system using a FUSE or a network file system.
+The name of the file. The file tree does not give special names or otherwise restrict the value of a name nor is the name validated. However, the `name` should be restricted to using characters that are commonly supported to avoid compatibility issues when a file tree is mapped to a operating system using a FUSE or a network file system.
 
 ## `content`
 
@@ -109,7 +109,7 @@ The link to the content associated with this entry.
 
 ## `createTime`
 
-The number of milliseconds from Midight, Jan 1, 1970 the file was first created.
+The number of milliseconds from Midnight, Jan 1, 1970 the file was first created.
 
 ## `modifyTime`
 

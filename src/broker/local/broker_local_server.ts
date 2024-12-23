@@ -6,7 +6,6 @@ import { verifyLive } from "../../common/verify";
 import { BrokerServer } from "../server";
 import { fileExists } from '../../common/files';
 import { delay } from '../../common/delay';
-import { invalid } from '../../common/errors';
 
 interface Information {
     id: string
