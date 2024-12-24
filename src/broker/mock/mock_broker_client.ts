@@ -46,7 +46,7 @@ export function mockBroker(): MockBrokerClient {
         return slotsMap.get(normalizeCode(id) ?? '')
     }
 
-    async function registered(kind: string): Promise<AsyncIterable<string>> {
+    async function *registered(kind: string): AsyncIterable<string> {
         let values: Iterable<string>
         switch (kind) {
             case 'broker': values = brokers.keys(); break
@@ -55,7 +55,7 @@ export function mockBroker(): MockBrokerClient {
             case 'slots': values = slotsMap.keys(); break
             default: throw new Error('Not found')
         }
-        return async function *() { yield * values }()
+        yield *values
     }
 
     async function registerBroker(broker: BrokerClient): Promise<void> {

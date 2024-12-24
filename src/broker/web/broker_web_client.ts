@@ -38,7 +38,7 @@ export class BrokerWebClient extends PingableClient implements BrokerClient {
         return this.client(id, async (id, url) => new SlotsWebClient(url, id))
     }
 
-    async registered(kind: string): Promise<AsyncIterable<string>> {
+    async *registered(kind: string): AsyncIterable<string> {
         const channel = new Channel<string>()
         try {
             const response = await fetch(new URL(`${brokerRegisteredPrefix}${kind}`, this.url))
@@ -57,7 +57,7 @@ export class BrokerWebClient extends PingableClient implements BrokerClient {
         } finally {
             channel.close()
         }
-        return channel.all()
+        yield *channel.all()
     }
 
     register(id: string, url: URL, kind?: string): Promise<BrokerRegisterResponse | undefined> {

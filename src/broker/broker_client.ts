@@ -9,7 +9,7 @@ export interface BrokerClient {
     find(id: string): Promise<FindClient | undefined>
     storage(id: string): Promise<StorageClient | undefined>
     slots(id: string): Promise<SlotsClient | undefined>
-    registered(kind: string): Promise<AsyncIterable<string>>
+    registered(kind: string): AsyncIterable<string>
     register(id: string, url: URL, kind?: string): Promise<BrokerRegisterResponse | undefined>
 }
 

@@ -1,7 +1,7 @@
 import { Blob } from 'node:buffer'
 import { Channel } from './channel'
 
-export async function streamBlob(blob: Blob): Promise<AsyncIterable<Buffer>> {
+export async function *streamBlob(blob: Blob): AsyncIterable<Buffer> {
     const channel = new Channel<Buffer>()
     async function readAll() {
         try {
@@ -22,5 +22,5 @@ export async function streamBlob(blob: Blob): Promise<AsyncIterable<Buffer>> {
         }
     }
     readAll()
-    return channel.all()
+    yield *channel.all()
 }

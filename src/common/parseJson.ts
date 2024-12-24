@@ -12,7 +12,7 @@ export function safeParseJson(text: string, reviver?: (this: any, key: string, v
     }
 }
 
-export async function textStreamFromFile(file: string | fss.ReadStream): Promise<AsyncIterable<string>> {
+export async function *textStreamFromFile(file: string | fss.ReadStream): AsyncIterable<string> {
     const stream = typeof file == "string" ? fss.createReadStream(file, 'utf-8') : file
     stream.pause()
     const channel = new Channel<string>()
@@ -21,7 +21,7 @@ export async function textStreamFromFile(file: string | fss.ReadStream): Promise
     stream.on('end', () => channel.close())
     stream.on('error', e => channel.fail(e))
     stream.resume()
-    return channel.all()
+    yield *channel.all()
 }
 
 export async function *dataFromFile(file: string | fss.ReadStream): AsyncIterable<Buffer> {
@@ -88,7 +88,7 @@ export async function dataToString(data: AsyncIterable<Buffer>): Promise<string>
     return new TextDecoder().decode(buffer)
 }
 
-export async function textStreamFromFileBackward(file: string): Promise<AsyncIterable<string>> {
+export async function *textStreamFromFileBackward(file: string): AsyncIterable<string> {
     const fileHandle = await fs.open(file, 'r')
     const stat = await fs.lstat(file)
     const size = stat.size
@@ -127,10 +127,10 @@ export async function textStreamFromFileBackward(file: string): Promise<AsyncIte
         }
     }
     readAll().catch(e => channel.fail(e))
-    return channel.all()
+    yield *channel.all()
 }
 
-export async function textStreamFromWeb(urlOrStream: URL | ReadableStreamDefaultReader): Promise<AsyncIterable<string>> {
+export async function *textStreamFromWeb(urlOrStream: URL | ReadableStreamDefaultReader): AsyncIterable<string> {
     let stream: ReadableStreamDefaultReader<any>
     if ('host' in urlOrStream) {
         const response = await fetch(urlOrStream)
@@ -154,7 +154,7 @@ export async function textStreamFromWeb(urlOrStream: URL | ReadableStreamDefault
         }
     }
     readAll(stream).catch(e => channel.fail(e))
-    return channel.all()
+    yield *channel.all()
 }
 
 export async function *jsonStreamToText<T>(stream: AsyncIterable<T>): AsyncIterable<string> {
@@ -163,12 +163,12 @@ export async function *jsonStreamToText<T>(stream: AsyncIterable<T>): AsyncItera
     }
 }
 
-export async function jsonStream<T>(
+export async function *jsonStream<T>(
     dataOrUrl: URL | AsyncIterable<string>,
     options?: {
         limit?: number
     }
-): Promise<AsyncIterable<T>> {
+): AsyncIterable<T> {
     let data: AsyncIterable<string>
     if ('host' in dataOrUrl) {
         data = await textStreamFromWeb(dataOrUrl)
@@ -266,15 +266,15 @@ export async function jsonStream<T>(
             }
         }
     }
-    return readAll()
+    yield *readAll()
 }
 
-export async function jsonBackwardStream<T>(
+export async function *jsonBackwardStream<T>(
     data: AsyncIterable<string>,
     options?: {
         limit?: number
     }
-): Promise<AsyncIterable<T>> {
+): AsyncIterable<T> {
     const limit = options?.limit ?? Infinity
     async function* readAll(): AsyncIterable<T> {
         let buffer = ""
@@ -353,6 +353,6 @@ export async function jsonBackwardStream<T>(
             }
         }
     }
-    return readAll()
+    yield *readAll()
 }
 

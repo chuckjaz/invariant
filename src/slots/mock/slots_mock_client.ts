@@ -30,9 +30,8 @@ export class MockSlotsServer implements SlotsClient {
         return false
     }
 
-    async history(id: string): Promise<AsyncIterable<SlotsGetResponse>> {
-        const responses = this.required(id)
-        return async function*() { yield *responses }()
+    async *history(id: string): AsyncIterable<SlotsGetResponse> {
+        yield *this.required(id)
     }
 
     async register(request: SlotsRegisterRequest): Promise<boolean> {

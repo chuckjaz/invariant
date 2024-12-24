@@ -15,7 +15,7 @@ export class SlotsWebClient extends PingableClient implements SlotsClient {
         return super.putJson(request, `/slots/${id}`)
     }
 
-    async history(id: string): Promise<AsyncIterable<SlotsGetResponse>> {
+    history(id: string): AsyncIterable<SlotsGetResponse> {
         return super.getJsonStream<SlotsGetResponse>(`/slots/history/${id}`)
     }
 

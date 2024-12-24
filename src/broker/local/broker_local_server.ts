@@ -59,15 +59,11 @@ export class LocalBrokerServer implements BrokerServer {
         return { id }
     }
 
-    async registered(kind: string): Promise<AsyncIterable<string>> {
-        const that = this
-        async function *all(): AsyncIterable<string> {
-            for (const [id, info] of that.info) {
-                if (info.kind == kind)
-                    yield id
-            }
+    async *registered(kind: string): AsyncIterable<string> {
+        for (const [id, info] of this.info) {
+            if (info.kind == kind)
+                yield id
         }
-        return all()
     }
 
     private validateId(id: string) {

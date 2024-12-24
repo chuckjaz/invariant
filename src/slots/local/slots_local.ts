@@ -2,7 +2,7 @@ import { SlotConfiguration, SlotsGetResponse, SlotsPutRequest, SlotsRegisterRequ
 import { SlotsClient } from "../slot_client";
 import * as path from 'node:path'
 import * as fs from 'node:fs/promises'
-import { randomBytes, verify as vfy, createPublicKey } from 'node:crypto'
+import { verify as vfy, createPublicKey } from 'node:crypto'
 import { promisify } from 'node:util'
 import { jsonBackwardStream, textStreamFromFileBackward } from "../../common/parseJson";
 import { fileExists } from "../../common/files";
@@ -54,11 +54,11 @@ export class LocalSlots implements SlotsClient {
         })
     }
 
-    async history(id: string): Promise<AsyncIterable<SlotsGetResponse>> {
+    async *history(id: string): AsyncIterable<SlotsGetResponse> {
         const historyFile = this.toHashPath(id) + '.json.history'
         if (await fileExists(historyFile)) {
-            const textStream = await textStreamFromFileBackward(historyFile)
-            return jsonBackwardStream(textStream)
+            const textStream = textStreamFromFileBackward(historyFile)
+            yield *jsonBackwardStream(textStream)
 
         } else {
             throw new Error(`Not found: ${id}`)
@@ -76,7 +76,7 @@ export class LocalSlots implements SlotsClient {
             return false;
         }
         if (request.proof) {
-            console.log("reqest has unsupported proof")
+            console.log("request has unsupported proof")
             return false
         }
         let signature: SignatureAlgorithm = { kind: SignatureAlgorithmKind.None }

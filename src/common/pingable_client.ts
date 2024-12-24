@@ -60,8 +60,8 @@ export class PingableClient {
         }
     }
 
-    protected async getJsonStream<T>(prefix: string | URL): Promise<AsyncIterable<T>> {
-        return await jsonStream<T>(new URL(prefix, this.url))
+    protected getJsonStream<T>(prefix: string | URL): AsyncIterable<T> {
+        return jsonStream<T>(new URL(prefix, this.url))
     }
 
     protected async putJson(data: any, prefix: string): Promise<boolean> {
@@ -117,7 +117,7 @@ export class PingableClient {
         if (!response) throw new Error('Invalid request');
     }
 
-    protected async postJsonStreams<A, R>(stream: AsyncIterable<A>, prefix: string): Promise<AsyncIterable<R>> {
+    protected async *postJsonStreams<A, R>(stream: AsyncIterable<A>, prefix: string): AsyncIterable<R> {
         const request = {
             method: 'POST',
             header: { 'Content-Type': 'application/json' },
@@ -125,7 +125,7 @@ export class PingableClient {
         }
         const response = await fetch(new URL(prefix, this.url), request)
         if (!response || !response.body) throw new Error('Invalid request')
-        const textStream = await textStreamFromWeb(response.body.getReader())
-        return jsonStream<R>(textStream)
+        const textStream = textStreamFromWeb(response.body.getReader())
+        yield *jsonStream<R>(textStream)
     }
 }
