@@ -16,13 +16,13 @@ A private key signed hash of the value without its `"signature"` field. This fie
 
 ## `:signature-definition`
 
-A description of the public/private key algoritm and format used for the signature. When using a signature, the `:id` of a slot is the public key of the signature. The algorithm used should produce a public key of at least 256 bits with an even distribution of the first 256 bits of the key. The signature algorithm should be a widely supported algorithm such as ed25519 or x25519.
+A description of the public/private key algorithm and format used for the signature. When using a signature, the `:id` of a slot is the public key of the signature. The algorithm used should produce a public key of at least 256 bits with an even distribution of the first 256 bits of the key. The signature algorithm should be a widely supported algorithm such as ed25519 or x25519.
 
 ## `:proof`
 
 A slot defined value that is proof the slot is valid.
 
-## `:proof-defintion`
+## `:proof-definition`
 
 A description of the proof algorithm and format used for the proof.
 
@@ -34,7 +34,7 @@ Determine the `:id` of the server.
 
 Determine the current value of the slot with the ID :id.
 
-## Reponse
+## Response
 
 The slot server responds with the following format,
 
@@ -111,8 +111,12 @@ interface SlotsPutRequest {
 
 Request the history for a slot.
 
-Result is a JSON stream of SlotGetRequest objects that are from the current value to the beginning of the
+Result is a JSON stream of `SlotGetRequest` objects that are from the current value to the beginning of the
 slot.
+
+# `GET /slots/watch/:id`
+
+Request a stream of slot `SlotGetRequest` objects. This will always immediately return the current value but, as new slot values are set, a new value will be emitted.
 
 # `PUT /slots/register/:id`
 

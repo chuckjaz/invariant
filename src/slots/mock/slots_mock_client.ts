@@ -1,6 +1,7 @@
 import { SlotConfiguration, SlotsGetResponse, SlotsPutRequest, SlotsRegisterRequest } from "../../common/types";
 import { SlotsClient } from "../slot_client";
 import { randomBytes } from 'node:crypto'
+import { BroadcastChannel } from "../../common/broadcast_channel";
 
 export function mockSlots(): MockSlotsServer {
     return new MockSlotsServer()
@@ -8,6 +9,7 @@ export function mockSlots(): MockSlotsServer {
 
 export class MockSlotsServer implements SlotsClient {
     private slots = new Map<string, SlotsGetResponse[]>()
+    private watches = new BroadcastChannel<string>()
 
     id = randomBytes(32).toString('hex')
 
@@ -25,6 +27,7 @@ export class MockSlotsServer implements SlotsClient {
         const last = responses[responses.length - 1]
         if (last.address == request.previous) {
             responses.push(request)
+            this.watches.send(this.watches.topic<SlotsGetResponse>(id), request)
             return true
         }
         return false
@@ -32,6 +35,13 @@ export class MockSlotsServer implements SlotsClient {
 
     async *history(id: string): AsyncIterable<SlotsGetResponse> {
         yield *this.required(id)
+    }
+
+    async *watch(id: string): AsyncIterable<SlotsGetResponse> {
+        const current = await this.get(id)
+        yield current
+        const channel = this.watches.subscribe(this.watches.topic<SlotsGetResponse>(id))
+        yield *channel.all()
     }
 
     async register(request: SlotsRegisterRequest): Promise<boolean> {

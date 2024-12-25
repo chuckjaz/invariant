@@ -19,6 +19,10 @@ export class SlotsWebClient extends PingableClient implements SlotsClient {
         return super.getJsonStream<SlotsGetResponse>(`/slots/history/${id}`)
     }
 
+    watch(id: string): AsyncIterable<SlotsGetResponse> {
+        return super.getJsonStream<SlotsGetResponse>(`/slots/watch/${id}`)
+    }
+
     async config(id: string): Promise<SlotConfiguration> {
         return super.getJson<SlotConfiguration>(`/slots/configuration/${id}`)
     }

@@ -9,12 +9,14 @@ import { fileExists } from "../../common/files";
 import { normalizeCode } from "../../common/codes";
 import { lock } from "../../common/lock";
 import { randomId } from "../../common/id";
+import { BroadcastChannel } from "../../common/broadcast_channel";
 
 const verify = promisify(vfy)
 
 export class LocalSlots implements SlotsClient {
     id: string
     private directory: string
+    private watches = new BroadcastChannel<string>()
 
     constructor(directory: string, id?: string) {
         this.directory = directory
@@ -63,6 +65,13 @@ export class LocalSlots implements SlotsClient {
         } else {
             throw new Error(`Not found: ${id}`)
         }
+    }
+
+    async *watch(id: string): AsyncIterable<SlotsGetResponse> {
+        const result = await this.readState(id)
+        yield result
+        const channel = this.watches.subscribe(this.watches.topic<SlotsGetResponse>(id))
+        yield *channel.all()
     }
 
     config(id: string): Promise<SlotConfiguration> {
@@ -123,12 +132,17 @@ export class LocalSlots implements SlotsClient {
     }
 
     private async writeState(id: string, state: SlotsGetResponse): Promise<void> {
+        this.notifyWatches(id, state)
         const fileName = this.toHashPath(id) + '.json'
         const historyFile = this.toHashPath(id) + '.json.history'
         const stateText = JSON.stringify(state)
         const stateResult = fs.writeFile(fileName, stateText, 'utf-8')
         const historyResult = fs.appendFile(historyFile, stateText, 'utf-8')
         return Promise.all([stateResult, historyResult]).then(() => { return void 0; })
+    }
+
+    private notifyWatches(id: string, state: SlotsGetResponse) {
+        this.watches.send(this.watches.topic(id), state)
     }
 
     private async ensureDir(id: string): Promise<void> {
