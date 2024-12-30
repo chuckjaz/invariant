@@ -4,8 +4,9 @@ import { z } from 'zod'
 import { SignatureAlgorithmKind } from '../local/slots_local';
 import { idSchema } from '../../common/schema';
 import { ResponseFunc, route, Route } from '../../common/web';
-import { SlotsRegisterRequest } from '../../common/types';
+import { SlotsPutRequest, SlotsRegisterRequest } from '../../common/types';
 import { codeConverter } from '../../common/codes';
+import { invalid } from '../../common/errors';
 
 const signatureAlgorithmNoneSchema = z.object({
     kind: z.literal(SignatureAlgorithmKind.None)
@@ -19,6 +20,13 @@ const registerSchema = z.object({
     id: idSchema,
     address: idSchema,
     signature: signatureAlgorithmSchema.optional()
+})
+
+const putSchema = z.object({
+    address: idSchema,
+    previous: idSchema,
+    signature: z.optional(z.string()),
+    proof: z.optional(z.string()),
 })
 
 export function slotsHandler(client: SlotsClient): ResponseFunc {
@@ -51,7 +59,7 @@ export function slotsHandler(client: SlotsClient): ResponseFunc {
                 method: 'GET',
                 params: [codeConverter],
                 handler: async function (ctx, next, id) {
-                    const result = await client.history(id)
+                    const result = client.history(id)
                     ctx.body = textToReadable(jsonStreamToText(result))
                     ctx.status = 200
                 }
@@ -61,6 +69,16 @@ export function slotsHandler(client: SlotsClient): ResponseFunc {
             params: [codeConverter],
             handler: async function (ctx, next, id) {
                 ctx.body = await client.get(id)
+                ctx.status = 200
+            }
+        }, {
+            method: 'PUT',
+            params: [codeConverter],
+            body: putSchema,
+            handler: async function (ctx, next, id, request: SlotsPutRequest) {
+                const result = await client.put(id, request)
+                if (!result) invalid('Invalid slot request');
+                ctx.body = ''
                 ctx.status = 200
             }
         }]

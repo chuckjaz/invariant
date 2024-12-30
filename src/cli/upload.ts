@@ -34,11 +34,11 @@ export default {
         describe: "An authentication token",
         string: true
     }),
-    handler: yargs => upload(
-        (yargs as any).directory,
-        (yargs as any).all,
-        (yargs as any).storage,
-        (yargs as any).auth
+    handler: (yargs: any) => upload(
+        yargs.directory,
+        yargs.all,
+        yargs.storage,
+        yargs.auth
     )
 } as yargs.CommandModule
 
