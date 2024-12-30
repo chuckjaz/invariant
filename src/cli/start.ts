@@ -23,13 +23,21 @@ import { slotsHandler } from '../slots/web/slots_web_handler'
 import { findHandlers } from '../find/web/find_handlers'
 import { findServer } from '../find/server'
 
+const starters: { [index: string]: (config: ServerConfiguration, broker?: BrokerClient) => Promise<any>} = {
+    'broker': startBroker,
+    'storage': startStorage,
+    'files': startFiles,
+    'slots': startSlots,
+    'find': startFind,
+}
+
 export default {
     command: 'start [service]',
     describe: `Start configured services`,
     builder: yargs => {
         return yargs.positional('service', {
             describe: 'The service to start, or all to start all configured services',
-            choices: ['all', 'broker', 'distribute', 'find', 'slots', 'storage'],
+            choices: ['all', ...Object.keys(starters)],
             default: 'all'
         })
     },
@@ -58,13 +66,6 @@ async function start(choice: string) {
     }
 }
 
-const starters: { [index: string]: (config: ServerConfiguration, broker?: BrokerClient) => Promise<any>} = {
-    'broker': startBroker,
-    'storage': startStorage,
-    'files': startFiles,
-    'slots': startSlots,
-    'find': startFind,
-}
 
 function listening(name: string, id: string, httpServer: HttpServer, directory?: string): number {
     const address = httpServer.address()

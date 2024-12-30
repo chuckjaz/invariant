@@ -10,6 +10,7 @@ import { normalizeCode } from "../../common/codes";
 import { lock } from "../../common/lock";
 import { randomId } from "../../common/id";
 import { BroadcastChannel } from "../../common/broadcast_channel";
+import { invalid } from "../../common/errors";
 
 const verify = promisify(vfy)
 
@@ -127,7 +128,7 @@ export class LocalSlots implements SlotsClient {
             const stateText =  await fs.readFile(fileName, 'utf-8')
             return JSON.parse(stateText)
         } catch (e) {
-            throw new Error(`Unknown id: ${id}`)
+            invalid(`Unknown id: ${id}`, 404)
         }
     }
 
