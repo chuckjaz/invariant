@@ -380,7 +380,7 @@ export class Files implements FilesClient, ContentReader {
                     modifyTime: entry.modifyTime ?? Date.now(),
                     createTime: entry.createTime ?? Date.now(),
                     executable: (entry.mode?.indexOf("x") ?? -1) >= 0,
-                    writable: ((entry.mode?.indexOf("r") ?? -1) >= 0),
+                    writable: (entry.mode?.indexOf("r") ?? -1) < 0,
                     etag: content.expected ?? content.address,
                 }
                 if (entry.kind == EntryKind.File) {
