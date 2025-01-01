@@ -6,7 +6,7 @@ import { ReadWriteLock } from "../common/read-write-lock";
 import { blockTreeSchema, directorySchema, entryKindSchema } from "../common/schema";
 import { Block, BlockTree, ContentLink, ContentTransform, DirectoryEntry, Entry, EntryKind, FileEntry } from "../common/types";
 import { SlotsClient } from "../slots/slot_client";
-import { Data, StorageClient } from "../storage/client";
+import { Data, StorageClient } from "../storage/storage_client";
 import { createHash } from 'node:crypto'
 import { ContentInformation, ContentKind, ContentReader, EntryAttributes, FileDirectoryEntry, FilesClient, Node } from "./files_client";
 

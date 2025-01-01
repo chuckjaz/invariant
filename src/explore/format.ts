@@ -1,6 +1,6 @@
 import { dataFromReadable } from "../common/data";
 import { dataToString } from "../common/parseJson";
-import { Data } from "../storage/client";
+import { Data } from "../storage/storage_client";
 
 function dataFromStdin(): Data {
     return dataFromReadable(process.stdin)

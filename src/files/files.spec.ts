@@ -7,7 +7,7 @@ import { dataFromString, dataToString } from "../common/parseJson"
 import { Block, ContentLink, ContentTransform, Entry, EntryKind } from "../common/types"
 import { mockSlots } from "../slots/mock/slots_mock_client"
 import { SlotsClient } from "../slots/slot_client"
-import { Data, StorageClient } from "../storage/client"
+import { Data, StorageClient } from "../storage/storage_client"
 import { mockStorage } from "../storage/mock"
 import { Files } from "./files"
 import { createHash } from 'node:crypto'

@@ -1,7 +1,7 @@
 import { BrokerRegisterResponse } from "../common/types";
 import { FindClient } from "../find/client";
 import { SlotsClient } from "../slots/slot_client";
-import { StorageClient } from "../storage/client";
+import { StorageClient } from "../storage/storage_client";
 
 export interface BrokerClient {
     ping(): Promise<string | undefined>

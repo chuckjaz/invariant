@@ -1,7 +1,7 @@
 import * as path from 'path'
 import ignore, { Ignore } from "ignore";
 import { ContentLink } from "../../common/types";
-import { Data, StorageClient } from "../../storage/client";
+import { Data, StorageClient } from "../../storage/storage_client";
 import { Node, ContentInformation, FileDirectoryEntry, ContentKind, EntryAttributes, FilesClient } from "../files_client";
 import { jsonFromData } from '../../common/data';
 import z from 'zod';

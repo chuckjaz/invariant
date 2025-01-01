@@ -1,4 +1,4 @@
-import { Data, ManagedStorageClient, StorageBlock, StorageClient } from "../client";
+import { Data, ManagedStorageClient, StorageBlock, StorageClient } from "../storage_client";
 import { opendir, mkdir, stat, rename, unlink, writeFile } from 'node:fs/promises'
 import { createHash, randomBytes } from 'node:crypto'
 import * as path from 'node:path'

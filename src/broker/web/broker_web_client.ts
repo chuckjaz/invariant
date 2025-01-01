@@ -7,7 +7,7 @@ import { FindClient } from "../../find/client";
 import { Find } from "../../find/web/find_client";
 import { SlotsClient } from "../../slots/slot_client";
 import { SlotsWebClient } from "../../slots/web/slots_web_client";
-import { StorageClient } from "../../storage/client";
+import { StorageClient } from "../../storage/storage_client";
 import { StorageWebClient } from "../../storage/web/storage_web_client";
 import { BrokerClient } from "../broker_client";
 

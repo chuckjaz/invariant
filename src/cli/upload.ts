@@ -7,7 +7,7 @@ import { fileExists } from "../common/files";
 import { ParallelContext } from "../common/parallel_context";
 import { DirectoryEntry, Entry, EntryKind, FileEntry } from '../common/types';
 import { dataFromFile, dataFromString } from '../common/parseJson';
-import { Data, StorageClient } from '../storage/client';
+import { Data, StorageClient } from '../storage/storage_client';
 import { dataFromBuffers, readAllData } from '../common/data';
 import { normalizeCode } from '../common/codes';
 import { error } from '../common/errors';

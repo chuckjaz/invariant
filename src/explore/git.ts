@@ -1,5 +1,5 @@
 import { invalid } from "../common/errors"
-import { Data } from "../storage/client"
+import { Data } from "../storage/storage_client"
 
 const args = process.argv.slice(2)
 

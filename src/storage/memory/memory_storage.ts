@@ -1,5 +1,5 @@
 import { hashTransform } from "../../common/data";
-import { Data, ManagedStorageClient, StorageBlock } from "../client";
+import { Data, ManagedStorageClient, StorageBlock } from "../storage_client";
 import { createHash, randomBytes } from 'node:crypto'
 
 type DataArray = Buffer[]

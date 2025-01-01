@@ -12,7 +12,7 @@ import {
 import { WorkQueue } from "../common/work_queue";
 import { findStorage } from "../file-tree/file-tree";
 import { FindClient } from "../find/client";
-import { StorageClient } from "../storage/client";
+import { StorageClient } from "../storage/storage_client";
 import { DistributeClient } from "./distribute_client";
 import { Block, Storage } from "./distribute_types";
 import { StorageLayers } from "./storage_layer";

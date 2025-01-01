@@ -1,5 +1,5 @@
 import { dataFromBuffers, readAllData } from "../../common/data"
-import { Data } from "../client"
+import { Data } from "../storage_client"
 import { mockStorage } from "../mock"
 import { StorageCache } from "./storage_cache"
 import { createHash } from 'node:crypto'

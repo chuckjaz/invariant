@@ -2,7 +2,7 @@ import { BrokerClient } from "../broker/broker_client"
 import { dataToString, safeParseJson } from "../common/parseJson"
 import { BlockTree, ContentLink, Entry, EntryKind } from "../common/types"
 import { FindClient } from "../find/client"
-import { Data, StorageClient } from "../storage/client"
+import { Data, StorageClient } from "../storage/storage_client"
 import * as path from 'node:path/posix'
 
 export class FileTree {

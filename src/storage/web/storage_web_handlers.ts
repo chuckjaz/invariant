@@ -1,5 +1,5 @@
 import Koa from 'koa';
-import { StorageClient } from '../client';
+import { StorageClient } from '../storage_client';
 import { dataFromReadable, jsonFromData } from '../../common/data';
 import { z } from 'zod'
 import { idSchema } from '../../common/schema';

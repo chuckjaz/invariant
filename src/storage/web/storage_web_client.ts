@@ -1,6 +1,6 @@
 import { normalizeCode } from "../../common/codes";
 import { PingableClient } from "../../common/pingable_client";
-import { Data, StorageClient } from "../client";
+import { Data, StorageClient } from "../storage_client";
 import { streamBlob } from "../../common/blob";
 
 const storagePrefix = '/storage/'

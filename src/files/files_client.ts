@@ -1,5 +1,5 @@
 import { ContentLink } from "../common/types"
-import { Data } from "../storage/client"
+import { Data } from "../storage/storage_client"
 
 export type Node = number
 

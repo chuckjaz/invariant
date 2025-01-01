@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import { Data, ManagedStorageClient, StorageClient } from "../client";
+import { Data, ManagedStorageClient, StorageClient } from "../storage_client";
 import { Lru } from '../../common/lru';
 import { measureTransform, splitStream } from '../../common/data';
 

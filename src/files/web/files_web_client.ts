@@ -2,7 +2,7 @@ import { streamBlob } from "../../common/blob";
 import { error } from "../../common/errors";
 import { PingableClient } from "../../common/pingable_client";
 import { ContentLink } from "../../common/types";
-import { Data } from "../../storage/client";
+import { Data } from "../../storage/storage_client";
 import { ContentInformation, ContentKind, EntryAttributes, FileDirectoryEntry, FilesClient as FilesClient, Node } from "../files_client";
 
 const filesPrefix = '/files'

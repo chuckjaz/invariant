@@ -1,5 +1,5 @@
 import { Hash, createHash } from 'node:crypto'
-import { Data } from "../storage/client"
+import { Data } from "../storage/storage_client"
 import { Readable, Transform } from "node:stream"
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'

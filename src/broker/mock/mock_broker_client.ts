@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { normalizeCode } from "../../common/codes";
 import { FindClient } from "../../find/client";
-import { StorageClient } from "../../storage/client";
+import { StorageClient } from "../../storage/storage_client";
 import { BrokerClient } from "../broker_client";
 import { ParallelMapper } from '../../common/parallel_mapper';
 import { BrokerRegisterResponse } from '../../common/types';

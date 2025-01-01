@@ -3,7 +3,7 @@ import { mockBroker } from "../../broker/mock/mock_broker_client"
 import { dataFromBuffers } from "../../common/data"
 import { FindClient } from "../../find/client"
 import { findServer } from "../../find/server"
-import { StorageClient } from "../client"
+import { StorageClient } from "../storage_client"
 import { mockStorage } from "../mock"
 import { BlockFindingStorage } from "./storage_find"
 import { createHash } from 'node:crypto'

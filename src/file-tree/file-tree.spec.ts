@@ -1,7 +1,7 @@
 import { mockBroker } from "../broker/mock/mock_broker_client"
 import { ContentLink } from "../common/types"
 import { findServer } from "../find/server"
-import { Data } from "../storage/client"
+import { Data } from "../storage/storage_client"
 import { mockStorage } from "../storage/mock"
 import {  FileTree } from "./file-tree"
 

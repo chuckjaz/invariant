@@ -3,7 +3,7 @@ import { findInFinder } from "../../common/findInFinder";
 import { randomId } from "../../common/id";
 import { ParallelContext } from "../../common/parallel_context";
 import { FindClient } from "../../find/client";
-import { Data, StorageClient } from "../client";
+import { Data, StorageClient } from "../storage_client";
 
 export class BlockFindingStorage implements StorageClient {
     id: string

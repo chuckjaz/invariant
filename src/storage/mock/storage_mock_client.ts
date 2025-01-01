@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { Data, ManagedStorageClient, StorageClient, StorageBlock } from "../client";
+import { Data, ManagedStorageClient, StorageClient, StorageBlock } from "../storage_client";
 import { normalizeCode } from '../../common/codes';
 import { hashTransform } from '../../common/data';
 import { BrokerClient } from '../../broker/broker_client';
