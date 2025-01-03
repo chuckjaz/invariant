@@ -22,13 +22,16 @@ import { LocalSlots } from '../slots/local/slots_local'
 import { slotsHandler } from '../slots/web/slots_web_handler'
 import { findHandlers } from '../find/web/find_handlers'
 import { findServer } from '../find/server'
+import { LocalProduction as LocalProductions } from '../production/local/local_production'
+import { productionHandlers } from '../production/web/web_production_handler'
 
 const starters: { [index: string]: (config: ServerConfiguration, broker?: BrokerClient) => Promise<any>} = {
     'broker': startBroker,
-    'storage': startStorage,
     'files': startFiles,
-    'slots': startSlots,
     'find': startFind,
+    'productions': startProductions,
+    'slots': startSlots,
+    'storage': startStorage,
 }
 
 export default {
@@ -117,6 +120,21 @@ async function startFiles(config: ServerConfiguration, broker?: BrokerClient) {
     app.use(filesHandlers)
     const httpServer = app.listen(config.port)
     listening("Files", config.id, httpServer)
+}
+
+async function startProductions(config: ServerConfiguration, broker?: BrokerClient) {
+    console.log("Starting productions server")
+    if (config.server != 'productions') error("Unexpected configuration")
+    const productions = new LocalProductions(config.directory, config.id)
+    const handlers = productionHandlers(productions)
+    const app = new Koa()
+    app.use(logHandler("productions"))
+    app.use(handlers)
+    const httpServer = app.listen(config.port)
+    listening("Productions", config.id, httpServer)
+    if (broker && config.url) {
+        broker.register(config.id, config.url, 'productions').catch(e => console.error(e))
+    }
 }
 
 async function startStorage(config: ServerConfiguration, broker?: BrokerClient) {

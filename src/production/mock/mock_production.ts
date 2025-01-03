@@ -1,9 +1,9 @@
 import { normalizeCode } from "../../common/codes";
 import { error } from "../../common/errors";
 import { randomId } from "../../common/id";
-import { ProductionClient } from "../production_client";
+import { ProductionsClient } from "../production_client";
 
-export class MockProduction implements ProductionClient {
+export class MockProduction implements ProductionsClient {
     private id = randomId()
     private resultMap = new Map<string, Map<string, string>>()
 

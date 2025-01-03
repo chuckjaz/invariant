@@ -6,11 +6,13 @@ import { BrokerClient } from "../broker_client";
 import { ParallelMapper } from '../../common/parallel_mapper';
 import { BrokerRegisterResponse } from '../../common/types';
 import { SlotsClient } from '../../slots/slot_client';
+import { ProductionsClient } from '../../production/production_client';
 
 export interface MockBrokerClient extends BrokerClient {
     id: string
     registerBroker(broker: BrokerClient): Promise<void>
     registerFind(find: FindClient): Promise<void>
+    registerProductions(productions: ProductionsClient): Promise<void>
     registerStorage(storage: StorageClient): Promise<void>
     registerSlots(slots: SlotsClient): Promise<void>
 }
@@ -21,6 +23,7 @@ export function mockBroker(): MockBrokerClient {
 
     const brokers = new Map<string, BrokerClient>()
     const finds = new Map<string, FindClient>()
+    const productionsMap = new Map<string, ProductionsClient>()
     const storages = new Map<string, StorageClient>()
     const slotsMap = new Map<string, SlotsClient>()
 
@@ -36,6 +39,10 @@ export function mockBroker(): MockBrokerClient {
 
     async function find(id: string): Promise<FindClient | undefined> {
         return finds.get(normalizeCode(id) ?? '')
+    }
+
+    async function productions(id: string): Promise<ProductionsClient | undefined> {
+        return productionsMap.get(id)
     }
 
     async function storage(id: string): Promise<StorageClient | undefined> {
@@ -68,6 +75,11 @@ export function mockBroker(): MockBrokerClient {
         if (id) finds.set(id, find)
     }
 
+    async function registerProductions(productions: ProductionsClient): Promise<void> {
+        const id = await productions.ping()
+        if (id) productionsMap.set(id, productions)
+    }
+
     async function registerStorage(storage: StorageClient): Promise<void> {
         const id = await storage.ping()
         if (id) storages.set(id, storage)
@@ -87,11 +99,13 @@ export function mockBroker(): MockBrokerClient {
         ping,
         broker,
         find,
+        productions,
         slots,
         storage,
         registered,
         registerBroker,
         registerFind,
+        registerProductions,
         registerStorage,
         registerSlots,
         register,

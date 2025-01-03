@@ -5,6 +5,8 @@ import { PingableClient } from "../../common/pingable_client";
 import { BrokerLocationResponse, BrokerRegisterResponse } from "../../common/types";
 import { FindClient } from "../../find/client";
 import { Find } from "../../find/web/find_client";
+import { ProductionsClient } from "../../production/production_client";
+import { ProductionWebClient } from "../../production/web/web_production_client";
 import { SlotsClient } from "../../slots/slot_client";
 import { SlotsWebClient } from "../../slots/web/slots_web_client";
 import { StorageClient } from "../../storage/storage_client";
@@ -28,6 +30,10 @@ export class BrokerWebClient extends PingableClient implements BrokerClient {
 
     find(id: string): Promise<FindClient | undefined> {
         return this.client(id, async (id, url) => new Find(url, id))
+    }
+
+    productions(id: string): Promise<ProductionsClient | undefined> {
+        return this.client(id, async (id, url) => new ProductionWebClient(url, id))
     }
 
     storage(id: string): Promise<StorageClient | undefined> {

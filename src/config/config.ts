@@ -9,13 +9,14 @@ export interface Configuration {
     servers?: ServerConfiguration[]
 }
 
-export type Server = "broker" | "distribute" | "find" | "files" | "slots" | "storage"
+export type Server = "broker" | "distribute" | "find" | "files" | "productions" | "slots" | "storage"
 
 export type ServerConfiguration =
     BrokerConfiguration |
     DistributeConfiguration |
     FindConfiguration |
     FilesConfiguration |
+    ProductionsConfiguration |
     SlotsConfiguration |
     StorageConfiguration
 
@@ -48,6 +49,10 @@ export interface FilesConfiguration extends CommonServerConfiguration {
 
 export interface FindConfiguration extends CommonServerConfiguration {
     server: "find"
+}
+
+export interface ProductionsConfiguration extends CommonServerConfiguration {
+    server: "productions"
 }
 
 export interface SlotsConfiguration extends CommonServerConfiguration {
@@ -111,6 +116,7 @@ export async function loadConfiguration(): Promise<Configuration> {
                     break
                 case "distribute":
                 case "find":
+                case "productions":
                 case "slots":
                 case "storage":
                     servers.push({

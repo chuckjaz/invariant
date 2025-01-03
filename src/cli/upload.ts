@@ -9,12 +9,9 @@ import { DirectoryEntry, Entry, EntryKind, FileEntry } from '../common/types';
 import { dataFromFile, dataFromString } from '../common/parseJson';
 import { Data, StorageClient } from '../storage/storage_client';
 import { dataFromBuffers, readAllData } from '../common/data';
-import { normalizeCode } from '../common/codes';
-import { error } from '../common/errors';
 import { loadConfiguration } from '../config/config';
-import { BrokerClient } from '../broker/broker_client';
-import { BrokerWebClient } from '../broker/web/broker_web_client';
-import { StorageWebClient } from '../storage/web/storage_web_client';
+import { defaultBroker } from './common/common_broker';
+import { findStorage } from './common/common_storage';
 
 export default {
     command: "upload [directory]",
@@ -56,50 +53,13 @@ async function put(storage: StorageClient, data: Data): Promise<string> {
     return code
 }
 
-async function findStorage(
-    storageSpec: string | undefined,
-    auth: string | undefined
-): Promise<StorageClient> {
-    const id = normalizeCode(storageSpec)
-    if (storageSpec && !id) {
-        let url: URL
-        try {
-            url = new URL(storageSpec)
-        } catch (e) {
-            error(`'${storageSpec}' should be a valid URL or a valid storage ID`)
-        }
-        return new StorageWebClient(url, undefined, auth ? (_, init) => {
-            if (init?.method == 'PUT') {
-                init.headers = [["X-Custom-Auth-Key", auth]]
-            }
-            return init
-        } : undefined)
-    }
-    const configuration = await loadConfiguration()
-    let brokerClient: BrokerClient
-    if (configuration.broker) {
-        brokerClient = new BrokerWebClient(configuration.broker)
-    } else {
-        error("Invariant is not connected")
-    }
-    let storageClient: StorageClient | undefined
-    if (id) {
-        storageClient = await brokerClient.storage(id)
-    } else {
-        for await (const id of await brokerClient.registered('storage')) {
-            storageClient = await brokerClient.storage(id)
-            if (storageClient && await storageClient.ping() !== undefined) break
-        }
-    }
-    if (!storageClient) error(`Could not find storage ${id}`);
-    return storageClient
-}
-
 async function upload(directory?: string, all?: boolean, storageSpec?: string, auth?: string) {
     if (!directory) directory = "."
     const context = new ParallelContext()
     const ig = ignore()
-    const storage = await findStorage(storageSpec, auth)
+    const configuration = await loadConfiguration()
+    const broker = await defaultBroker(configuration)
+    const storage = await findStorage(broker, storageSpec, auth)
     if (!all) {
         ig.add('.git')
         const ignoreFile = path.join(directory, '.gitignore')

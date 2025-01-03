@@ -103,7 +103,7 @@ export async function route(route: Route, ctx: Ctx, next: Next): Promise<void> {
             if (!Array.isArray(current) && part in current) {
                 current = (current as RoutePart)[part]
                 i++
-                if (!isHandler(current)) {
+                if (!isHandler(current) && !Array.isArray(current)) {
                     continue
                 }
             }

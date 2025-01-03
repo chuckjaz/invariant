@@ -1,5 +1,3 @@
-import { Blob } from 'node:buffer'
-
 export type Data = AsyncIterable<Buffer>
 
 export interface StorageClient {

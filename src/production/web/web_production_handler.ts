@@ -1,8 +1,8 @@
 import { codeConverter } from "../../common/codes";
 import { ResponseFunc, route, Route } from "../../common/web";
-import { ProductionClient } from "../production_client";
+import { ProductionsClient } from "../production_client";
 
-export function productionHandlers(server: ProductionClient): ResponseFunc {
+export function productionHandlers(server: ProductionsClient): ResponseFunc {
     const routes: Route = {
         'id': {
             method: 'GET',

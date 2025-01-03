@@ -4,6 +4,7 @@ import { invalid } from "../common/errors";
 import { loadConfiguration } from "../config/config";
 import { BrokerWebClient } from "../broker/web/broker_web_client";
 import { firstSlots } from "./start";
+import { defaultBroker } from "./common/common_broker";
 
 export default {
     command: 'publish [slot] [address] [previous]',
@@ -33,14 +34,8 @@ async function publish(slot: string, address: string, previous: string) {
     if (!normalPrevious) invalid('Incorrect formed previous address');
 
     console.log("Updating slot", normalSlot)
-
     const configuration = await loadConfiguration()
-    if (!configuration.broker) {
-        invalid("No broker configured")
-    }
-
-    const broker = new BrokerWebClient(configuration.broker)
-
+    const broker = await defaultBroker(configuration)
     const slots = await firstSlots(broker)
     if (!slots) {
         invalid("Could not find a slots server")

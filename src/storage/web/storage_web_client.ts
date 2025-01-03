@@ -58,10 +58,7 @@ export class StorageWebClient extends PingableClient implements StorageClient {
             duplex: 'half'
         }))
         if (response.status == 200) {
-            const url = await response.text()
-            if (url.startsWith(storagePrefix)) {
-                return url.substring(storagePrefix.length)
-            }
+            return await response.text()
         }
         return false
     }

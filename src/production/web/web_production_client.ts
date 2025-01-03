@@ -1,9 +1,9 @@
 import { normalizeCode } from "../../common/codes";
 import { error, invalid } from "../../common/errors";
 import { PingableClient } from "../../common/pingable_client";
-import { ProductionClient } from "../production_client";
+import { ProductionsClient } from "../production_client";
 
-export class WebProductionClient extends PingableClient implements ProductionClient{
+export class ProductionWebClient extends PingableClient implements ProductionsClient{
     constructor(url: URL, id?: string) {
         super(url, id)
     }
@@ -33,7 +33,7 @@ export class WebProductionClient extends PingableClient implements ProductionCli
         const normalInput = normalizeCode(input)
         const normalOutput = normalizeCode(output)
         if (!normalInput || !normalTask || !normalOutput) error('Expected normalizable input');
-        const result = await fetch(new URL(`/production/${task}/${input}?output=${output}`), request)
+        const result = await fetch(new URL(`/production/${task}/${input}?output=${output}`, this.url), request)
         if (result.status != 200) error(`Could not record task result: ${result.status}`);
     }
 }

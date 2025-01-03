@@ -1,10 +1,10 @@
 import { randomId } from "../../common/id";
-import { ProductionClient } from "../production_client";
+import { ProductionsClient } from "../production_client";
 import * as path from 'node:path'
 import * as fs from 'node:fs/promises'
 import { directoryExists, fileExists } from "../../common/files";
 
-export class LocalProduction implements ProductionClient {
+export class LocalProduction implements ProductionsClient {
     private id: string
     private directory: string
     private resultCache = new Map<string, Map<string, string>>()

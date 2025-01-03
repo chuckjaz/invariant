@@ -630,7 +630,7 @@ export class Files implements FilesClient, ContentReader {
             const address = await that.storage.post(dataFromBuffers(buffers))
             buffers.length = 0
             if (!address) {
-                console.error(`Could not save ${address}${ node ? `, writes to ${node} were lost` : ''}`)
+                console.error(`Could not save file${ node ? `, writes to ${node} were lost` : ''}`)
                 return false
             }
             const content: ContentLink = { address }
