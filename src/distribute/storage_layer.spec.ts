@@ -1,4 +1,4 @@
-import { take } from "../common/data"
+import { arr } from "../common/arr"
 import { Storage } from "./distribute_types"
 import { StorageLayers } from "./storage_layer"
 import { randomBytes } from "node:crypto"
@@ -53,12 +53,4 @@ function newStorage(): Storage {
         blocks: [],
         active: true
     }
-}
-
-function arr<T>(size: number, init: (index: number) => T): T[] {
-    const result = []
-    for (let i = 0; i < size; i++) {
-        result.push(init(i))
-    }
-    return result
 }

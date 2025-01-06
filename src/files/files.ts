@@ -9,6 +9,7 @@ import { SlotsClient } from "../slots/slot_client";
 import { Data, StorageClient } from "../storage/storage_client";
 import { createHash } from 'node:crypto'
 import { ContentInformation, ContentKind, ContentReader, EntryAttributes, FileDirectoryEntry, FilesClient, Node } from "./files_client";
+import { stringCompare } from "../common/compares";
 
 export class Files implements FilesClient, ContentReader {
     private broker: BrokerClient
@@ -719,23 +720,7 @@ export class Files implements FilesClient, ContentReader {
     }
 }
 
-interface SlotMount {
-    slot: string
-    client: SlotsClient
-}
-
 function nRequired<T>(value: T | undefined): T {
     if (value) return value
     invalid("Unrecognized node")
-}
-
-function sorted<T>(arr: T[]): boolean {
-    for (let i = 0, limit = arr.length - 2; i < limit; i++) {
-        if (arr[i] > arr[i + 1]) return false
-    }
-    return true
-}
-
-function stringCompare(a: string, b: string): number {
-    return a > b ? 1 : a == b ? 0 : -1
 }

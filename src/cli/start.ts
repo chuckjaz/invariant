@@ -22,8 +22,8 @@ import { LocalSlots } from '../slots/local/slots_local'
 import { slotsHandler } from '../slots/web/slots_web_handler'
 import { findHandlers } from '../find/web/find_handlers'
 import { findServer } from '../find/server'
-import { LocalProduction as LocalProductions } from '../production/local/local_production'
-import { productionHandlers } from '../production/web/web_production_handler'
+import { LocalProduction as LocalProductions } from '../productions/local/local_productions'
+import { productionHandlers } from '../productions/web/web_productions_handler'
 
 const starters: { [index: string]: (config: ServerConfiguration, broker?: BrokerClient) => Promise<any>} = {
     'broker': startBroker,

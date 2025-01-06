@@ -1,6 +1,6 @@
 import { codeConverter } from "../../common/codes";
 import { ResponseFunc, route, Route } from "../../common/web";
-import { ProductionsClient } from "../production_client";
+import { ProductionsClient } from "../productions_client";
 
 export function productionHandlers(server: ProductionsClient): ResponseFunc {
     const routes: Route = {

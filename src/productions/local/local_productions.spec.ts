@@ -1,6 +1,7 @@
+import { arr } from "../../common/arr"
 import { randomId } from "../../common/id"
 import { withTmpDir } from "../../common/test_tmp"
-import { LocalProduction } from "./local_production"
+import { LocalProduction } from "./local_productions"
 
 describe('production/local', () => {
     it("can create a local production", async () => {
@@ -32,11 +33,3 @@ describe('production/local', () => {
         })
     })
 })
-
-function arr<T>(size: number, init: (index: number) => T): T[] {
-    const result: T[] = []
-    for (let i = 0; i < size; i++) {
-        result.push(init(i))
-    }
-    return result
-}

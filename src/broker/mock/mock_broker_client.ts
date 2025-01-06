@@ -6,7 +6,7 @@ import { BrokerClient } from "../broker_client";
 import { ParallelMapper } from '../../common/parallel_mapper';
 import { BrokerRegisterResponse } from '../../common/types';
 import { SlotsClient } from '../../slots/slot_client';
-import { ProductionsClient } from '../../production/production_client';
+import { ProductionsClient } from '../../productions/productions_client';
 
 export interface MockBrokerClient extends BrokerClient {
     id: string

@@ -1,6 +1,6 @@
 import { BrokerClient } from "../../broker/broker_client";
 import { invalid } from "../../common/errors";
-import { ProductionsClient } from "../../production/production_client";
+import { ProductionsClient } from "../../productions/productions_client";
 
 export async function findProductions(broker: BrokerClient, idSpec?: string): Promise<ProductionsClient> {
     if (!idSpec) {

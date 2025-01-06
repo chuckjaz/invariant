@@ -1,7 +1,7 @@
 import { normalizeCode } from "../../common/codes";
 import { error, invalid } from "../../common/errors";
 import { PingableClient } from "../../common/pingable_client";
-import { ProductionsClient } from "../production_client";
+import { ProductionsClient } from "../productions_client";
 
 export class ProductionWebClient extends PingableClient implements ProductionsClient{
     constructor(url: URL, id?: string) {

@@ -1,19 +1,19 @@
 import { randomId } from "../../common/id"
-import { mockProduction } from "./mock_production"
+import { mockProductions } from "./mock_productions"
 
 describe('productions/mock', () => {
     it("can create a mock", () => {
-        expect(mockProduction()).toBeDefined()
+        expect(mockProductions()).toBeDefined()
     })
     it("can store a result",  async () => {
-        const production = mockProduction()
+        const production = mockProductions()
         const task = randomId()
         const input = randomId()
         const output = randomId()
         await production.put(task, input, output)
     })
     it("can retrieve an output", async () => {
-        const production = mockProduction()
+        const production = mockProductions()
         const task = randomId()
         const input = randomId()
         const output = randomId()

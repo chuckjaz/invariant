@@ -1,5 +1,5 @@
 import { randomId } from "../../common/id";
-import { ProductionsClient } from "../production_client";
+import { ProductionsClient } from "../productions_client";
 import * as path from 'node:path'
 import * as fs from 'node:fs/promises'
 import { directoryExists, fileExists } from "../../common/files";

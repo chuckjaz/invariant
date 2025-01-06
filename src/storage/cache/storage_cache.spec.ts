@@ -3,6 +3,7 @@ import { Data } from "../storage_client"
 import { mockStorage } from "../mock"
 import { StorageCache } from "./storage_cache"
 import { createHash } from 'node:crypto'
+import { arr } from "../../common/arr"
 
 describe("storage/cache", () => {
     it("can create a storage cache", () => {
@@ -108,14 +109,6 @@ describe("storage/cache", () => {
 async function bufferOf(data: Data | false): Promise<Buffer> {
     if (!data) return Buffer.alloc(0, 0);
     return readAllData(data)
-}
-
-function arr<T>(size: number, init: (index: number) => T): T[] {
-    const result: T[] = []
-    for (let i = 0; i < size; i++) {
-        result.push(init(i))
-    }
-    return result
 }
 
 // Faster than crypto and it doesn't need to be a strongly random as crypto

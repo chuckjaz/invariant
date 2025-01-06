@@ -1,9 +1,9 @@
 import { normalizeCode } from "../../common/codes";
 import { error } from "../../common/errors";
 import { randomId } from "../../common/id";
-import { ProductionsClient } from "../production_client";
+import { ProductionsClient } from "../productions_client";
 
-export class MockProduction implements ProductionsClient {
+export class MockProductions implements ProductionsClient {
     private id = randomId()
     private resultMap = new Map<string, Map<string, string>>()
 
@@ -34,6 +34,6 @@ export class MockProduction implements ProductionsClient {
     }
 }
 
-export function mockProduction(): MockProduction {
-    return new MockProduction()
+export function mockProductions(): MockProductions {
+    return new MockProductions()
 }

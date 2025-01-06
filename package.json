@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
-    "test": "node --enable-source-maps node_modules/jasmine/bin/jasmine.js"
+    "test": "node --enable-source-maps node_modules/jasmine/bin/jasmine.js",
+    "build": "tsc"
   },
   "author": "",
   "license": "ISC",
@@ -16,6 +17,8 @@
     "jasmine": "^5.2.0",
     "koa": "^2.15.3",
     "koa-body": "^6.0.1",
+    "showdown": "^2.1.0",
+    "showdown-highlight": "^3.1.0",
     "yargs": "^17.7.2",
     "zod": "^3.23.8"
   },
@@ -25,6 +28,7 @@
     "@types/jasmine": "^5.1.4",
     "@types/koa": "^2.15.0",
     "@types/koa__router": "^12.0.4",
+    "@types/showdown": "^2.0.6",
     "@types/yargs": "^17.0.33",
     "typescript": "^5.5.3"
   }

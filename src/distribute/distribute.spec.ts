@@ -1,4 +1,5 @@
 import { mockBroker, MockBrokerClient } from "../broker/mock/mock_broker_client"
+import { arr } from "../common/arr"
 import { stringsToData } from "../common/data"
 import { FindClient } from "../find/client"
 import { findServer } from "../find/server"
@@ -67,14 +68,6 @@ async function storagesAndBroker(size: number): Promise<[MockBrokerClient, MockS
         broker.registerStorage(storage)
     }
     return [broker, storages, finder]
-}
-
-function arr<T>(size: number, init: (i: number) => T): T[] {
-    const result = new Array(size)
-    for (let i = 0; i < size; i++) {
-        result[i] = init(i)
-    }
-    return result
 }
 
 async function *str<T, R>(itr: Iterable<T>): AsyncIterable<T> {

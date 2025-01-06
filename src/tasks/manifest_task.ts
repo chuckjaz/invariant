@@ -3,7 +3,7 @@ import { jsonStreamToText } from "../common/parseJson";
 import { directorySchema } from "../common/schema";
 import { ContentLink } from "../common/types";
 import { ContentReader, ContentWriter } from "../files/files_client";
-import { ProductionsClient } from "../production/production_client";
+import { ProductionsClient } from "../productions/productions_client";
 
 export const manifestTaskId = '954890cadc9a472e73dd5154f04a6c6920b7aa16f3956032778d8204f7ca4592'
 
@@ -18,7 +18,7 @@ export async function manifestTask(
         stringsToData(jsonStreamToText(findManifestReferences(content, contentReader, seen)))
     )
     await productions.put(manifestTaskId, content.address, manifest.address)
-    return  manifest
+    return manifest
 }
 
 async function *findManifestReferences(

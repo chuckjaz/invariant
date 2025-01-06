@@ -1,6 +1,6 @@
 import { BrokerRegisterResponse } from "../common/types";
 import { FindClient } from "../find/client";
-import { ProductionsClient } from "../production/production_client";
+import { ProductionsClient } from "../productions/productions_client";
 import { SlotsClient } from "../slots/slot_client";
 import { StorageClient } from "../storage/storage_client";
 
