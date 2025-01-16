@@ -50,6 +50,9 @@ export class LocalSlots implements SlotsClient {
                     default:
                         return false
                 }
+                if (!request.time) {
+                    request = { ...request, time: Date.now() }
+                }
                 await this.writeState(id, request)
                 return true
             }
@@ -165,7 +168,7 @@ export class LocalSlots implements SlotsClient {
     }
 
     private toHashPath(hashCode: string): string {
-        return path.join(this.directory, 'sha256', hashCode.slice(0, 2), hashCode.slice(2, 4), hashCode.slice(4))
+        return path.join(this.directory, hashCode.slice(0, 2), hashCode.slice(2, 4), hashCode.slice(4))
     }
 }
 

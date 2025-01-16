@@ -52,6 +52,7 @@ export interface SlotsGetResponse {
 export interface SlotsPutRequest {
     address: string
     previous: string
+    time?: number
     signature?: string
     proof?: string
 }
@@ -59,6 +60,7 @@ export interface SlotsPutRequest {
 export interface SlotsRegisterRequest {
     id: string
     address: string
+    time?: number
     signature?: any
     proof?: any
 }

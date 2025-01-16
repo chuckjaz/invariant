@@ -61,3 +61,4 @@ export const entrySchema = z.object({
 })
 
 export const directorySchema = z.array(entrySchema)
+
