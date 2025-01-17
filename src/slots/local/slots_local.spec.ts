@@ -112,6 +112,7 @@ describe("slots/local", () => {
                 }
                 let index = count
                 for await (const entry of await slots.history(id)) {
+                    delete entry.time
                     expect(entry).toEqual(requests[index--])
                 }
                 expect(index).toEqual(-1)

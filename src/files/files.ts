@@ -4,7 +4,7 @@ import { error, invalid } from "../common/errors";
 import { dataFromString } from "../common/parseJson";
 import { ReadWriteLock } from "../common/read-write-lock";
 import { blockTreeSchema, directorySchema, entryKindSchema } from "../common/schema";
-import { Block, BlockTree, ContentLink, ContentTransform, DirectoryEntry, Entry, EntryKind, FileEntry } from "../common/types";
+import { Block, BlockTree, ContentLink, ContentTransform, DirectoryEntry, Entry, EntryKind, etagOf, FileEntry } from "../common/types";
 import { SlotsClient } from "../slots/slot_client";
 import { Data, StorageClient } from "../storage/storage_client";
 import { createHash } from 'node:crypto'
@@ -57,7 +57,7 @@ export class Files implements FilesClient, ContentReader {
             createTime: now,
             executable: executable ?? false,
             writable: writable ?? content.slot !== undefined,
-            etag: content.expected ?? content.address
+            etag: etagOf(content)
         }
         this.infos.set(node, info)
         this.mounts.add(node)
@@ -382,7 +382,7 @@ export class Files implements FilesClient, ContentReader {
                     createTime: entry.createTime ?? Date.now(),
                     executable: (entry.mode?.indexOf("x") ?? -1) >= 0,
                     writable: (entry.mode?.indexOf("r") ?? -1) < 0,
-                    etag: content.expected ?? content.address,
+                    etag: etagOf(content),
                 }
                 if (entry.kind == EntryKind.File) {
                     if (entry.type) info.type = entry.type;
@@ -568,13 +568,16 @@ export class Files implements FilesClient, ContentReader {
                 }
             }
             directoryEntries.sort((a, b) => stringCompare(a.name, b.name))
+            const etag = directoryEtag(directoryEntries)
             const directoryEntriesText = JSON.stringify(directoryEntries)
-            const directoryBlock = await this.writeData(dataFromString(directoryEntriesText), node)
+
+            const directoryBlock = await this.writeData(dataFromString(directoryEntriesText), node, etag)
             if (!directoryBlock) return
             const previous = this.contentMap.get(node)
             this.contentMap.set(node, directoryBlock.content)
             this.invalidDirectories.delete(node)
-
+            const info = this.infos.get(node)
+            if (info) info.etag = etag
             if (previous) {
                 const slot = this.slotMounts.get(node)
                 if (slot) {
@@ -600,7 +603,7 @@ export class Files implements FilesClient, ContentReader {
             const dataBlock = await this.writeData(data, node)
             if (!dataBlock) return
             const info = nRequired(this.infos.get(node))
-            info.etag = dataBlock.content.expected ?? dataBlock.content.address
+            info.etag = etagOf(dataBlock.content)
             info.size = dataBlock.size
             this.contentMap.set(node, dataBlock.content)
             this.overrides.delete(node)
@@ -614,7 +617,7 @@ export class Files implements FilesClient, ContentReader {
         }
     }
 
-    private async writeData(data: Data, node?: Node): Promise<Block | undefined> {
+    private async writeData(data: Data, node?: Node, etag?: string): Promise<Block | undefined> {
         const pieceLimit = 1024 * 1024
         const hash = createHash('sha256')
         data = hashTransform(data, hash)
@@ -651,7 +654,11 @@ export class Files implements FilesClient, ContentReader {
         if (!await writeBuffers()) return undefined
 
         if (blocks.length == 1) {
-            return blocks[0]
+            const block = blocks[0]
+            if (etag) {
+                block.content.etag = etag
+            }
+            return block
         }
         const blocksText = JSON.stringify(blocks)
         const blocksData = dataFromString(blocksText)
@@ -659,7 +666,9 @@ export class Files implements FilesClient, ContentReader {
         if (blocksBlock === undefined) return
         const expected = hash.digest().toString('hex')
         const transforms: ContentTransform[] = [{ kind: "Blocks" }]
-        return {content: { ...blocksBlock.content,  expected, transforms }, size: sizeBox.size }
+        const content: ContentLink = { ...blocksBlock.content,  expected, transforms }
+        if (etag) content.etag = etag
+        return { content, size: sizeBox.size }
     }
 
     private slotReadsTimeout?: NodeJS.Timeout
@@ -723,4 +732,19 @@ export class Files implements FilesClient, ContentReader {
 function nRequired<T>(value: T | undefined): T {
     if (value) return value
     invalid("Unrecognized node")
+}
+
+function hashText(text: string): string {
+    const hash = createHash('sha256')
+    const buffer = new TextEncoder().encode(text)
+    hash.update(buffer)
+    const digest = hash.digest()
+    return digest.toString('hex')
+}
+
+export function directoryEtag(entries: Entry[]): string {
+    const etagData = entries.map(e => ({ name: e.name, etag: etagOf(e.content) }))
+    const etagText = JSON.stringify(etagData)
+    const hash = hashText(etagText)
+    return hash
 }

@@ -4,7 +4,7 @@ import * as path from 'node:path'
 import * as fs from 'node:fs/promises'
 import { directoryExists, fileExists } from "../../common/files";
 
-export class LocalProduction implements ProductionsClient {
+export class LocalProductions implements ProductionsClient {
     private id: string
     private directory: string
     private resultCache = new Map<string, Map<string, string>>()
@@ -50,7 +50,8 @@ export class LocalProduction implements ProductionsClient {
         if (await fileExists(resultFile)) {
             const taskMap = this.taskMapFor(task)
             const resultsText = await fs.readFile(resultFile, 'utf-8')
-            for (const line of resultsText.split('/n').filter(line => line.length > 2)) {
+            const lines = resultsText.split('\n').filter(line => line.length > 2)
+            for (const line of lines) {
                 const [input, output] = line.trim().split('=')
                 taskMap.set(input, output)
             }

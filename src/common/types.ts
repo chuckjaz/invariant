@@ -45,6 +45,7 @@ export type FindResponse = FindResponseEntry[]
 export interface SlotsGetResponse {
     address: string
     previous: string | "root"
+    time?: number
     signature?: string
     proof?: string
 }
@@ -102,6 +103,11 @@ export interface ContentLink {
     transforms?: ContentTransform[]
     expected?: string
     primary?: string
+    etag?: string
+}
+
+export function etagOf(content: ContentLink): string {
+    return content.etag ?? content.expected ?? content.address
 }
 
 export type ContentTransform =

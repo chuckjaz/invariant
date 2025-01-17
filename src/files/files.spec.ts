@@ -9,7 +9,7 @@ import { mockSlots } from "../slots/mock/slots_mock_client"
 import { SlotsClient } from "../slots/slot_client"
 import { Data, StorageClient } from "../storage/storage_client"
 import { mockStorage } from "../storage/mock"
-import { Files } from "./files"
+import { directoryEtag, Files } from "./files"
 import { createHash } from 'node:crypto'
 import { ContentKind, FileDirectoryEntry, Node } from "./files_client"
 
@@ -215,8 +215,9 @@ async function filesWithEmptyDirectory(): Promise<[Files, Node, string, SlotsCli
 
 async function emptyDirectory(storage: StorageClient): Promise<ContentLink> {
     const address = await storage.post(dataFromString("[]"))
-    if (!address) error("Storage refused empty directory")
-    return { address }
+    if (!address) error("Storage refused empty directory");
+    const etag = directoryEtag([])
+    return { address, etag }
 }
 
 async function filesWithRandomContent(
@@ -264,10 +265,16 @@ const randomDirectoryOptions = {
 }
 
 
-function contentFor(address: string, expected: string, transforms: ContentTransform[]): ContentLink {
+function contentFor(
+    address: string,
+    expected: string,
+    transforms: ContentTransform[],
+    etag?: string
+): ContentLink {
     const content: ContentLink = { address }
-    if (transforms.length > 0) content.transforms = transforms
+    if (transforms.length > 0) content.transforms = transforms;
     if (address != expected) content.expected = expected;
+    if (etag) content.etag = etag
     return content
 }
 
@@ -308,7 +315,8 @@ async function saveBlocks(
     storage: StorageClient,
     data: Data,
     transforms: ContentTransform[],
-    splits: (index: number) => number
+    splits: (index: number) => number,
+    etag?: string
 ): Promise<ContentLink> {
     const hash = createHash('sha256')
     data = hashTransform(data, hash)
@@ -318,7 +326,7 @@ async function saveBlocks(
     const address = await storage.post(data)
     if (!address) error(`Could not save data`);
     const expected = hash.digest().toString('hex')
-    return contentFor(address, expected, transforms)
+    return contentFor(address, expected, transforms, etag)
 }
 
 async function *blockList(storage: StorageClient, data: Data, splits: (index: number) => number, transforms: ContentTransform[]): Data {
@@ -371,9 +379,10 @@ async function randomDirectory(
             entries.push(newEntry)
         }
         entries.sort((a, b) => compare(a.name, b.name))
+        const etag = directoryEtag(entries)
         const directoryText = JSON.stringify(entries)
         const directoryBuffers = [Buffer.from(new TextEncoder().encode(directoryText))]
-        return saveBlocks(storage, dataFromBuffers(directoryBuffers), opts.transforms, opts.splits)
+        return saveBlocks(storage, dataFromBuffers(directoryBuffers), opts.transforms, opts.splits, etag)
     }
 
     return randomDirectory(0)
@@ -394,11 +403,13 @@ async function validateDirectory(files: Files, root: Node) {
 
     async function validateDirectory(node: Node) {
         let previous: FileDirectoryEntry | undefined = undefined
+        const etagData: { name: string, etag: string}[] = []
         for await (const entry of files.readDirectory(node)) {
             if (previous) expect(entry.name > previous.name).toBeTrue();
             previous = entry
             const info = await files.info(entry.node)
-            if (!info) error(`No info found for ${node}`)
+            if (!info) error(`No info found for ${node}`);
+            etagData.push({ name: entry.name, etag: info.etag })
             switch (info.kind) {
                 case ContentKind.Directory: {
                     await validateDirectory(entry.node)
@@ -410,6 +421,10 @@ async function validateDirectory(files: Files, root: Node) {
                 }
             }
         }
+        const etagText = JSON.stringify(etagData)
+        const etag = hashText(etagText)
+        const directoryInfo = await files.info(node)
+        expect(directoryInfo?.etag).toEqual(etag)
     }
 
     await validateDirectory(root)
@@ -443,4 +458,12 @@ function addressOf(buffers: Buffer[]): string {
 
 function compare(a: string, b: string): number {
     return a > b ? 1 : a == b ? 0 : -1
+}
+
+function hashText(text: string): string {
+    const hash = createHash('sha256')
+    const buffer = new TextEncoder().encode(text)
+    hash.update(buffer)
+    const digest = hash.digest()
+    return digest.toString('hex')
 }

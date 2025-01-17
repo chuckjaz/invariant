@@ -39,6 +39,7 @@ export const contentLinkSchema = z.object({
     transforms: z.optional(z.array(contentTransformSchema)),
     expected: z.optional(idSchema),
     primary: z.optional(idSchema),
+    etag: z.optional(idSchema),
 })
 
 export const blockSchema = z.object({
