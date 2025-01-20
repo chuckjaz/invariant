@@ -137,7 +137,7 @@ export function filesWebHandlers(client: FilesClient): ResponseFunc {
                     'newParent': offsetOrLength,
                     'newName': convertString
                 },
-                handler: async (ctx, next, parent, query: { newParent?: Node, newName?: string }, name: string) => {
+                handler: async (ctx, next, query: { newParent?: Node, newName?: string }, parent, name: string) => {
                     const newParent = query.newParent
                     const newName = query.newName
                     ctx.body = ''
@@ -152,7 +152,7 @@ export function filesWebHandlers(client: FilesClient): ResponseFunc {
                 method: 'PUT',
                 params: [nodeSchema, convertString],
                 query: { 'node': offsetOrLength },
-                handler: async (ctx, next, parent, query: { node?: Node }, name: string) => {
+                handler: async (ctx, next, query: { node?: Node }, parent, name: string) => {
                     const node = query.node
                     ctx.body = ''
                     if (node === undefined || await client.link(parent, node, name)) {

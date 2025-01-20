@@ -99,13 +99,14 @@ export async function route(route: Route, ctx: Ctx, next: Next): Promise<void> {
         let i = 0;
         let current = route
         loop: while (current && i < parts.length) {
-            const part = parts[i]
+            let part = parts[i]
             if (!Array.isArray(current) && part in current) {
                 current = (current as RoutePart)[part]
                 i++
                 if (!isHandler(current) && !Array.isArray(current)) {
                     continue
                 }
+                part  = parts[i]
             }
             if (isHandler(current) && current.method == ctx.method) {
                 await handle(parts.slice(i), current)

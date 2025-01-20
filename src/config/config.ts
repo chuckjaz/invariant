@@ -1,12 +1,13 @@
 import { homedir } from 'node:os'
 import * as path from 'path'
 import * as fs from 'node:fs/promises'
-import { error } from '../common/errors'
 import { ContentLink } from '../common/types'
+import { invalid } from '../common/errors'
 
 export interface Configuration {
     broker?: URL
     servers?: ServerConfiguration[]
+    tools?: ToolConfiguration[]
 }
 
 export type Server = "broker" | "distribute" | "find" | "files" | "productions" | "slots" | "storage"
@@ -63,6 +64,13 @@ export interface StorageConfiguration extends CommonServerConfiguration {
     server: "storage"
 }
 
+export type ToolConfiguration = FuseToolConfiguration
+
+export interface FuseToolConfiguration {
+    tool: "fuse"
+    path: string
+}
+
 interface ServerConfigurationJson {
     server: string
     id: string
@@ -77,10 +85,17 @@ interface ServerConfigurationJson {
     syncFrequency?: number
 }
 
+interface ToolConfigurationJson {
+    tool: string
+    path?: string
+}
+
 interface ConfigurationJson {
     broker: string
     servers?: ServerConfigurationJson[]
+    tools?: ToolConfigurationJson[]
 }
+
 
 function configurationPath(): string {
     return path.join(homedir(), '.invariant')
@@ -139,6 +154,21 @@ export async function loadConfiguration(): Promise<Configuration> {
                         syncFrequency: server.syncFrequency
                     })
                     break
+            }
+        }
+        const toolsJson = json.tools
+        const tools: ToolConfiguration[] = []
+        if (toolsJson) {
+            for (const tool of toolsJson) {
+                switch (tool.tool) {
+                    case "fuse":
+                        if (!tool.path) invalid("configuration: tool fuse path required")
+                        const toolPath = path.resolve(configurationPath(), tool.path)
+                        tools.push({
+                            tool: "fuse",
+                            path: toolPath
+                        })
+                }
             }
         }
     }
