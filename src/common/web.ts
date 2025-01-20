@@ -132,6 +132,7 @@ export async function route(route: Route, ctx: Ctx, next: Next): Promise<void> {
     } catch(e: any) {
         ctx.status = e.status ?? 500
         ctx.body = e.message
+        console.error(e)
     }
 }
 

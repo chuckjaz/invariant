@@ -56,7 +56,7 @@ export class Files implements FilesClient, ContentReader {
             modifyTime: now,
             createTime: now,
             executable: executable ?? false,
-            writable: writable ?? content.slot !== undefined,
+            writable: writable ?? content.slot === true,
             etag: etagOf(content)
         }
         this.infos.set(node, info)
@@ -375,13 +375,15 @@ export class Files implements FilesClient, ContentReader {
             for (const entry of directory) {
                 const entryNode = this.newNode()
                 const content = entry.content
+                let mode = entry.mode ?? entry.kind == EntryKind.File ? "" : "x";
+                if (!directoryInfo.writable && mode.indexOf('r') < 0) mode += 'r'
                 const info: ContentInformation = {
                     node: entryNode,
                     kind: entry.kind == EntryKind.Directory ? ContentKind.Directory : ContentKind.File,
                     modifyTime: entry.modifyTime ?? Date.now(),
                     createTime: entry.createTime ?? Date.now(),
-                    executable: (entry.mode?.indexOf("x") ?? -1) >= 0,
-                    writable: (entry.mode?.indexOf("r") ?? -1) < 0,
+                    executable: mode.indexOf("x") >= 0,
+                    writable: mode.indexOf("r") < 0,
                     etag: etagOf(content),
                 }
                 if (entry.kind == EntryKind.File) {
