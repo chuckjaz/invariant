@@ -82,7 +82,8 @@ export class PingableClient {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
         }
-        const response = await fetch(new URL(prefix, this.url), request)
+        const url = typeof prefix == 'string' ? new URL(prefix, this.url) : prefix
+        const response = await fetch(url, request)
         if (response.ok) {
             return await response.json() as T
         }

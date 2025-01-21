@@ -35,6 +35,8 @@ export interface EntryAttributes {
 }
 
 export interface FilesClient {
+    ping(): Promise<string | undefined>
+
     mount(content: ContentLink): Promise<Node>
     unmount(node: Node): Promise<ContentLink>
 

@@ -10,6 +10,7 @@ import { Files } from "../files/files"
 import { findStorage } from "./common/common_storage"
 import { firstSlots } from "./start"
 import { findProductions } from "./common/common_productions"
+import { randomId } from "../common/id"
 
 export default {
     command: 'task [task] [input] [output]',
@@ -80,7 +81,7 @@ async function task(
     const storage = await findStorage(broker, storageDef, auth)
     const slots = await firstSlots(broker)
     if (!slots) error('Could not find slots');
-    const files = new Files(storage, slots, broker, 1)
+    const files = new Files(randomId(), storage, slots, broker, 1)
     const productions = await findProductions(broker)
     const inputContent: ContentLink = {
         address: input,

@@ -12,6 +12,7 @@ import { ContentInformation, ContentKind, ContentReader, EntryAttributes, FileDi
 import { stringCompare } from "../common/compares";
 
 export class Files implements FilesClient, ContentReader {
+    private id: string
     private broker: BrokerClient
     private storage: StorageClient
     private slots: SlotsClient
@@ -28,11 +29,16 @@ export class Files implements FilesClient, ContentReader {
     private locks = new Map<Node, ReadWriteLock>()
     private nextNode = 1
 
-    constructor(storage: StorageClient, slots: SlotsClient, broker: BrokerClient, syncFrequency?: number) {
+    constructor(id: string, storage: StorageClient, slots: SlotsClient, broker: BrokerClient, syncFrequency?: number) {
+        this.id = id
         this.storage = storage
         this.slots = slots
         this.broker = broker
         this.syncFrequency = syncFrequency ?? 5000
+    }
+
+    async ping(): Promise<string> {
+        return this.id
     }
 
     async mount(content: ContentLink, executable?: boolean, writable?: boolean): Promise<Node> {

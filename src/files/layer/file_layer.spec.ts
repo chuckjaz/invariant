@@ -18,9 +18,10 @@ describe("file_layer", () => {
         const storage = mockStorage()
         const slots = mockSlots()
         const broker = mockBroker()
-        const controlPlane = new Files(storage, slots, broker, 1)
+        const controlPlane = new Files(randomId(), storage, slots, broker, 1)
 
         const layer = new LayeredFiles(
+            randomId(),
             controlPlane,
             storage,
             slots,
@@ -45,8 +46,8 @@ describe("file_layer", () => {
             }
         ])
 
-        const controlPlane = new Files(storage, slots, broker, 1)
-        const layer = new LayeredFiles(controlPlane, storage, slots, broker)
+        const controlPlane = new Files(randomId(), storage, slots, broker, 1)
+        const layer = new LayeredFiles(randomId(), controlPlane, storage, slots, broker)
         await layer.mount(controlRoot)
     })
     it("can write to a layer", async () => {
@@ -54,7 +55,7 @@ describe("file_layer", () => {
         const slots = mockSlots()
         const broker = mockBroker()
 
-        const controlPlane = new Files(storage, slots, broker, 1)
+        const controlPlane = new Files(randomId(), storage, slots, broker, 1)
 
         const sourceSlot = randomId()
         const backingSlot = randomId()
@@ -80,7 +81,7 @@ describe("file_layer", () => {
                 syncFrequency: 1
             }
         ])
-        const layers = new LayeredFiles(controlPlane, storage, slots, broker)
+        const layers = new LayeredFiles(randomId(), controlPlane, storage, slots, broker)
         await layers.mount(layersContent)
         await writeFile(layers, 'src/hello.ts', 'console.log("hello, world!")')
         await writeFile(layers, 'dist/hello.js', 'console.log("hello, world!")')

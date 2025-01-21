@@ -12,13 +12,14 @@ import { mockStorage } from "../storage/mock"
 import { directoryEtag, Files } from "./files"
 import { createHash } from 'node:crypto'
 import { ContentKind, FileDirectoryEntry, Node } from "./files_client"
+import { randomId } from "../common/id"
 
 describe("files", () => {
     it("can create a files server", () => {
         const broker = mockBroker()
         const storage = mockStorage(broker)
         const slots = mockSlots()
-        const files = new Files(storage, slots, broker, 1)
+        const files = new Files(randomId(), storage, slots, broker, 1)
         try {
             expect(files).toBeDefined()
         } finally {
@@ -205,7 +206,7 @@ async function filesWithEmptyDirectory(): Promise<[Files, Node, string, SlotsCli
     broker.registerStorage(storage)
     broker.registerSlots(slots)
     const slot = randomBytes(32).toString('hex')
-    const files = new Files(storage, slots, broker, 1)
+    const files = new Files(randomId(), storage, slots, broker, 1)
     const content = await emptyDirectory(storage)
     slots.register({ id: slot, address: content.address })
     const slotContent: ContentLink = { ...content, address: slot, slot: true }
@@ -226,7 +227,7 @@ async function filesWithRandomContent(
     const broker = mockBroker()
     const storage = mockStorage(broker)
     const slots = mockSlots()
-    const files = new Files(storage, slots, broker, 1)
+    const files = new Files(randomId(), storage, slots, broker, 1)
     const content = await randomDirectory(storage, options)
     const node = await files.mount(content)
     return [files, node, broker, slots, storage]

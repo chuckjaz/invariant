@@ -156,26 +156,27 @@ export async function loadConfiguration(): Promise<Configuration> {
                     break
             }
         }
-        const toolsJson = json.tools
-        const tools: ToolConfiguration[] = []
-        if (toolsJson) {
-            for (const tool of toolsJson) {
-                switch (tool.tool) {
-                    case "fuse":
-                        if (!tool.path) invalid("configuration: tool fuse path required")
-                        const toolPath = path.resolve(configurationPath(), tool.path)
-                        tools.push({
-                            tool: "fuse",
-                            path: toolPath
-                        })
-                }
+    }
+    const toolsJson = json.tools
+    const tools: ToolConfiguration[] = []
+    if (toolsJson) {
+        for (const tool of toolsJson) {
+            switch (tool.tool) {
+                case "fuse":
+                    if (!tool.path) invalid("configuration: tool fuse path required")
+                    const toolPath = path.resolve(configurationPath(), tool.path)
+                    tools.push({
+                        tool: "fuse",
+                        path: toolPath
+                    })
             }
         }
     }
 
     const result: Configuration = {
         broker: json.broker ? new URL(json.broker) : undefined,
-        servers
+        servers,
+        tools
     }
     return  result
 }

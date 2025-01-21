@@ -109,7 +109,7 @@ async function startFiles(config: ServerConfiguration, broker?: BrokerClient) {
     const slots = config.mount?.slot ? await firstSlots(broker) : mockSlots()
     if (!slots) error("Could not find a slots server");
 
-    const files = new Files(storage, slots, broker, config.syncFrequency)
+    const files = new Files(config.id, storage, slots, broker, config.syncFrequency)
 
     if (config.mount) {
         await files.mount(config.mount)
@@ -120,6 +120,9 @@ async function startFiles(config: ServerConfiguration, broker?: BrokerClient) {
     app.use(filesHandlers)
     const httpServer = app.listen(config.port)
     listening("Files", config.id, httpServer)
+    if (broker && config.url) {
+        broker.register(config.id, config.url, 'files').catch(e => console.error(e))
+    }
 }
 
 async function startProductions(config: ServerConfiguration, broker?: BrokerClient) {

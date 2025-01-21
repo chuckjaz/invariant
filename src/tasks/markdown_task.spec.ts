@@ -15,6 +15,7 @@ import { markdownDirectoryTask, markdownFileTask } from "./markdown_task"
 import showdownHighlight from "showdown-highlight"
 import { stringCompare } from "../common/compares"
 import { ParallelContext } from "../common/parallel_context"
+import { randomId } from "../common/id"
 
 describe("tasks/markdown task", () => {
     it("can convert a file", async () => {
@@ -25,7 +26,7 @@ describe("tasks/markdown task", () => {
         await broker.registerFind(finder)
         const slots = mockSlots()
         await broker.registerSlots(slots)
-        const files = new Files(storage, slots, broker)
+        const files = new Files(randomId(), storage, slots, broker)
         const productions = mockProductions()
 
         const { content: markdownContent, expect: html } = await createMarkdownFile("# This is a test", storage)
@@ -41,7 +42,7 @@ describe("tasks/markdown task", () => {
         await broker.registerFind(finder)
         const slots = mockSlots()
         await broker.registerSlots(slots)
-        const files = new Files(storage, slots, broker)
+        const files = new Files(randomId(), storage, slots, broker)
         const productions = mockProductions()
         const context = new ParallelContext()
 

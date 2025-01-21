@@ -24,7 +24,7 @@ export class FilesWebClient extends PingableClient implements FilesClient {
     }
 
     mount(content: ContentLink, executable?: boolean, writable?: boolean): Promise<Node> {
-        const url = new URL(mountPrefix)
+        const url = new URL(mountPrefix, this.url)
         if (executable !== undefined) {
             url.searchParams.append('executable', `${executable}`)
         }

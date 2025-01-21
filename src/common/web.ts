@@ -6,6 +6,15 @@ export type Ctx = Koa.ParameterizedContext<Koa.DefaultState, Koa.DefaultContext,
 export type Next = Koa.Next
 export type ResponseFunc = (ctx: Ctx, next: Next) => Promise<void>
 
+export function logger(name: string): ((msg: string) => Promise<void>) {
+    let i = 0
+    return async (msg: string) => {
+        const requestNumber = i++
+        const date = new Date().toLocaleString()
+        console.log(`${date} LOG(${requestNumber}:${name}): ${msg}`)
+    }
+}
+
 export function logHandler(name: string): ResponseFunc {
     let i = 0
     return async (ctx, next) => {

@@ -43,6 +43,13 @@ interface OffsetLength {
 
 export function filesWebHandlers(client: FilesClient): ResponseFunc {
     const routes: Route = {
+        'id': {
+            method: 'GET',
+            handler: async (ctx, next) => {
+                ctx.body = await client.ping()
+                ctx.status = 200
+            }
+        },
         'files': [{
             'mount': {
                 method: 'POST',
@@ -64,10 +71,8 @@ export function filesWebHandlers(client: FilesClient): ResponseFunc {
                 method: 'GET',
                 params: [nodeSchema],
                 handler: async (ctx, next, node: Node) => {
-                    console.log("info:", node)
                     const result = await client.info(node)
                     if (result) {
-                        console.log("info: result:", result)
                         ctx.status = 200
                         ctx.body = result
                     } else {
@@ -79,10 +84,8 @@ export function filesWebHandlers(client: FilesClient): ResponseFunc {
                 method: 'GET',
                 params: [nodeSchema, convertString],
                 handler: async (ctx, next, parent: number, name: string) => {
-                    console.log("lookup:", parent, name)
                     const result = await client.lookup(parent, name)
                     if (result) {
-                        console.log("lookup: result:", result)
                         ctx.body = result
                         ctx.status = 200
                     } else {
@@ -98,7 +101,6 @@ export function filesWebHandlers(client: FilesClient): ResponseFunc {
                     'length': offsetOrLength,
                 },
                 handler: async (ctx, next, query: OffsetLength, parent: Node) =>{
-                    console.log('directory', query, parent)
                     ctx.body = await allOfStream(client.readDirectory(parent, query.offset, query.length))
                     ctx.status = 200
                 }

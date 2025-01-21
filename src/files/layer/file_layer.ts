@@ -11,6 +11,7 @@ import { SlotsClient } from '../../slots/slot_client';
 import { BrokerClient } from '../../broker/broker_client';
 import { dataToString } from '../../common/parseJson';
 import { invalid } from '../../common/errors';
+import { randomId } from '../../common/id';
 
 export interface FileLayer {
     kind: LayerKind
@@ -249,6 +250,7 @@ class LayeredDirectory  {
 const defaultFrequency = 10 * 1000
 
 export class LayeredFiles implements FilesClient {
+    private id: string
     private controlPlane: FilesClient
     private storage: StorageClient
     private slots: SlotsClient
@@ -259,15 +261,21 @@ export class LayeredFiles implements FilesClient {
     private directories = new Map<Node, LayeredDirectory>()
 
     constructor (
+        id: string,
         controlPlane: FilesClient,
         storage: StorageClient,
         slots: SlotsClient,
         broker: BrokerClient
     ) {
+        this.id = id
         this.controlPlane = controlPlane
         this.storage = storage
         this.slots = slots
         this.broker = broker
+    }
+
+    async ping(): Promise<string | undefined> {
+        return this.id
     }
 
     async mount(content: ContentLink): Promise<Node> {
@@ -294,6 +302,7 @@ export class LayeredFiles implements FilesClient {
                 layerRoot = controlNode
             } else {
                 client = new Files(
+                    randomId(),
                     this.storage,
                     this.slots,
                     this.broker,
