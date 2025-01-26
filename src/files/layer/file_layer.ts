@@ -239,11 +239,13 @@ class LayeredDirectory  {
 
     async sync(): Promise<void> {
         const clients = new Set<FilesClient>()
+        const promises: Promise<void>[] = []
         for (const layer of this.fileLayers) {
             if (clients.has(layer.client)) continue;
             clients.add(layer.client)
-            await layer.client.sync()
+            promises.push(layer.client.sync())
         }
+        await Promise.all(promises)
     }
 }
 
