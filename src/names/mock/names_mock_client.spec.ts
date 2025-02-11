@@ -1,8 +1,8 @@
 import { randomId } from "../../common/id"
 import { withTmpDir } from "../../common/test_tmp"
-import { LocalNamesServer } from "./local_names_server"
+import { MockNamesClient } from "./names_mock_client"
 
-describe('names/local', () => {
+describe('names/mock', () => {
     it('can ping', async () => {
         const id = randomId()
         await tmpClient(async client => {
@@ -28,21 +28,6 @@ describe('names/local', () => {
             const address = randomId()
             await client.register(name, address)
             const result = await client.lookup(name)
-            expect(result.name).toEqual(`${name}.local`)
-            expect(result.address).toEqual(address)
-        })
-    })
-    it('can persist the records', async () => {
-        await withTmpDir(async dir => {
-            const id = randomId()
-            const client1 = new LocalNamesServer(dir, id)
-            const name = 'name'
-            const address = randomId()
-            await client1.register(name, address)
-            await client1.forceSave()
-
-            const client2 = new LocalNamesServer(dir, id)
-            const result = await client2.lookup(name)
             expect(result.name).toEqual(`${name}.local`)
             expect(result.address).toEqual(address)
         })
@@ -114,12 +99,9 @@ describe('names/local', () => {
     })
 })
 
-async function tmpClient(block: (client: LocalNamesServer) => Promise<void>, id: string = randomId()) {
-    await withTmpDir(async dir => {
-        const client = new LocalNamesServer(dir, id)
-        await block(client)
-        await client.forceSave()
-    })
+async function tmpClient(block: (client: MockNamesClient) => Promise<void>, id: string = randomId()) {
+    const client = new MockNamesClient(id)
+    await block(client)
 }
 
 async function expectFailure(msg: string, block: () => Promise<void>) {

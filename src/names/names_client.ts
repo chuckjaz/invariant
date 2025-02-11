@@ -1,5 +1,5 @@
 export interface NamesClient {
-    ping(): Promise<string>
+    ping(): Promise<string | undefined>
     lookup(name: string): Promise<LookupResult>
     register(name: string, address: string, ttl?: number): Promise<void>
     update(name: string, previous: string, address: string, ttl?: number): Promise<boolean>
