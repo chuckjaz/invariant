@@ -24,7 +24,7 @@ export class MockNamesClient implements NamesClient {
         return { name: eName, ...result }
     }
 
-    async register(name: string, address: string, ttl: number = 10 * 1000): Promise<void> {
+    async register(name: string, address: string, ttl: number = 10 * 1000, slot?: boolean): Promise<void> {
         const eName = effectiveName(name)
         const eAddress = normalizeCode(address)
         if (!eAddress) {
@@ -34,10 +34,12 @@ export class MockNamesClient implements NamesClient {
         if (entry) {
             invalid('Name already registered')
         }
-        this.map.set(eName, { address: eAddress, ttl })
+        const record: MapEntry = { address: eAddress, ttl }
+        if (slot === true) record.slot = true
+        this.map.set(eName, record)
     }
 
-    async update(name: string, previous: string, address: string, ttl?: number): Promise<boolean> {
+    async update(name: string, previous: string, address: string, ttl?: number, slot?: boolean): Promise<boolean> {
         const eName = effectiveName(name)
         const ePrevious = normalizeCode(previous)
         if (!ePrevious) {
@@ -58,6 +60,11 @@ export class MockNamesClient implements NamesClient {
         if (ttl !== undefined) {
             entry.ttl = ttl
         }
+        if (slot === true) {
+            entry.slot = true
+        } else if (slot === false) {
+            entry.slot = false
+        }
         return true
     }
 }
@@ -65,6 +72,7 @@ export class MockNamesClient implements NamesClient {
 interface MapEntry {
     address: string
     ttl: number
+    slot?: boolean
 }
 
 function effectiveName(name: string) {

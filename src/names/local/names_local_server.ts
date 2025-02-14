@@ -10,6 +10,7 @@ interface NameRecord {
     name: string
     address: string
     ttl: number
+    slot?: boolean
 }
 
 export class LocalNamesServer implements NamesClient {
@@ -34,7 +35,7 @@ export class LocalNamesServer implements NamesClient {
         invalid(`Unknown name ${effectiveName}`, 404)
     }
 
-    async register(name: string, address: string, ttl?: number): Promise<void> {
+    async register(name: string, address: string, ttl?: number, slot?: boolean): Promise<void> {
         const effectiveName = await this.effectiveName(name)
         const map = await this.ensureMap()
         if (map.has(effectiveName)) {
@@ -44,11 +45,14 @@ export class LocalNamesServer implements NamesClient {
         if (ttl !== undefined) {
             record.ttl = ttl
         }
+        if (slot === true) {
+            record.slot = true
+        }
         map.set(effectiveName, record)
         this.requestSave()
     }
 
-    async update(name: string, previous: string, address: string, ttl?: number): Promise<boolean> {
+    async update(name: string, previous: string, address: string, ttl?: number, slot?: boolean): Promise<boolean> {
         const effectiveName = this.effectiveName(name)
         const map = await this.ensureMap()
         const previousRecord = map.get(effectiveName)
@@ -67,6 +71,7 @@ export class LocalNamesServer implements NamesClient {
             invalid('Invalid address', 400)
         }
         const record: NameRecord = { name: effectiveName, address: normalAddress, ttl: ttl ?? THIRTY_MINUTES }
+        if (slot === true) record.slot = true;
         map.set(effectiveName, record)
         this.requestSave()
         return true
