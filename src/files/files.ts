@@ -1,15 +1,18 @@
 import { BrokerClient } from "../broker/broker_client";
-import { BlockOverride, brotliDecompressData, dataFromBuffers, decipherData, hashTransform, inflateData, jsonFromData, limitData, measureTransform, overrideData, readAllData, setDataSize, splitData, unzipData, validateData } from "../common/data";
+import { BlockOverride, brotliDecompressData, dataFromBuffers, dataToStrings, decipherData, hashTransform, inflateData, jsonFromData, limitData, measureTransform, overrideData, readAllData, setDataSize, splitData, unzipData, validateData } from "../common/data";
 import { error, invalid } from "../common/errors";
 import { dataFromString } from "../common/parseJson";
 import { ReadWriteLock } from "../common/read-write-lock";
-import { blockTreeSchema, directorySchema, entryKindSchema } from "../common/schema";
+import { blockTreeSchema, contentLinkSchema, directorySchema, entryKindSchema } from "../common/schema";
 import { Block, BlockTree, ContentLink, ContentTransform, DirectoryEntry, Entry, EntryKind, etagOf, FileEntry } from "../common/types";
 import { SlotsClient } from "../slots/slot_client";
 import { Data, StorageClient } from "../storage/storage_client";
 import { createHash } from 'node:crypto'
 import { ContentInformation, ContentKind, ContentReader, EntryAttributes, FileDirectoryEntry, FilesClient, Node } from "./files_client";
 import { stringCompare } from "../common/compares";
+import z from "zod";
+import ignore, { Ignore } from "ignore";
+import path from "node:path";
 
 export class Files implements FilesClient, ContentReader {
     private id: string
@@ -19,7 +22,7 @@ export class Files implements FilesClient, ContentReader {
     private syncFrequency: number
     private mounts = new Set<Node>()
     private contentMap = new Map<Node, ContentLink>()
-    private directories = new Map<Node, Map<string, Node>>()
+    private directories = new Map<Node, Directory>()
     private parents = new Map<Node, Node>()
     private infos = new Map<Node, ContentInformation>()
     private overrides = new Map<Node, BlockOverride[]>()
@@ -81,7 +84,7 @@ export class Files implements FilesClient, ContentReader {
 
     async lookup(parent: Node, name: string): Promise<Node | undefined> {
         const directory = await this.ensureDirectory(parent)
-        return directory.get(name)
+        return directory.lookup(name)
     }
 
     async info(node: Node): Promise<ContentInformation | undefined> {
@@ -150,14 +153,13 @@ export class Files implements FilesClient, ContentReader {
         const lock = nRequired(this.locks.get(node))
         await lock.readLock()
         try {
-            const entries = await this.ensureDirectory(node)
+            const directory = await this.ensureDirectory(node)
             let current = 0
-            for (const [name, node] of entries) {
+            for await (const entry of directory.read()) {
                 if (current < offset) continue
                 if (current - offset > length) break
                 current++
-                const info = nRequired(this.infos.get(node))
-                yield { name, kind: info.kind, node }
+                yield entry
             }
         } finally {
             lock.readUnlock()
@@ -169,32 +171,8 @@ export class Files implements FilesClient, ContentReader {
         const lock = nRequired(this.locks.get(parent))
         await lock.writeLock()
         try {
-            const entries = await this.ensureDirectory(parent)
-            const info = nRequired(this.infos.get(parent))
-            const now = Date.now()
-            info.modifyTime = now
-            this.invalidDirectories.add(parent)
-            const node = this.newNode()
-            const newInfo: ContentInformation = {
-                node,
-                kind,
-                modifyTime: now,
-                createTime: now,
-                writable: true,
-                executable: false,
-                etag: "",
-                size: 0
-            }
-            this.infos.set(node, newInfo)
-            entries.set(name, node)
-            this.parents.set(node, parent)
-            this.invalidDirectories.add(parent)
-            if (kind == ContentKind.Directory) {
-                this.directories.set(node, new Map())
-                this.transforms.set(node, () => dataFromString("[]"))
-            } else {
-                this.transforms.set(node, () => dataFromString(""))
-            }
+            const directory = await this.ensureDirectory(parent)
+            const node = await directory.createNode(name, kind)
             this.scheduleSync()
             return node
         } finally {
@@ -366,19 +344,54 @@ export class Files implements FilesClient, ContentReader {
         this.scheduleSync()
     }
 
-    private async ensureDirectory(node: Node): Promise<Map<string, Node>> {
+    private async readDirectoryContent(node: Node, writable: boolean): Promise<Map<string, Node>> {
+        const entries = new Map<string, Node>()
+        const info = nRequired(this.infos.get(node))
+        if (info.kind != ContentKind.Directory) invalid(`Node ${node} is not a directory`);
+        const content = nRequired(this.contentMap.get(node))
+        const data = validateData(this.readContentLink(content), content.expected ?? content.address)
+        const directoriesEntries = await jsonFromData(directorySchema, data) as Entry[]
+        if (!directoriesEntries) invalid(`Could not read directory for ${node}`);
+        for (const entry of directoriesEntries) {
+            const entryNode = this.newNode()
+            const content = entry.content
+            let mode = entry.mode ?? entry.kind == EntryKind.File ? "" : "x";
+            if (!writable && mode.indexOf('r') < 0) mode += 'r';
+            const info: ContentInformation = {
+                node: entryNode,
+                kind: entry.kind == EntryKind.Directory ? ContentKind.Directory : ContentKind.File,
+                modifyTime: entry.modifyTime ?? Date.now(),
+                createTime: entry.createTime ?? Date.now(),
+                executable: mode.indexOf("x") >= 0,
+                writable: mode.indexOf("r") < 0,
+                etag: etagOf(content),
+            }
+            if (entry.kind == EntryKind.File) {
+                if (entry.type) info.type = entry.type;
+                if (entry.size !== undefined) info.size = entry.size
+            }
+            this.infos.set(entryNode, info)
+            this.contentMap.set(entryNode, entry.content as any as ContentLink)
+            entries.set(entry.name, entryNode)
+            this.parents.set(entryNode, node)
+        }
+        return entries
+    }
+
+    private async ensureDirectory(node: Node): Promise<Directory> {
         const directoryInfo = nRequired(this.infos.get(node))
         if (directoryInfo.kind != ContentKind.Directory) invalid(`Node is not a directory`);
-        let entries = this.directories.get(node)
-        if (!entries) {
-            entries = new Map()
+        let directory = this.directories.get(node)
+        if (!directory) {
+            const entries = new Map<string, Node>()
             const info = nRequired(this.infos.get(node))
             if (info.kind != ContentKind.Directory) invalid("Node is not a directory");
             const content = nRequired(this.contentMap.get(node))
             let data = validateData(this.readContentLink(content), content.expected ?? content.address)
-            const directory = await jsonFromData(directorySchema, data) as Entry[]
-            if (!directory) invalid(`Could not read directory`);
-            for (const entry of directory) {
+            const directoryEntries = await jsonFromData(directorySchema, data) as Entry[]
+            if (!directoryEntries) invalid(`Could not read directory`);
+            let layerInfo: ContentInformation | undefined = undefined
+            for (const entry of directoryEntries) {
                 const entryNode = this.newNode()
                 const content = entry.content
                 let mode = entry.mode ?? entry.kind == EntryKind.File ? "" : "x";
@@ -395,15 +408,21 @@ export class Files implements FilesClient, ContentReader {
                 if (entry.kind == EntryKind.File) {
                     if (entry.type) info.type = entry.type;
                     if (entry.size !== undefined) info.size = entry.size
+                    if (!layerInfo && entry.name == '.layer') {
+                        layerInfo = info
+                    }
                 }
                 this.infos.set(entryNode, info)
                 this.contentMap.set(entryNode, entry.content as any as ContentLink)
                 entries.set(entry.name, entryNode)
                 this.parents.set(entryNode, node)
             }
+            if (layerInfo) {
+
+            }
             this.directories.set(node, entries)
         }
-        return entries
+        return directory
     }
 
     async *readContentLink(content: ContentLink): Data {
@@ -540,64 +559,105 @@ export class Files implements FilesClient, ContentReader {
         }
     }
 
+    private async readLayerDescription(parent: Node, node: Node): Promise<FileLayerDescriptions> {
+        const data = this.readFile(node)
+        const layerData = await jsonFromData(fileLayerDescriptionsSchema, data)
+        if (!layerData) invalid("Invalid layer file")
+        const descriptions: FileLayerDescriptions = []
+        for (const layer of layerData) {
+            const layerContent = layer.content as ContentLink
+            const layerDirectory = await this.mount(layerContent)
+            if (layer.kind == 'accept') {
+                descriptions.push({
+                    kind: 'accept',
+                    accepts: layer.accepts,
+                    node: layerDirectory
+                })
+            } else if (layer.kind == 'ignore') {
+                const ignores = layer.ignores ?? []
+                if (layer.ignoreFiles) {
+                    for (const ignoreFile of layer.ignoreFiles) {
+                        const ignoreFilesNode = await this.lookup(parent, ignoreFile)
+                        if (!ignoreFilesNode) invalid(`Invalid ignore file name: ${ignoreFile}`);
+                        for await (const line of dataToStrings(this.readFile(ignoreFilesNode))) {
+                            ignores.push(line)
+                        }
+                    }
+                }
+                descriptions.push({
+                    kind: 'ignore',
+                    node: layerDirectory,
+                    ignores
+                })
+            } else {
+                invalid("Unexpected layer entry")
+            }
+        }
+        descriptions.push({
+            kind: 'base',
+            node: parent
+        })
+        return descriptions
+    }
+
+    private async writeDirectoryContent(node: Node, entries: Map<string, Node>): Promise<Block | undefined> {
+        const directoryEntries: Entry[] = []
+        for (const [name, entryNode] of entries) {
+            const info = this.infos.get(entryNode)
+            if (!info) error(`Could not find info for ${name} in directory node ${node}, file node: ${entryNode}`);
+            const content = this.contentMap.get(entryNode)
+            if (!content) error(`Could not find content for ${name} in directory node ${node}, file node: ${entryNode}`);
+            if (info.kind == ContentKind.Directory) {
+                const directoryEntry: DirectoryEntry = {
+                    kind: EntryKind.Directory,
+                    name,
+                    content
+                }
+                directoryEntries.push(directoryEntry)
+            } else {
+                const fileEntry: FileEntry = {
+                    kind: EntryKind.File,
+                    name,
+                    content,
+                    size: info.size,
+                    type: info.type
+                }
+                directoryEntries.push(fileEntry)
+            }
+        }
+        directoryEntries.sort((a, b) => stringCompare(a.name, b.name))
+        const etag = directoryEtag(directoryEntries)
+        const directoryEntriesText = JSON.stringify(directoryEntries)
+
+        const directoryBlock = await this.writeData(dataFromString(directoryEntriesText), node, etag)
+        if (!directoryBlock) return
+        const previous = this.contentMap.get(node)
+        this.contentMap.set(node, directoryBlock.content)
+        this.invalidDirectories.delete(node)
+        const info = this.infos.get(node)
+        if (info) info.etag = etag
+        if (previous) {
+            const slot = this.slotMounts.get(node)
+            if (slot) {
+                const result = await this.slots.put(slot, {
+                    previous: previous.address,
+                    address: directoryBlock.content.address
+                })
+                if (!result) {
+                    console.error(`Update of slot ${slot} failed`)
+                }
+            }
+        }
+        return directoryBlock
+    }
+
     private async syncDirectory(node: Node) {
         const lock = nRequired(this.locks.get(node))
         await lock.writeLock()
         try {
-            const entries = this.directories.get(node)
-            if (!entries) return
-            for (const entryNode of entries.values()) {
-                if (this.invalidDirectories.has(entryNode)) {
-                    await this.syncDirectory(entryNode)
-                }
-            }
-            const directoryEntries: Entry[] = []
-            for (const [name, entryNode] of entries) {
-                const info = this.infos.get(entryNode)
-                if (!info) error(`Could not find info for ${name} in directory node ${node}, file node: ${entryNode}`);
-                const content = this.contentMap.get(entryNode)
-                if (!content) error(`Could not find content for ${name} in directory node ${node}, file node: ${entryNode}`);
-                if (info.kind == ContentKind.Directory) {
-                    const directoryEntry: DirectoryEntry = {
-                        kind: EntryKind.Directory,
-                        name,
-                        content
-                    }
-                    directoryEntries.push(directoryEntry)
-                } else {
-                    const fileEntry: FileEntry = {
-                        kind: EntryKind.File,
-                        name,
-                        content,
-                        size: info.size,
-                        type: info.type
-                    }
-                    directoryEntries.push(fileEntry)
-                }
-            }
-            directoryEntries.sort((a, b) => stringCompare(a.name, b.name))
-            const etag = directoryEtag(directoryEntries)
-            const directoryEntriesText = JSON.stringify(directoryEntries)
-
-            const directoryBlock = await this.writeData(dataFromString(directoryEntriesText), node, etag)
-            if (!directoryBlock) return
-            const previous = this.contentMap.get(node)
-            this.contentMap.set(node, directoryBlock.content)
-            this.invalidDirectories.delete(node)
-            const info = this.infos.get(node)
-            if (info) info.etag = etag
-            if (previous) {
-                const slot = this.slotMounts.get(node)
-                if (slot) {
-                    const result = await this.slots.put(slot, {
-                        previous: previous.address,
-                        address: directoryBlock.content.address
-                    })
-                    if (!result) {
-                        console.error(`Update of slot ${slot} failed`)
-                    }
-                }
-            }
+            const directory = this.directories.get(node)
+            if (!directory) return
+            await directory.sync()
         } finally {
             lock.writeUnlock()
         }
@@ -679,6 +739,150 @@ export class Files implements FilesClient, ContentReader {
         return { content, size: sizeBox.size }
     }
 
+    private simpleDirectory(directory: Node, entries: Map<string, Node>): Directory {
+        const that = this
+        return {
+            async lookup(name) {
+                return entries.get(name)
+            },
+            async *read(): AsyncIterable<FileDirectoryEntry> {
+                for (const [name, node] of entries) {
+                    const info = nRequired(that.infos.get(node))
+                    yield { name, node, kind: info.kind }
+                }
+            },
+            async createNode(name, kind) {
+                const node = that.newNode()
+                const info = nRequired(that.infos.get(directory))
+                const now = Date.now()
+                info.modifyTime = now
+                const newInfo: ContentInformation = {
+                    node,
+                    kind,
+                    modifyTime: now,
+                    createTime: now,
+                    writable: true,
+                    executable: false,
+                    etag: "",
+                    size: 0
+                }
+                that.infos.set(node, newInfo)
+                entries.set(name, node)
+                that.parents.set(node, directory)
+                that.invalidDirectories.add(directory)
+                if (kind == ContentKind.Directory) {
+                    const newEntries = new Map<string, Node>()
+                    const newDirectory = that.simpleDirectory(directory, newEntries)
+                    that.directories.set(directory, newDirectory)
+                    that.transforms.set(node, () => dataFromString("[]"))
+                } else {
+                    that.transforms.set(node, () => dataFromString(""))
+                }
+                return node
+            },
+            async sync() {
+                if (that.invalidDirectories.has(directory)) {
+                    await that.writeDirectoryContent(directory, entries)
+                    that.invalidDirectories.delete(directory)
+                }
+            }
+        }
+    }
+
+    private layersFrom(backing: Node, descriptors: FileLayerDescriptions): Layers {
+        const layers: Layer[] = []
+
+        for (const descriptor of descriptors) {
+            const ig = ignore()
+            let kind = descriptor.kind
+            switch (descriptor.kind) {
+                case 'accept': {
+                    ig.add(descriptor.accepts)
+                    break
+                }
+                case 'ignore': {
+                    if (descriptor.ignores) {
+                        ig.add(descriptor.ignores)
+                    }
+                    break
+                }
+            }
+            layers.push({ kind, ignore: ig, node: descriptor.node })
+        }
+
+        function layersOf(directory: string): Layers {
+            return {
+                backingNode(name: string) {
+                    const filePath = path.join(directory, name)
+                    let index = 0
+                    loop: for (const layer of layers) {
+                        switch (layer.kind) {
+                            case 'base':
+                                break loop
+                            case 'accept': {
+                                const matches = layer.ignore.test(filePath)
+                                if (matches) break loop
+                                break
+                            }
+                            case 'ignore': {
+                                const matches = layer.ignore.test(filePath)
+                                if (!matches) break loop
+                                break
+                            }
+
+                        }
+                        index++
+                    }
+                    if (descriptors)
+                        return descriptors[index].node
+                    return backing
+                },
+                nested(name: string): Layers {
+                    return layersOf(path.join(directory, name))
+                },
+                nodes(): Node[] {
+                    return [...descriptors.map(d => d.node)]
+                }
+            }
+        }
+
+        return layersOf('')
+    }
+
+    private layeredDirectory(layers: Layers): Directory {
+        const that = this;
+        return {
+            lookup(name) {
+                const node = layers.backingNode(name)
+                return that.lookup(node, name)
+            },
+            async *read() {
+                const seen = new Set<string>()
+                const nodes = layers.nodes()
+                for (const node of nodes) {
+                    for await(const entry of that.readDirectory(node)) {
+                        if (seen.has(entry.name)) continue
+                        const layerNode = layers.backingNode(entry.name)
+                        if (node == layerNode) {
+                            seen.add(entry.name)
+                            yield entry
+                        }
+                    }
+                }
+            },
+            async createNode(name, kind) {
+                const parent = layers.backingNode(name)
+                return that.createNode(parent, name, kind)
+            },
+            async sync() {
+                const nodes = layers.nodes()
+                for (const node of nodes) {
+                    await that.syncDirectory(node)
+                }
+            }
+        }
+    }
+
     private slotReadsTimeout?: NodeJS.Timeout
     private previousSlotReads = Promise.resolve()
 
@@ -755,4 +959,65 @@ export function directoryEtag(entries: Entry[]): string {
     const etagText = JSON.stringify(etagData)
     const hash = hashText(etagText)
     return hash
+}
+
+const ignoreLayerSchema = z.object({
+    kind: z.literal("ignore"),
+    content: contentLinkSchema,
+    ignores: z.optional(z.array(z.string())),
+    ignoreFiles: z.optional(z.array(z.string())),
+})
+
+const acceptLayerSchema = z.object({
+    kind: z.literal("accept"),
+    content: contentLinkSchema,
+    accepts: z.array(z.string()),
+})
+
+const fileLayerDescriptionSchema = z.discriminatedUnion('kind', [ignoreLayerSchema, acceptLayerSchema])
+const fileLayerDescriptionsSchema = z.array(fileLayerDescriptionSchema)
+
+type LayerKind = 'ignore' | 'accept' | 'base'
+
+interface LayerBase {
+    kind: LayerKind
+}
+
+interface IgnoreLayer extends LayerBase {
+    kind: 'ignore'
+    node: Node
+    ignores: string[]
+}
+
+interface AcceptLayer {
+    kind: 'accept',
+    node: Node
+    accepts: string[]
+}
+
+interface BaseLayer {
+    kind: 'base',
+    node: Node
+}
+
+type FileLayerDescription = IgnoreLayer | AcceptLayer | BaseLayer
+type FileLayerDescriptions = FileLayerDescription[]
+
+interface Layers {
+    backingNode(name: string): Node
+    nested(name: string): Layers
+    nodes(): Node[]
+}
+
+interface Layer {
+    kind: LayerKind
+    ignore: Ignore
+    node: Node
+}
+
+interface Directory {
+    lookup(name: string): Promise<Node | undefined>
+    read(): AsyncIterable<FileDirectoryEntry>
+    createNode(name: string, kind: ContentKind): Promise<Node>
+    sync(): Promise<undefined>
 }
