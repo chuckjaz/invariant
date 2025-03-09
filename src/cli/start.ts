@@ -24,6 +24,7 @@ import { findHandlers } from '../find/web/find_handlers'
 import { findServer } from '../find/server'
 import { LocalProductions as LocalProductions } from '../productions/local/local_productions'
 import { productionHandlers } from '../productions/web/web_productions_handler'
+import { findUrl } from '../common/findurl'
 
 const starters: { [index: string]: (config: ServerConfiguration, broker?: BrokerClient) => Promise<any>} = {
     'broker': startBroker,
@@ -120,9 +121,7 @@ async function startFiles(config: ServerConfiguration, broker?: BrokerClient) {
     app.use(filesHandlers)
     const httpServer = app.listen(config.port)
     listening("Files", config.id, httpServer)
-    if (broker && config.url) {
-        broker.register(config.id, config.url, 'files').catch(e => console.error(e))
-    }
+    registerServer(config, httpServer, 'files', broker)
 }
 
 async function startProductions(config: ServerConfiguration, broker?: BrokerClient) {
@@ -135,8 +134,31 @@ async function startProductions(config: ServerConfiguration, broker?: BrokerClie
     app.use(handlers)
     const httpServer = app.listen(config.port)
     listening("Productions", config.id, httpServer)
-    if (broker && config.url) {
-        broker.register(config.id, config.url, 'productions').catch(e => console.error(e))
+    await registerServer(config, httpServer, 'productions', broker)
+}
+
+async function registerServer(
+    config: ServerConfiguration,
+    httpServer: HttpServer,
+    kind?: string,
+    broker?: BrokerClient
+): Promise<void> {
+    if (broker && !config.private) {
+        let url = config.url
+        if (!url) {
+            const address = httpServer.address()
+            if (address && typeof address != 'string') {
+                const myUrl = await findUrl()
+                if (myUrl) {
+                    myUrl.port = `${address.port}`
+                    url = myUrl
+                }
+            }
+        }
+        if (url) {
+            console.log(`Registering ${kind} ${config.id} to broker as ${url.toString()}`)
+            broker.register(config.id, url, kind).catch(e => console.error(e))
+        }
     }
 }
 
@@ -150,10 +172,7 @@ async function startStorage(config: ServerConfiguration, broker?: BrokerClient) 
     app.use(storageHandlers(client, broker))
     const httpServer = app.listen(config.port)
     listening("Storage", config.id, httpServer, config.directory)
-
-    if (broker && config.url) {
-        broker.register(config.id, config.url, 'storage').catch(e => console.error(e))
-    }
+    await registerServer(config, httpServer, 'storage', broker)
 }
 
 async function startSlots(config: ServerConfiguration, broker?: BrokerClient) {
@@ -166,10 +185,7 @@ async function startSlots(config: ServerConfiguration, broker?: BrokerClient) {
     app.use(logHandler('slots'))
     app.use(handlers)
     listening("Slots", config.id, httpServer, config.directory)
-
-    if (broker && config.url) {
-        broker.register(config.id, config.url, 'slots').catch(e => console.error(e))
-    }
+    await registerServer(config, httpServer, 'slots', broker)
 }
 
 async function startFind(config: ServerConfiguration, broker?: BrokerClient) {
@@ -183,10 +199,7 @@ async function startFind(config: ServerConfiguration, broker?: BrokerClient) {
     app.use(logHandler('Find'))
     app.use(handlers)
     listening("Find", config.id, httpServer)
-
-    if (config.url) {
-        broker.register(config.id, config.url, 'find').catch(e => console.error(e))
-    }
+    await registerServer(config, httpServer, 'find', broker)
 }
 
 async function findStorage(broker: BrokerClient): Promise<StorageClient | undefined> {

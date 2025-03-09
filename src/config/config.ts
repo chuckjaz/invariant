@@ -24,6 +24,7 @@ export type ServerConfiguration =
 export interface CommonServerConfiguration {
     server: Server
     id: string
+    private?: boolean
     port?: number
     directory: string
     url?: URL

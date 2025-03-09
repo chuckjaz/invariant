@@ -7,15 +7,17 @@ import task from './task'
 import upload from './upload'
 import mount from "./mount"
 
-yargs
-    .command(check)
-    .command(mount)
-    .command(start)
-    .command(publish)
-    .command(slot)
-    .command(task)
-    .command(upload)
-    .demandCommand()
-    .wrap(90)
-    .help()
-    .parse()
+export function startCli() {
+    yargs
+        .command(check)
+        .command(mount)
+        .command(start)
+        .command(publish)
+        .command(slot)
+        .command(task)
+        .command(upload)
+        .demandCommand()
+        .wrap(90)
+        .help()
+        .parse()
+}
