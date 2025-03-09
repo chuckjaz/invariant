@@ -9,6 +9,9 @@
   "author": "",
   "license": "ISC",
   "description": "",
+  "bin": {
+    "invariant": "dist/cli.js"
+  },
   "dependencies": {
     "@koa/router": "^13.1.0",
     "co-body": "^6.2.0",
