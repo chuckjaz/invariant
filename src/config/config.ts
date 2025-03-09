@@ -5,6 +5,7 @@ import { ContentLink } from '../common/types'
 import { invalid } from '../common/errors'
 
 export interface Configuration {
+    configPath: string
     broker?: URL
     servers?: ServerConfiguration[]
     tools?: ToolConfiguration[]
@@ -101,6 +102,7 @@ interface ConfigurationJson {
 function configurationPath(): string {
     return path.join(homedir(), '.invariant')
 }
+
 function configurationConfigPath(): string {
     return path.join(configurationPath(), 'config.json')
 }
@@ -175,6 +177,7 @@ export async function loadConfiguration(): Promise<Configuration> {
     }
 
     const result: Configuration = {
+        configPath: configurationPath(),
         broker: json.broker ? new URL(json.broker) : undefined,
         servers,
         tools
@@ -184,6 +187,6 @@ export async function loadConfiguration(): Promise<Configuration> {
 
 export async function saveConfiguration(configuration: ServerConfiguration) {
     const location = configurationConfigPath()
-    const jsonText = JSON.stringify(configuration)
+    const jsonText = JSON.stringify(configuration, null, "\n")
     await fs.writeFile(location, jsonText, 'utf-8')
 }
