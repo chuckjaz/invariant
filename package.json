@@ -4,7 +4,8 @@
   "main": "server.js",
   "scripts": {
     "test": "node --enable-source-maps node_modules/jasmine/bin/jasmine.js",
-    "build": "tsc"
+    "build": "tsc",
+    "start": "node dist/cli start"
   },
   "author": "",
   "license": "ISC",
