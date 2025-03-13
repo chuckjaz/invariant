@@ -25,6 +25,7 @@ import { findServer } from '../find/server'
 import { LocalProductions as LocalProductions } from '../productions/local/local_productions'
 import { productionHandlers } from '../productions/web/web_productions_handler'
 import { findUrl } from '../common/findurl'
+import { delay } from '../common/delay'
 
 const starters: { [index: string]: (config: ServerConfiguration, broker?: BrokerClient) => Promise<any>} = {
     'broker': startBroker,
@@ -43,33 +44,73 @@ export default {
             describe: 'The service to start, or all to start all configured services',
             choices: ['all', ...Object.keys(starters)],
             default: 'all'
+        }).option('id', {
+            describe: 'The id of the service to start',
+            array: true
+        }).option('private', {
+            alias: 'p',
+            describe: 'Do not register the service with the broker',
+            boolean: true
+        }).option('broker', {
+            alias: 'b',
+            describe: 'The URL for the broker to use',
+            string: true
         })
     },
-    handler: argv => { start((argv as any).service) }
+    handler: (argv: any) => {
+        start(argv.service, argv.id, argv.private, argv.broker)
+    }
 } satisfies CommandModule
 
-async function start(choice: string) {
+function contains(item: string, items: string[]): boolean {
+    return items.indexOf(item) >= 0
+}
+
+async function start(choice: string, ids?: string[], _private?: boolean, brokerUrl?: string) {
     const configuration = await loadConfiguration()
     const servers = configuration.servers
     if (servers) {
-        console.log('Starting services...')
-        let broker = configuration.broker ? new BrokerWebClient(configuration.broker) : undefined
+        let started = false
+        const url = (brokerUrl ? new URL(brokerUrl) : undefined) ?? configuration.broker
+        let broker = url ? new BrokerWebClient(url) : undefined
         for (const service of servers) {
             const server = service.server
-            if (server == choice || choice == "all") {
+            if ((server == choice || choice == "all") && (ids == undefined || contains(service.id, ids))) {
                 const fn = starters[server]
-                if (!fn) error(`Unknown server ${server} in configuration`)
-                const primary = await fn(service, broker)
+                if (!fn) error(`Unknown server ${server} in configuration`);
+                const primary = await fn(service, _private ? undefined : broker)
+                started = true
                 if (primary && server == "broker" && service.primary) {
                     broker = primary
                 }
             }
+        }
+        if (!started) {
+            console.error("No services started")
         }
     } else {
         console.error('No services configured')
     }
 }
 
+async function waitForBroker(broker?: BrokerClient) {
+    if (!broker) return
+    let tries = 0
+    while (tries < 5) {
+        try {
+            let result = await broker.ping()
+            if (result) return
+        } catch (e) {
+            console.log('caught', e)
+        }
+        if (tries == 0) {
+            console.log("Waiting for the broker to start")
+        }
+        tries++
+        delay(50 * tries)
+    }
+    error('Could not find the broker')
+}
 
 function listening(name: string, id: string, httpServer: HttpServer, directory?: string): number {
     const address = httpServer.address()
@@ -88,6 +129,7 @@ async function startBroker(config: ServerConfiguration, broker?: BrokerClient): 
     const httpServer = app.listen(config.port)
     const port = listening("Broker", config.id, httpServer, config.directory)
     if (broker && config.url) {
+        await waitForBroker(broker)
         broker.register(config.id, config.url, 'broker').catch(e => console.error(e))
     }
     if (config.primary) {
@@ -156,6 +198,7 @@ async function registerServer(
             }
         }
         if (url) {
+            await waitForBroker(broker)
             console.log(`Registering ${kind} ${config.id} to broker as ${url.toString()}`)
             broker.register(config.id, url, kind).catch(e => console.error(e))
         }
