@@ -8,10 +8,12 @@ import { BrokerRegisterResponse } from '../../common/types';
 import { SlotsClient } from '../../slots/slot_client';
 import { ProductionsClient } from '../../productions/productions_client';
 import { FilesClient } from '../../files/files_client';
+import { DistributeClient } from '../../distribute/distribute_client';
 
 export interface MockBrokerClient extends BrokerClient {
     id: string
     registerBroker(broker: BrokerClient): Promise<void>
+    registerDistribute(distribute: DistributeClient): Promise<void>
     registerFiles(files: FilesClient): Promise<void>
     registerFind(find: FindClient): Promise<void>
     registerProductions(productions: ProductionsClient): Promise<void>
@@ -24,6 +26,7 @@ export function mockBroker(): MockBrokerClient {
     const id = idBytes.toString('hex')
 
     const brokerMap = new Map<string, BrokerClient>()
+    const distributeMap = new Map<string, DistributeClient>()
     const filesMap = new Map<string, FilesClient>()
     const findMap = new Map<string, FindClient>()
     const productionsMap = new Map<string, ProductionsClient>()
@@ -38,6 +41,10 @@ export function mockBroker(): MockBrokerClient {
         const client = brokerMap.get(normalizeCode(id) ?? '')
         if (client) return client
         return await findBroker(id, ...brokerMap.values())
+    }
+
+    async function distribute(id: string): Promise<DistributeClient | undefined> {
+        return distributeMap.get(normalizeCode(id) ?? '')
     }
 
     async function files(id: string): Promise<FilesClient | undefined> {
@@ -77,6 +84,11 @@ export function mockBroker(): MockBrokerClient {
         if (id) brokerMap.set(id, broker)
     }
 
+    async function registerDistribute(distribute: DistributeClient): Promise<void> {
+        const id = await distribute.ping()
+        if (id) distributeMap.set(id, distribute)
+    }
+
     async function registerFiles(files: FilesClient): Promise<void> {
         const id = await files.ping()
         if (id) filesMap.set(id, files)
@@ -110,6 +122,7 @@ export function mockBroker(): MockBrokerClient {
         id,
         ping,
         broker,
+        distribute,
         files,
         find,
         productions,
@@ -117,6 +130,7 @@ export function mockBroker(): MockBrokerClient {
         storage,
         registered,
         registerBroker,
+        registerDistribute,
         registerFiles,
         registerFind,
         registerProductions,

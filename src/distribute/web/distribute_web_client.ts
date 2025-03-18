@@ -8,23 +8,22 @@ export class DistributeWebClient extends PingableClient implements DistributeCli
     }
 
     async pin(request: DistributorPutPinRequest): Promise<void> {
-        
+        await this.putJsonStream(request, '/distributor/pin')
     }
 
     async unpin(request: DistributorPutUnpinRequest): Promise<void> {
-        await this.putJson(request, '/distributor/unpin')
+        await this.putJsonStream(request, '/distributor/unpin')
     }
 
     async register(request: DistributorPutRegisterStorage): Promise<void> {
-        await this.putJson(request, '/distirbutor/register/storage')
+        await this.putJsonStream(request, '/distributor/register/storage')
     }
 
     async unregister(request: DistributorPutUnregisterStorage): Promise<void> {
-        await this.putJson(request, '/distributor/unregister/storage')
+        await this.putJsonStream(request, '/distributor/unregister/storage')
     }
 
     async *blocks(request: DistributorPostBlocksRequest): DistributorPostBlocksResponse {
-        const result = await this.postJsonStreams<string, DistributorPostBlocksResponseItem>(request, '/distirbutor/blocks')
-        yield *result
+        return this.postJsonStreams<string, DistributorPostBlocksResponseItem>(request, '/distributor/blocks')
     }
 }

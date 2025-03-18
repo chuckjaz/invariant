@@ -2,7 +2,6 @@ import { CommandModule } from "yargs";
 import { normalizeCode } from "../common/codes";
 import { invalid } from "../common/errors";
 import { loadConfiguration } from "../config/config";
-import { BrokerWebClient } from "../broker/web/broker_web_client";
 import { firstSlots } from "./start";
 import { defaultBroker } from "./common/common_broker";
 

@@ -4,6 +4,8 @@ import { invalid } from "../../common/errors";
 import { safeParseJson } from "../../common/parseJson";
 import { PingableClient } from "../../common/pingable_client";
 import { BrokerLocationResponse, BrokerRegisterResponse } from "../../common/types";
+import { DistributeClient } from "../../distribute/distribute_client";
+import { DistributeWebClient } from "../../distribute/web/distribute_web_client";
 import { FilesClient } from "../../files/files_client";
 import { FilesWebClient } from "../../files/web/files_web_client";
 import { FindClient } from "../../find/client";
@@ -46,6 +48,10 @@ export class BrokerWebClient extends PingableClient implements BrokerClient {
 
     broker(id: string): Promise<BrokerClient | undefined> {
         return this.client(id, async (id, url) => new BrokerWebClient(url, id))
+    }
+
+    distribute(id: string): Promise<DistributeClient | undefined> {
+        return this.client(id, async (id, url) => new DistributeWebClient(url, id))
     }
 
     files(id: string): Promise<FilesClient | undefined> {

@@ -1,3 +1,4 @@
+import { error } from "./errors"
 import { dataToReadable, jsonStream, jsonStreamToText, safeParseJson, textStreamFromWeb, textToReadable } from "./parseJson"
 
 const idPrefix = '/id/'
@@ -65,9 +66,10 @@ export class PingableClient {
     }
 
     protected async putJson(data: any, prefix: string): Promise<boolean> {
-        const request = {
+        const request: RequestInit = {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
+            duplex: "half",
             body: JSON.stringify(data)
         }
         const response = await fetch(new URL(prefix, this.url), request)
@@ -77,9 +79,10 @@ export class PingableClient {
     }
 
     protected async postJson<T>(data: any, prefix: string | URL): Promise<T> {
-        const request = {
+        const request: RequestInit = {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            duplex: "half",
             body: JSON.stringify(data)
         }
         const url = typeof prefix == 'string' ? new URL(prefix, this.url) : prefix
@@ -93,9 +96,10 @@ export class PingableClient {
     }
 
     protected async postJsonOrUndefined<T>(data: any, prefix: string | URL): Promise<T | undefined> {
-        const request = {
+        const request: RequestInit = {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            duplex: "half",
             body: JSON.stringify(data)
         }
         const response = await fetch(new URL(prefix, this.url), request)
@@ -109,23 +113,27 @@ export class PingableClient {
     }
 
     protected async putJsonStream<A>(stream: AsyncIterable<A>, prefix: string): Promise<void> {
-        const request = {
-            method: 'POST',
-            header: { 'Content-Type': 'application/json' },
+        const request: RequestInit = {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            duplex: "half",
             body: textToReadable(jsonStreamToText(stream))
         }
         const response = await fetch(new URL(prefix, this.url), request)
         if (!response) throw new Error('Invalid request');
+        if (response.status != 200) error(`Service error: ${response.status}: ${response.statusText}`)
     }
 
     protected async *postJsonStreams<A, R>(stream: AsyncIterable<A>, prefix: string): AsyncIterable<R> {
-        const request = {
+        const request: RequestInit = {
             method: 'POST',
-            header: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json' },
+            duplex: "half",
             body: textToReadable(jsonStreamToText(stream))
         }
         const response = await fetch(new URL(prefix, this.url), request)
-        if (!response || !response.body) throw new Error('Invalid request')
+        if (!response || !response.body) throw new Error('Invalid request');
+        if (response.status != 200) error(`Service error: ${response.status}: ${response.statusText}`)
         const textStream = textStreamFromWeb(response.body.getReader())
         yield *jsonStream<R>(textStream)
     }

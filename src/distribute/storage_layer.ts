@@ -30,6 +30,18 @@ export class StorageLayers {
         removeFrom(this.root)
     }
 
+    *knownStorages(): Iterable<Buffer> {
+        function *yieldEntry(entry: StorageLayerEntry): Iterable<Buffer> {
+            if (isStorage(entry)) yield entry.id
+            else if (isStorageLayer(entry)) {
+                for (const childEntry of entry.entries) {
+                    yield *yieldEntry(childEntry)
+                }
+            }
+        }
+        yield *yieldEntry(this.root)
+    }
+
     findNearestActive(id: Buffer, size: number): Storage[] {
         const result: Storage[] = []
 

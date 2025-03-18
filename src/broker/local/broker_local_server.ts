@@ -85,18 +85,18 @@ export class LocalBrokerServer implements BrokerServer {
     }
 
     async verifyIds() {
-        // Every 5 to 10 seconds validate an id that has not been validated in the last 60 seconds
-        while (this.running) {
-            await delay(nextInt(5000, 5000))
-            const ids = Array.from(this.info.keys())
-            const id = ids[nextInt(ids.length)]
-            const entry = this.info.get(id)
-            const now = Date.now()
-            if (entry && ((entry.lastVerified ?? 0) + 60 * 1000) < now) {
-                entry.lastVerified = now
-                this.validateId(id)
-            }
-        }
+        // // Every 5 to 10 seconds validate an id that has not been validated in the last 60 seconds
+        // while (this.running) {
+        //     await delay(nextInt(5000, 5000))
+        //     const ids = Array.from(this.info.keys())
+        //     const id = ids[nextInt(ids.length)]
+        //     const entry = this.info.get(id)
+        //     const now = Date.now()
+        //     if (entry && ((entry.lastVerified ?? 0) + 60 * 1000) < now) {
+        //         entry.lastVerified = now
+        //         this.validateId(id)
+        //     }
+        // }
     }
 
     private running = true

@@ -29,8 +29,8 @@ async function *findManifestReferences(
     async function *manifestFromDirectory(content: ContentLink): AsyncIterable<string> {
         const id = content.address
         if (seen.has(id)) return
-        yield id
         seen.add(id)
+        yield id
         const directory = await jsonFromData(directorySchema, contentReader.readContentLink(content))
         if (directory) {
             for (const entry of directory) {
@@ -38,8 +38,8 @@ async function *findManifestReferences(
                     case "File":
                         const fileId = entry.content.address
                         if (!seen.has(fileId)) {
-                            yield fileId
                             seen.add(fileId)
+                            yield fileId
                         }
                         break
                     case "Directory":

@@ -1,5 +1,5 @@
 import { BrokerClient } from "../broker/broker_client";
-import { take } from "../common/data";
+import { randomId } from "../common/id";
 import { ParallelContext } from "../common/parallel_context";
 import {
     DistributorPutPinRequest,
@@ -9,6 +9,7 @@ import {
     DistributorPostBlocksRequest,
     DistributorPostBlocksResponse
 } from "../common/types";
+import { Logger } from "../common/web";
 import { WorkQueue } from "../common/work_queue";
 import { findStorage } from "../file-tree/file-tree";
 import { FindClient } from "../find/client";
@@ -19,6 +20,7 @@ import { StorageLayers } from "./storage_layer";
 
 export class Distribute implements DistributeClient {
     broker: BrokerClient
+    id: string
     storageLayers = new StorageLayers()
     manifests = new Map<string, Manifest>()
     tasks = new WorkQueue<DistributeTask>()
@@ -26,13 +28,20 @@ export class Distribute implements DistributeClient {
     blockMap = new Map<string, Block>()
     _finder?: FindClient
     n: number
+    logger?: Logger
     workerPromise: Promise<void>
 
-    constructor (broker: BrokerClient, n: number = 3, finder?: FindClient) {
+    constructor (broker: BrokerClient, id?: string, n: number = 3, finder?: FindClient, logger?: Logger) {
         this.broker = broker
+        this.id = id ?? randomId()
         this._finder = finder
         this.n = n
+        this.logger = logger
         this.workerPromise = this.taskWorker()
+    }
+
+    async ping(): Promise<string | undefined> {
+        return this.id
     }
 
     async close(): Promise<void> {
@@ -42,6 +51,7 @@ export class Distribute implements DistributeClient {
 
     async pin(request: DistributorPutPinRequest): Promise<void> {
         for await (const blockId of request) {
+            this.log(`PINNING: ${blockId}`)
             const block = this.blockMap.get(blockId)
             if (!block) {
                 const newBlock: Block = {
@@ -131,6 +141,7 @@ export class Distribute implements DistributeClient {
                 break
             }
         }
+        this._finder = finder
         if (!finder) throw new Error("Could not find a finder")
         return finder
     }
@@ -147,6 +158,7 @@ export class Distribute implements DistributeClient {
 
     private requestRebalanceBlocks() {
         if (this.rebalanceRequested) return
+        this.log("Rebalance requested")
         this.tasks.push({ kind: DistributeTaskKind.RebalanceBlocks })
         this.rebalanceRequested = true
     }
@@ -208,6 +220,7 @@ export class Distribute implements DistributeClient {
         if (!storageClient || !(await storageClient.ping())) {
             if (storage.active) this.requestRebalanceBlocks();
             storage.active = false
+            this.log(`STORAGE: ID ${idText} is inactive`)
             return
         }
         if (!storage.active) this.requestRebalanceBlocks();
@@ -218,6 +231,7 @@ export class Distribute implements DistributeClient {
         for (const [_, block] of this.blockMap.entries()) {
             const nearest =  this.storageLayers.findNearestActive(block.id, this.n)
             if (!areEffectivelyEqual(block.stores, nearest)) {
+                this.log(`Moving block: ${block.id.toString('hex')}: ${block.stores.map(s => s.id.toString('hex'))} -> ${nearest.map(s => s.id.toString('hex'))}`)
                 this.requestMoveBlock(block, block.stores, nearest)
                 block.stores = nearest
             }
@@ -232,16 +246,16 @@ export class Distribute implements DistributeClient {
             if (storage.active) {
                 const storageClient = await this.broker.storage(storageId)
                 if (!storageClient) {
-                    console.log("Couldn't find storage", storageId)
+                    this.log(`Couldn't find storage ${storageId}`)
                     return [storageId, undefined]
                 }
                 if (await storageClient.has(id)) {
-                    console.log('storage already has', id)
+                    this.log(`storage ${storageId} 'already has ${id}`)
                     return [storageId, undefined]
                 }
                 return [storageId, storageClient]
             }
-            console.log('Storage not active', storageId)
+            this.log(`Storage not active ${storageId}`)
             return [storageId, undefined]
         })
 
@@ -257,7 +271,7 @@ export class Distribute implements DistributeClient {
         const dest = (await destPromise).filter(i => i[1]) as [string, StorageClient][]
         let source = (await sourcePromise).filter(i => i[1]) as [string, StorageClient][]
         if (dest.length == 0) {
-            console.log("No live destinations")
+            this.log(`No live destinations for ${id}`)
             return
         }
         if (source.length == 0) {
@@ -265,10 +279,21 @@ export class Distribute implements DistributeClient {
             const foundSourceId = foundSource ? await foundSource.ping() : undefined
             if (foundSource && foundSourceId) {
                 source = [[foundSourceId, foundSource]]
-            } else {
-                console.log(`Block ${id} could not be found`)
-                return
             }
+        }
+        if (source.length == 0) {
+            // Try known storages
+            for (const storageIdBuffer of this.storageLayers.knownStorages()) {
+                const storageId = storageIdBuffer.toString('hex')
+                const storage = await this.broker.storage(storageId)
+                if (storage && await storage.has(id)) {
+                    source.push([storageId, storage])
+                }
+            }
+        }
+        if (source.length == 0) {
+            this.log(`Block ${id} could not be found`)
+            return
         }
 
         // Round-robin the sources to copy to the destinations
@@ -282,7 +307,7 @@ export class Distribute implements DistributeClient {
                     const sourceClient = sourceStorage[1]
                     const data = await sourceClient.get(id)
                     if (!data) {
-                        console.log(`Storage ${sourceStorage[0]} said it had ${id} but return false to get`)
+                        this.log(`Storage ${sourceStorage[0]} said it had ${id} but return false to get`)
                         return
                     }
                     await destinationClient.put(id, data)
@@ -300,6 +325,11 @@ export class Distribute implements DistributeClient {
         for (const [container, blocks] of notifications.entries()) {
             await finder.has(container, blocks)
         }
+    }
+
+    private async log(msg: string) {
+        const logger = this.logger
+        if (logger) logger(msg)
     }
 }
 

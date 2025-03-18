@@ -63,6 +63,15 @@ export function slotsHandler(client: SlotsClient): ResponseFunc {
                     ctx.body = textToReadable(jsonStreamToText(result))
                     ctx.status = 200
                 }
+            },
+            'watch': {
+                method: 'GET',
+                params: [codeConverter],
+                handler: async function (ctx, next, id: string) {
+                    const result = client.watch(id)
+                    ctx.body = textToReadable(jsonStreamToText(result))
+                    ctx.status = 200
+                }
             }
         }, {
             method: 'GET',

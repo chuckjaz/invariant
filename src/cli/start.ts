@@ -4,14 +4,14 @@ import { CommandModule } from "yargs"
 import { loadConfiguration, Server, ServerConfiguration } from "../config/config"
 import { BrokerClient } from '../broker/broker_client'
 import { BrokerWebClient } from '../broker/web/broker_web_client'
-import { logHandler } from '../common/web'
+import { logger, logHandler, logHandlerOf } from '../common/web'
 import { storageHandlers } from '../storage/web/storage_web_handlers'
 import { LocalStorage } from '../storage/local/local_storage'
 import { LocalBrokerServer } from '../broker/local/broker_local_server'
 import { brokerHandlers } from '../broker/web/broker_web_handler'
 import { error } from '../common/errors'
 import { Files } from '../files/files'
-import { StorageClient } from '../storage/storage_client'
+import { ManagedStorageClient, StorageClient } from '../storage/storage_client'
 import { FindClient } from '../find/client'
 import { BlockFindingStorage } from '../storage/find/storage_find'
 import { StorageCache } from '../storage/cache/storage_cache'
@@ -26,9 +26,14 @@ import { LocalProductions as LocalProductions } from '../productions/local/local
 import { productionHandlers } from '../productions/web/web_productions_handler'
 import { findUrl } from '../common/findurl'
 import { delay } from '../common/delay'
+import { Distribute } from '../distribute/distribute'
+import { distributeHandlers } from '../distribute/web/distribute_web_handlers'
+import { DistributeClient } from '../distribute/distribute_client'
+import { allOfStream } from '../common/data'
 
 const starters: { [index: string]: (config: ServerConfiguration, broker?: BrokerClient) => Promise<any>} = {
     'broker': startBroker,
+    'distribute': startDistribute,
     'files': startFiles,
     'find': startFind,
     'productions': startProductions,
@@ -211,11 +216,28 @@ async function startStorage(config: ServerConfiguration, broker?: BrokerClient) 
     const app = new Koa()
 
     const client = new LocalStorage(config.directory, config.id)
-    app.use(logHandler("storage"))
+    app.use(logHandler(`storage-${shortId(config.id)}`))
     app.use(storageHandlers(client, broker))
     const httpServer = app.listen(config.port)
     listening("Storage", config.id, httpServer, config.directory)
     await registerServer(config, httpServer, 'storage', broker)
+
+    // Let the finder know all the block we already have
+    if (broker) {
+        // Intentionally don't await this so it is in parallel to the other starts
+        bootstrapFinder(broker, client)
+    }
+}
+
+async function bootstrapFinder(broker: BrokerClient, storage: ManagedStorageClient) {
+    const finder = await firstFinder(broker)
+    if (!finder) return
+    const id = await storage.ping()
+    if (!id) return
+
+    const blocks = (await allOfStream(storage.blocks())).map(b => b.address)
+    await finder.has(id, blocks)
+    console.log(`storage-${shortId(id)} fully started`)
 }
 
 async function startSlots(config: ServerConfiguration, broker?: BrokerClient) {
@@ -243,6 +265,31 @@ async function startFind(config: ServerConfiguration, broker?: BrokerClient) {
     app.use(handlers)
     listening("Find", config.id, httpServer)
     await registerServer(config, httpServer, 'find', broker)
+}
+
+async function startDistribute(config: ServerConfiguration, broker?: BrokerClient) {
+    if (config.server != 'distribute') error("Unexpected distribute configuration");
+    if (!broker) error("Distribute server requires broker")
+    const app = new Koa()
+    const log = logger('distribute')
+    const client = new Distribute(broker, config.id, config.replication, undefined, log)
+    const httpServer = app.listen(config.port)
+    const handlers = distributeHandlers(client)
+    app.use(logHandlerOf(log))
+    app.use(handlers)
+    listening("Distribute", config.id, httpServer)
+    await registerServer(config, httpServer, 'distribute', broker)
+    if (config.serverIds) {
+        await client.register(sendAll(config.serverIds))
+    }
+}
+
+async function *sendAll<T>(arr: T[]): AsyncIterable<T> {
+    yield *arr
+}
+
+function shortId(id: string): string {
+    return id.substring(0, 5)
 }
 
 async function findStorage(broker: BrokerClient): Promise<StorageClient | undefined> {
@@ -281,4 +328,8 @@ export async function firstFinder(broker: BrokerClient): Promise<FindClient | un
 
 export async function firstSlots(broker: BrokerClient): Promise<SlotsClient | undefined> {
     return firstServer(broker, 'slots', id => broker.slots(id))
+}
+
+export async function firstDistribute(broker: BrokerClient): Promise<DistributeClient | undefined> {
+    return firstServer(broker, 'distribute', id => broker.distribute(id))
 }

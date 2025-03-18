@@ -7,6 +7,7 @@ import { createWriteStream } from 'fs'
 import { pipeline } from 'node:stream/promises'
 import { hashTransform } from "../../common/data";
 import { normalizeCode } from "../../common/codes";
+import { Dirent } from "node:fs";
 
 const hexBytes = /^[0-9a-fA-F]+$/
 
@@ -54,14 +55,16 @@ export class LocalStorage implements ManagedStorageClient {
 
     async *blocks(): AsyncIterable<StorageBlock> {
         const dirPath = path.join(this.directory, 'store')
-        for await (const prefix1 of directoryNames(dirPath, isPrefixByte)) {
+        for await (const prefix1 of directoryNames(dirPath, isPrefixDir)) {
             const layer1 = path.join(dirPath, prefix1)
-            for await (const prefix2 of directoryNames(layer1, isPrefixByte)) {
+            for await (const prefix2 of directoryNames(layer1, isPrefixDir)) {
                 const layer2 = path.join(layer1, prefix2)
-                for await (const postfix of directoryNames(layer2, isPostfixBytes)) {
-                    const address = normalizeCode(path.join(layer2, postfix))
+                for await (const postfix of directoryNames(layer2, isStorageFile)) {
+                    const file = path.join(layer2, postfix)
+                    const rawAddress = `${prefix1}${prefix2}${postfix}`
+                    const address = normalizeCode(rawAddress)
                     if (address) {
-                        const fstat = await stat(address)
+                        const fstat = await stat(file)
                         yield { address, size: fstat.size, lastAccess: fstat.atime.getTime() }
                     }
                 }
@@ -149,13 +152,21 @@ function isPrefixByte(name: string): boolean {
 
 function isPostfixBytes(name: string): boolean {
     const match = name.match(hexBytes)
-    return !!match && match[0].length == 28
+    return !!match && match[0].length == 60
 }
 
-async function *directoryNames(path: string, filter: (name: string) => boolean): AsyncIterable<string> {
+function isPrefixDir(entry: Dirent): boolean {
+    return entry.isDirectory() && isPrefixByte(entry.name)
+}
+
+function isStorageFile(entry: Dirent): boolean {
+    return entry.isFile() && isPostfixBytes(entry.name)
+}
+
+async function *directoryNames(path: string, filter: (entry: Dirent) => boolean): AsyncIterable<string> {
     const dir = await opendir(path)
     for await (const entry of dir) {
-        if (entry.isFile() && filter(entry.name)) {
+        if (filter(entry)) {
             yield entry.name
         }
     }

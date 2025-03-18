@@ -38,6 +38,8 @@ export interface BrokerConfiguration extends CommonServerConfiguration {
 
 export interface DistributeConfiguration extends CommonServerConfiguration {
     server: "distribute"
+    replication?: number
+    serverIds?: string[]
 }
 
 export interface FilesConfiguration extends CommonServerConfiguration {
@@ -85,6 +87,8 @@ interface ServerConfigurationJson {
     mount?: any
     cache?: any
     syncFrequency?: number
+    serverIds?: string[]
+    replication?: number
 }
 
 interface ToolConfigurationJson {
@@ -133,6 +137,16 @@ export async function loadConfiguration(): Promise<Configuration> {
                     })
                     break
                 case "distribute":
+                    servers.push({
+                        server: server.server,
+                        id: server.id,
+                        port: server.port,
+                        directory,
+                        url,
+                        serverIds: server.serverIds,
+                        replication: server.replication
+                    })
+                    break
                 case "find":
                 case "productions":
                 case "slots":
