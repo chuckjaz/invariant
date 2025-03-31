@@ -21,7 +21,7 @@ export class PingableClient {
                 return id
             }
         } catch(e) {
-            console.error('ping error', e)
+            return undefined
         }
     }
 

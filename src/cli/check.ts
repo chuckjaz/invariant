@@ -5,6 +5,7 @@ import { BrokerWebClient } from '../broker/web/broker_web_client'
 import { BrokerClient } from '../broker/broker_client'
 import { loadConfiguration, Server } from '../config/config'
 import yargs from 'yargs'
+import { Url } from 'node:url'
 
 export default {
     command: 'check [broker]',
@@ -54,7 +55,8 @@ async function reportKind(kind: Server, broker: BrokerClient) {
             case 'broker': pingable = await broker.broker(id); break;
             case 'files':
             case 'distribute':
-                error("Not supported yet")
+                console.log(`${kind}: check not supported yet`)
+                continue
         }
         if (!pingable) {
             console.log(`  ${kind}: ${id} was reported by the broker but the broker couldn't find it`)
@@ -71,6 +73,10 @@ interface Pingable {
 async function timePing(name: string, pingable: Pingable, id?: string): Promise<{ id: string | undefined, time: number}> {
     const start = Date.now()
     const ping = await pingable.ping()
+    if (!ping) {
+        console.error(`${name}: could not ping ${id}`)
+        return { id: id ?? '' , time: 0 }
+    }
     const end = Date.now()
     const time = end - start
     if (ping) {
