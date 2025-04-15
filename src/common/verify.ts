@@ -7,3 +7,9 @@ export async function verifyLive(url: string, id: string): Promise<boolean> {
     }
     return received == id
 }
+
+export async function firstLive(urls: string[], id: string): Promise<string | undefined> {
+    for (const url of urls) {
+        if (await verifyLive(url, id)) return url
+    }
+}

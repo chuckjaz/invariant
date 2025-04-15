@@ -1,13 +1,13 @@
 export interface BrokerLocationResponse {
     id: string;
-    url: string;
+    urls: string[];
     ttl?: number;
     token?: string;
 }
 
 export interface BrokerRegisterRequest {
     id: string;
-    url: string;
+    urls: string[];
     kind?: string;
 }
 

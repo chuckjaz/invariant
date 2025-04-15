@@ -22,7 +22,7 @@ function kindConverter(value: string | string[] | undefined): string | undefined
 
 const brokerRegisterRequestSchema = z.object({
     id: idSchema,
-    url: z.string().url(),
+    urls: z.string().url().array(),
     kind: z.enum(["broker", "distribute", "files", "find", "productions", "slots", "storage"])
 })
 
@@ -49,7 +49,8 @@ export function brokerHandlers(server: BrokerServer): ResponseFunc {
                 method: 'POST',
                 body: brokerRegisterRequestSchema,
                 handler: async function (ctx, next, request: BrokerRegisterRequest) {
-                    const response = await server.register(request.id, new URL(request.url), request.kind)
+                    const urls = request.urls.map(u => new URL(u))
+                    const response = await server.register(request.id, urls, request.kind)
                     if (response) {
                         ctx.body = response
                         ctx.status = 200

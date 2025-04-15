@@ -114,7 +114,7 @@ export function mockBroker(): MockBrokerClient {
         if (id) slotsMap.set(id, slotsClient)
     }
 
-    async function register(id: string, url: URL, kind?: string): Promise<BrokerRegisterResponse | undefined> {
+    async function register(id: string, urls: URL[], kind?: string): Promise<BrokerRegisterResponse | undefined> {
         return undefined
     }
 

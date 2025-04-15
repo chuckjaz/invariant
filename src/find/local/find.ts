@@ -11,6 +11,7 @@ import { BrokerLocationResponse, BrokerServiceQueryResponse, FindResponse } from
 import { safeParseJson as safeParseJson } from '../../common/parseJson'
 import { WorkQueue } from '../../common/work_queue'
 import { ParallelMapper } from '../../common/parallel_mapper'
+import { firstLive } from '../../common/verify'
 
 const findPath = path.join(__dirname, '.find')
 const app = new Koa()
@@ -164,7 +165,7 @@ async function restore() {
 
 interface ServerInformation {
     id: string
-    url: string
+    urls: string[]
     lastValidated?: number
     token?: string
     ttl?: number
@@ -182,7 +183,8 @@ class Broker {
     }
 
     async urlOf(id: string): Promise<string | undefined> {
-        return (await this.collectInfoFor(id))?.url
+        const urls =  (await this.collectInfoFor(id))?.urls
+        if (urls) return await firstLive(urls, id)
     }
 
     async findServers(kind: string): Promise<ServerInformation[]> {
@@ -197,7 +199,7 @@ class Broker {
         }
         const info = await this.reqJson(`/broker/location`) as BrokerLocationResponse
         if (info) {
-            this.infoCache.set(id, { id, url: info.url, token: info.token, ttl: info.ttl })
+            this.infoCache.set(id, { id, urls: info.urls, token: info.token, ttl: info.ttl })
             return info
         }
     }

@@ -1,5 +1,4 @@
 import { BrokerRegisterResponse } from "../common/types";
-import { Distribute } from "../distribute/distribute";
 import { DistributeClient } from "../distribute/distribute_client";
 import { FilesClient } from "../files/files_client";
 import { FindClient } from "../find/client";
@@ -17,6 +16,6 @@ export interface BrokerClient {
     storage(id: string): Promise<StorageClient | undefined>
     slots(id: string): Promise<SlotsClient | undefined>
     registered(kind: string): AsyncIterable<string>
-    register(id: string, url: URL, kind?: string): Promise<BrokerRegisterResponse | undefined>
+    register(id: string, urls: URL[], kind?: string): Promise<BrokerRegisterResponse | undefined>
 }
 

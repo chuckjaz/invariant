@@ -2,14 +2,14 @@ import * as path from 'path'
 import { readFile, writeFile } from 'fs/promises'
 import { randomId } from "../../common/id";
 import { BrokerLocationResponse, BrokerRegisterResponse } from "../../common/types";
-import { verifyLive } from "../../common/verify";
+import { firstLive, verifyLive } from "../../common/verify";
 import { BrokerServer } from "../broker_server";
 import { fileExists } from '../../common/files';
 import { delay } from '../../common/delay';
 
 interface Information {
     id: string
-    url: string
+    urls: string[]
     kind?: string
     lastVerified: number
 }
@@ -42,19 +42,19 @@ export class LocalBrokerServer implements BrokerServer {
         const info = this.info.get(id)
         if (info) {
             this.validateId(id)
-            return { id, url: info.url }
+            return { id, urls: info.urls }
         }
         return undefined
     }
 
-    async register(id: string, url: URL, kind?: string): Promise<BrokerRegisterResponse | undefined> {
+    async register(id: string, urls: URL[], kind?: string): Promise<BrokerRegisterResponse | undefined> {
         const existingInfo = this.info.get(id)
         if (existingInfo) {
             existingInfo.kind = kind
-            existingInfo.url = url.toString()
+            existingInfo.urls = urls.map(u => u.toString())
             existingInfo.lastVerified = 0
         } else {
-            this.info.set(id, { id, kind, url: url.toString(), lastVerified: 0 })
+            this.info.set(id, { id, kind, urls: urls.map(u => u.toString()), lastVerified: 0 })
         }
         return { id }
     }
@@ -70,9 +70,9 @@ export class LocalBrokerServer implements BrokerServer {
         const that = this
         const entry = this.info.get(id) as Information
         async function validate() {
-            const isValid = await verifyLive(entry.url, entry.id)
-            if (!isValid) {
-                console.log("Deleting", id, "as it is not responding on", entry.url)
+            const liveUrl = await firstLive(entry.urls, entry.id)
+            if (!liveUrl) {
+                console.log("Deleting", id, "as it is not responding on any of", entry.urls)
                 that.info.delete(id)
                 that.save().catch(e => console.error(e))
             } else {

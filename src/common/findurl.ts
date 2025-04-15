@@ -1,10 +1,18 @@
 import * as os from 'node:os'
 import * as dns from 'node:dns/promises'
 
-export async function findUrl(): Promise<URL | undefined> {
+export async function findUrls(port?: number): Promise<URL[] | undefined> {
     const interfaces = os.networkInterfaces()
-    let best: string | undefined = undefined
-    let ip4: boolean = false
+    let result: URL[] = []
+    let addresses = new Set<string>()
+
+    function add(address: string, best: boolean = false) {
+        if (addresses.has(address)) return
+        addresses.add(address)
+        const url = new URL(address)
+        if (port !== undefined) url.port = port.toString();
+        if (best) { result.unshift(url) } else { result.push(url) }
+    }
 
     loop: for (const interfaceName in interfaces) {
         const interfaceInfos = interfaces[interfaceName]
@@ -12,29 +20,21 @@ export async function findUrl(): Promise<URL | undefined> {
         for (const interfaceInfo of interfaceInfos) {
             if (interfaceInfo.internal) continue
             const address = interfaceInfo.address
-            if (!best || !ip4) {
-                ip4 = interfaceInfo.family == 'IPv4'
-                best = `http://${ip4 ? address : `[${address}]`}`
+            const ip4 = interfaceInfo.family == 'IPv4'
+            const raw  = `http://${ip4 ? address : `[${address}]`}`
+            add(raw)
 
-                // Try to name the address
-                let name: string | undefined
-                const names = await findNamesOf(address)
-                for (const dnsName of names) {
-                    const dnsAddress = await findAddressOf(dnsName)
-                    if (dnsAddress == address) {
-                        name = dnsName
-                    }
-                }
-
-                if (name) {
-                    // Take the first named address
-                    best = `http://${name}`
-                    break loop
+            // Try to name the address
+            const names = await findNamesOf(address)
+            for (const dnsName of names) {
+                const dnsAddress = await findAddressOf(dnsName)
+                if (dnsAddress == address) {
+                    add(`http://${dnsName}`, ip4)
                 }
             }
         }
     }
-    return best ? new URL(best) : undefined
+    return result.length ? result : undefined
 }
 
 async function findNamesOf(address: string): Promise<string[]> {

@@ -28,7 +28,7 @@ export interface CommonServerConfiguration {
     private?: boolean
     port?: number
     directory: string
-    url?: URL
+    urls?: URL[]
 }
 
 export interface BrokerConfiguration extends CommonServerConfiguration {
@@ -80,7 +80,7 @@ interface ServerConfigurationJson {
     id: string
     port?: number
     directory?: string
-    url?: string
+    urls?: string[]
     primary?: boolean
     storage?: string
     slots?: string
@@ -122,9 +122,9 @@ export async function loadConfiguration(): Promise<Configuration> {
             let directory = server.directory
             if (directory) directory = path.resolve(configurationPath(), directory)
             else directory = configurationPath()
-            let url: URL | undefined = undefined
-            let urlString = server.url
-            if (urlString) url = new URL(urlString)
+            let urls: URL[] | undefined = undefined
+            let urlsStrings = server.urls
+            if (urlsStrings) urls = urlsStrings.map(u => new URL(u))
             switch (server.server) {
                 case "broker":
                     servers.push({
@@ -132,7 +132,7 @@ export async function loadConfiguration(): Promise<Configuration> {
                         id: server.id,
                         port: server.port,
                         directory,
-                        url,
+                        urls,
                         primary: server.primary
                     })
                     break
@@ -142,7 +142,7 @@ export async function loadConfiguration(): Promise<Configuration> {
                         id: server.id,
                         port: server.port,
                         directory,
-                        url,
+                        urls,
                         serverIds: server.serverIds,
                         replication: server.replication
                     })
@@ -156,7 +156,7 @@ export async function loadConfiguration(): Promise<Configuration> {
                         id: server.id,
                         port: server.port,
                         directory,
-                        url
+                        urls
                     })
                     break
                 case "files":
@@ -165,7 +165,7 @@ export async function loadConfiguration(): Promise<Configuration> {
                         id: server.id,
                         port: server.port,
                         directory,
-                        url,
+                        urls,
                         mount: server.mount,
                         cache: server.cache,
                         syncFrequency: server.syncFrequency

@@ -4,6 +4,7 @@ import { invalid } from "../../common/errors";
 import { safeParseJson } from "../../common/parseJson";
 import { PingableClient } from "../../common/pingable_client";
 import { BrokerLocationResponse, BrokerRegisterResponse } from "../../common/types";
+import { firstLive } from "../../common/verify";
 import { DistributeClient } from "../../distribute/distribute_client";
 import { DistributeWebClient } from "../../distribute/web/distribute_web_client";
 import { FilesClient } from "../../files/files_client";
@@ -96,8 +97,8 @@ export class BrokerWebClient extends PingableClient implements BrokerClient {
         yield *channel.all()
     }
 
-    register(id: string, url: URL, kind?: string): Promise<BrokerRegisterResponse | undefined> {
-        return this.postJson<BrokerRegisterResponse>({ id, url: url.toString(), kind }, brokerRegisterPrefix)
+    register(id: string, urls: URL[], kind?: string): Promise<BrokerRegisterResponse | undefined> {
+        return this.postJson<BrokerRegisterResponse>({ id, urls: urls.map(u => u.toString()), kind }, brokerRegisterPrefix)
     }
 
     private async client<T>(id: string, factory: ClientFactory<T>): Promise<T | undefined> {
@@ -106,8 +107,11 @@ export class BrokerWebClient extends PingableClient implements BrokerClient {
         const response = await fetch(new URL(brokerLocationPrefix + normalId, this.url))
         if (response.status == 200) {
             const result = await response.json() as BrokerLocationResponse
-            if ('id' in result &&  normalId == normalizeCode(result.id) && 'url' in result) {
-                return factory(normalId, new URL(result.url))
+            if ('id' in result &&  normalId == normalizeCode(result.id) && 'urls' in result) {
+                const url = await firstLive(result.urls, normalId)
+                if (url) {
+                    return factory(normalId, new URL(url))
+                }
             }
         }
     }

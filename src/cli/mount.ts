@@ -8,10 +8,10 @@ import { jsonFromText } from "../common/data";
 import { contentLinkSchema } from "../common/schema";
 import { ContentLink } from "../common/types";
 import { BrokerWebClient } from "../broker/web/broker_web_client";
-import { FilesClient } from "../files/files_client";
 import { invalid } from "../common/errors";
 import { FilesWebClient } from "../files/web/files_web_client";
 import { logger } from "../common/web";
+import { firstLive } from "../common/verify";
 
 export default {
     command: "mount [root] [directory]",
@@ -52,7 +52,9 @@ async function firstFilesUrl(broker: BrokerWebClient): Promise<URL> {
     for await (const id of broker.registered('files')) {
         const location = await broker.location(id)
         if (!location) continue
-        const url = new URL(location.url)
+        const urlString = await firstLive(location.urls, id)
+        if (!urlString) continue
+        const url = new URL(urlString)
         const files = new FilesWebClient(url)
         const pingId = await files.ping()
         if (!pingId) continue

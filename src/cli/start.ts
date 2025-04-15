@@ -24,7 +24,7 @@ import { findHandlers } from '../find/web/find_handlers'
 import { findServer } from '../find/server'
 import { LocalProductions as LocalProductions } from '../productions/local/local_productions'
 import { productionHandlers } from '../productions/web/web_productions_handler'
-import { findUrl } from '../common/findurl'
+import { findUrls } from '../common/findurl'
 import { delay } from '../common/delay'
 import { Distribute } from '../distribute/distribute'
 import { distributeHandlers } from '../distribute/web/distribute_web_handlers'
@@ -133,9 +133,9 @@ async function startBroker(config: ServerConfiguration, broker?: BrokerClient): 
     app.use(brokerHandlers(server))
     const httpServer = app.listen(config.port)
     const port = listening("Broker", config.id, httpServer, config.directory)
-    if (broker && config.url) {
+    if (broker && config.urls) {
         await waitForBroker(broker)
-        broker.register(config.id, config.url, 'broker').catch(e => console.error(e))
+        broker.register(config.id, config.urls, 'broker').catch(e => console.error(e))
     }
     if (config.primary) {
         return new BrokerWebClient(new URL(`http://localhost:${port}`), config.id)
@@ -191,21 +191,18 @@ async function registerServer(
     broker?: BrokerClient
 ): Promise<void> {
     if (broker && !config.private) {
-        let url = config.url
-        if (!url) {
+        let urls = config.urls
+        if (!urls) {
+            urls = []
             const address = httpServer.address()
             if (address && typeof address != 'string') {
-                const myUrl = await findUrl()
-                if (myUrl) {
-                    myUrl.port = `${address.port}`
-                    url = myUrl
-                }
+                urls = await findUrls(config.port ?? address.port)
             }
         }
-        if (url) {
+        if (urls && urls.length) {
             await waitForBroker(broker)
-            console.log(`Registering ${kind} ${config.id} to broker as ${url.toString()}`)
-            broker.register(config.id, url, kind).catch(e => console.error(e))
+            console.log(`Registering ${kind} ${config.id} to broker on ${urls.map(u => u.toString()).join()}`)
+            broker.register(config.id, urls, kind).catch(e => console.error(e))
         }
     }
 }

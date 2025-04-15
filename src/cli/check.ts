@@ -5,7 +5,6 @@ import { BrokerWebClient } from '../broker/web/broker_web_client'
 import { BrokerClient } from '../broker/broker_client'
 import { loadConfiguration, Server } from '../config/config'
 import yargs from 'yargs'
-import { Url } from 'node:url'
 
 export default {
     command: 'check [broker]',
