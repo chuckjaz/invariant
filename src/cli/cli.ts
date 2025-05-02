@@ -7,10 +7,14 @@ import task from './task'
 import upload from './upload'
 import mount from "./mount"
 import pin from "./pin"
+import init from "./init"
+import add from "./add"
 
 export function startCli() {
     yargs
+        .command(add)
         .command(check)
+        .command(init)
         .command(mount)
         .command(start)
         .command(pin)

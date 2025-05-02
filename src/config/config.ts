@@ -3,6 +3,7 @@ import * as path from 'path'
 import * as fs from 'node:fs/promises'
 import { ContentLink } from '../common/types'
 import { invalid } from '../common/errors'
+import { fileExists } from '../common/files'
 
 export interface Configuration {
     configPath: string
@@ -199,8 +200,18 @@ export async function loadConfiguration(): Promise<Configuration> {
     return  result
 }
 
-export async function saveConfiguration(configuration: ServerConfiguration) {
+export async function saveConfiguration(configuration: Configuration) {
     const location = configurationConfigPath()
-    const jsonText = JSON.stringify(configuration, null, "\n")
+    const { configPath, ...configToWrite } = configuration
+    const jsonText = JSON.stringify(configToWrite, null, "    ")
     await fs.writeFile(location, jsonText, 'utf-8')
+}
+
+export async function configurationExists(): Promise<boolean> {
+    const location = configurationConfigPath()
+    return await fileExists(location)
+}
+
+export function newConfiguration(): Configuration {
+    return { configPath: configurationConfigPath() }
 }

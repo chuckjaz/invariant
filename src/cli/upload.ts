@@ -86,7 +86,7 @@ async function upload(directory?: string, all?: boolean, storageSpec?: string, a
                 tasks.push(async () => {
                     const stat = await fs.stat(fullName)
                     const data = dataFromFile(fullName)
-                    console.log('uploading', fullName)
+                    console.log('Uploading', fullName)
                     const address = await put(storage, data)
                     if (!address) throw new Error(`Could not read ${fullName}`)
                     const treeEntry: FileEntry = {

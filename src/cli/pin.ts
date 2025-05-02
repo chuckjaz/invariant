@@ -22,9 +22,7 @@ export default {
             describe: "The content to pin. This can be a content address object or just the address",
         }).demandOption('content')
     },
-    handler: async (argv: any) => { await pin(
-        argv.content
-    )}
+    handler: async (argv: any) => { await pin(argv.content) }
 } satisfies CommandModule
 
 async function pin(contentOrAddress: string) {
