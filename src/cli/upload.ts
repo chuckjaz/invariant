@@ -13,6 +13,9 @@ import { Configuration, loadConfiguration } from '../config/config';
 import { defaultBroker } from './common/common_broker';
 import { findStorage } from './common/common_storage';
 import { error } from '../common/errors';
+import { BrokerClient } from '../broker/broker_client';
+import { SlotsClient } from '../slots/slot_client';
+import { normalizeCode } from '../common/codes';
 
 export default {
     command: "upload [directory]",
@@ -35,12 +38,17 @@ export default {
         alias: 'c',
         describe: "Use the sha value cache",
         boolean: true
+    }).option('publish', {
+        alias: 'p',
+        describe: "Publish result to a slot",
+        string: true
     }),
     handler: (yargs: any) => (yargs.cache ? cachedUpload : upload)(
         yargs.directory,
         yargs.all,
         yargs.storage,
-        yargs.auth
+        yargs.auth,
+        yargs.publish
     )
 } as yargs.CommandModule
 
@@ -58,7 +66,13 @@ async function put(storage: StorageClient, data: Data): Promise<string> {
     return code
 }
 
-async function upload(directory?: string, all?: boolean, storageSpec?: string, auth?: string) {
+async function upload(
+    directory?: string,
+    all?: boolean,
+    storageSpec?: string,
+    auth?: string,
+    publishSlot?: string
+) {
     if (!directory) directory = "."
     const context = new ParallelContext()
     const ig = ignore()
@@ -128,9 +142,16 @@ async function upload(directory?: string, all?: boolean, storageSpec?: string, a
 
     const result = await readDirectory(directory)
     console.log('ROOT:', result)
+    if (publishSlot) publish(broker, publishSlot, result)
 }
 
-async function cachedUpload(directory?: string, all?: boolean, storageSpec?: string, auth?: string) {
+async function cachedUpload(
+    directory?: string,
+    all?: boolean,
+    storageSpec?: string,
+    auth?: string,
+    publishSlot?: string
+) {
     const config = await loadConfiguration()
 
     // Find sha cache
@@ -248,6 +269,7 @@ async function cachedUpload(directory?: string, all?: boolean, storageSpec?: str
     a(() => cache.store(config))
     await Promise.all(uploadPromises)
     console.log(`ROOT: ${root}`)
+    if (publishSlot) publish(broker, publishSlot, root)
 }
 
 function required<V>(value: V | undefined): V {
@@ -325,4 +347,31 @@ class ShaCache {
     private cacheFileName(config: Configuration): string {
         return path.join(config.configPath, 'sha-cache.json')
     }
+}
+
+async function publish(broker: BrokerClient, slot: string | undefined, address: string) {
+    if (!slot) return
+    const effectiveSlot = normalizeCode(slot)
+    if (!effectiveSlot) error(`Invalid slot address ${slot}`)
+    // Find the slot server
+    const currentAndSlots = await slotServerOf(broker, effectiveSlot)
+    if (!currentAndSlots) {
+        error(`Could not find slot server for slot ${effectiveSlot}`)
+    }
+    const [slots, previous] = currentAndSlots
+    const result = await slots.put(slot, { address, previous })
+    if (!result) {
+        console.error(`Update of the slot ${effectiveSlot} was refused`)
+    }
+}
+
+async function slotServerOf(broker: BrokerClient, slot: string): Promise<[SlotsClient, string] | undefined> {
+    for await (const slotId of broker.registered('slots')) {
+        const slots = await broker.slots(slotId)
+        if (!slots) continue
+        const result = await slots.get(slot)
+        if (!result) continue
+        return [slots, result.address]
+    }
+    return undefined
 }
