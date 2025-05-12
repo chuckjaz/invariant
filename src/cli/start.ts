@@ -289,7 +289,7 @@ function shortId(id: string): string {
     return id.substring(0, 5)
 }
 
-async function findStorage(broker: BrokerClient): Promise<StorageClient | undefined> {
+export async function findStorage(broker: BrokerClient): Promise<StorageClient | undefined> {
     const finder = await firstFinder(broker)
     const storage = await firstStorage(broker);
     if (!finder) return storage

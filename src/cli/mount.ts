@@ -1,17 +1,21 @@
+import Koa from 'koa'
 import { CommandModule } from "yargs";
 import * as path from 'node:path'
 import { spawn } from 'node:child_process'
 
 import { directoryExists } from "../common/files";
 import { loadConfiguration } from "../config/config";
-import { jsonFromText } from "../common/data";
-import { contentLinkSchema } from "../common/schema";
 import { ContentLink } from "../common/types";
 import { BrokerWebClient } from "../broker/web/broker_web_client";
-import { invalid } from "../common/errors";
+import { error, invalid } from "../common/errors";
 import { FilesWebClient } from "../files/web/files_web_client";
 import { logger } from "../common/web";
 import { firstLive } from "../common/verify";
+import { resolveId } from "./common/common_resolve";
+import { findStorage, firstSlots } from "./start";
+import { Files } from "../files/files";
+import { randomId } from "../common/id";
+import { filesWebHandlers } from "../files/web/files_web_handler";
 
 export default {
     command: "mount [root] [directory]",
@@ -30,25 +34,55 @@ export default {
 } satisfies CommandModule
 
 async function mount(root: string, directory: string, debug: boolean) {
-    const content = jsonFromText(contentLinkSchema, root) as ContentLink
+    const config = await loadConfiguration()
+    if (!config.broker) invalid("No broker configured");
+    const broker = new BrokerWebClient(config.broker)
+    const content = await resolveId(broker, root)
     if (!content) invalid(`Invalid root content link`)
     const normalDirectory = path.resolve(directory)
     const exists = await directoryExists(normalDirectory)
     if (!exists) invalid(`Directory ${normalDirectory} does not exist`);
-    const config = await loadConfiguration()
-    if (!config.broker) invalid("No broker configured");
-    const broker = new BrokerWebClient(config.broker)
-    const filesClientUrl = await firstFilesUrl(broker)
+    const filesClientUrl = await firstFilesUrl(broker) ?? await startLocalFilesServer(broker, content)
 
     const fuseTool = config.tools?.find(tool => tool.tool = 'fuse')
     if (!fuseTool) invalid("No fuse tools was configured");
 
-
     spawnFuse(fuseTool.path, filesClientUrl, directory, content, debug)
-
 }
 
-async function firstFilesUrl(broker: BrokerWebClient): Promise<URL> {
+async function startLocalFilesServer(
+    broker: BrokerWebClient,
+    content: ContentLink
+): Promise<URL> {
+    let storage = await findStorage(broker)
+    if (!storage) error("Could not find a storage to use");
+    const slots =  await firstSlots(broker)
+    if (!slots) error("Could not find a slots server");
+
+    const id = randomId()
+    const files = new Files(id, storage, slots, broker)
+
+    // Validate that the content can be mounted
+    try {
+        for await (const _ of files.readContentLink(content)) {
+            // We just need to verify that the content link is valid by reading the first block
+            break;
+        }
+    } catch (e) {
+        error(`Invalid content link: ${e}`)
+    }
+    const filesHandlers = filesWebHandlers(files)
+    const app = new Koa()
+    app.use(filesHandlers)
+    const httpServer = app.listen()
+    const address = httpServer.address();
+    if (!address || typeof address !== 'object' || !('port' in address)) {
+        throw new Error("Failed to retrieve the server port");
+    }
+    return new URL(`http://localhost:${address.port}`)
+}
+
+async function firstFilesUrl(broker: BrokerWebClient): Promise<URL | undefined> {
     for await (const id of broker.registered('files')) {
         const location = await broker.location(id)
         if (!location) continue
@@ -60,7 +94,6 @@ async function firstFilesUrl(broker: BrokerWebClient): Promise<URL> {
         if (!pingId) continue
         return url
     }
-    invalid("Could not find a files server in broker")
 }
 
 function spawnFuse(command: string, filesUrl: URL, directory: string, root: ContentLink, debug: boolean) {
