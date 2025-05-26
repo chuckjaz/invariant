@@ -16,6 +16,8 @@ import { findStorage, firstSlots } from "./start";
 import { Files } from "../files/files";
 import { randomId } from "../common/id";
 import { filesWebHandlers } from "../files/web/files_web_handler";
+import { LayeredFiles } from '../files/layer/file_layer';
+import { FilesClient, Node } from '../files/files_client';
 
 export default {
     command: "mount [root] [directory]",
@@ -42,18 +44,18 @@ async function mount(root: string, directory: string, debug: boolean) {
     const normalDirectory = path.resolve(directory)
     const exists = await directoryExists(normalDirectory)
     if (!exists) invalid(`Directory ${normalDirectory} does not exist`);
-    const filesClientUrl = await firstFilesUrl(broker) ?? await startLocalFilesServer(broker, content)
+    const [filesClientUrl, root_node] = await firstFilesUrl(broker, content) ?? await startLocalFilesServer(broker, content)
 
     const fuseTool = config.tools?.find(tool => tool.tool = 'fuse')
     if (!fuseTool) invalid("No fuse tools was configured");
 
-    spawnFuse(fuseTool.path, filesClientUrl, directory, content, debug)
+    spawnFuse(fuseTool.path, filesClientUrl, directory, root_node, debug)
 }
 
 async function startLocalFilesServer(
     broker: BrokerWebClient,
     content: ContentLink
-): Promise<URL> {
+): Promise<[URL, Node]> {
     let storage = await findStorage(broker)
     if (!storage) error("Could not find a storage to use");
     const slots =  await firstSlots(broker)
@@ -61,6 +63,7 @@ async function startLocalFilesServer(
 
     const id = randomId()
     const files = new Files(id, storage, slots, broker)
+    let effectiveFiles: FilesClient = files
 
     // Validate that the content can be mounted
     try {
@@ -71,7 +74,20 @@ async function startLocalFilesServer(
     } catch (e) {
         error(`Invalid content link: ${e}`)
     }
-    const filesHandlers = filesWebHandlers(files)
+
+    // Check if the files root directory contains a .layers file
+    const rootOfMount = await files.mount(content)
+    let effectiveRoot = rootOfMount
+    const layersNode = await files.lookup(rootOfMount, '.layers')
+    if (layersNode) {
+        // Load the layers configuration from the .layers file
+        const layeredFiles = new LayeredFiles(randomId(), files, storage, slots, broker)
+        const layerRoot = await layeredFiles.mount(content)
+        effectiveFiles = layeredFiles
+        effectiveRoot = layerRoot
+    }
+
+    const filesHandlers = filesWebHandlers(effectiveFiles)
     const app = new Koa()
     app.use(filesHandlers)
     const httpServer = app.listen()
@@ -79,10 +95,10 @@ async function startLocalFilesServer(
     if (!address || typeof address !== 'object' || !('port' in address)) {
         throw new Error("Failed to retrieve the server port");
     }
-    return new URL(`http://localhost:${address.port}`)
+    return [new URL(`http://localhost:${address.port}`), effectiveRoot];
 }
 
-async function firstFilesUrl(broker: BrokerWebClient): Promise<URL | undefined> {
+async function firstFilesUrl(broker: BrokerWebClient, content: ContentLink): Promise<[URL, Node] | undefined> {
     for await (const id of broker.registered('files')) {
         const location = await broker.location(id)
         if (!location) continue
@@ -92,17 +108,18 @@ async function firstFilesUrl(broker: BrokerWebClient): Promise<URL | undefined> 
         const files = new FilesWebClient(url)
         const pingId = await files.ping()
         if (!pingId) continue
-        return url
+        const root = await files.mount(content)
+        return [url, root]
     }
 }
 
-function spawnFuse(command: string, filesUrl: URL, directory: string, root: ContentLink, debug: boolean) {
+function spawnFuse(command: string, filesUrl: URL, directory: string, root_node: Node, debug: boolean) {
     const stdoutLog = logger('fuse:out')
     const stderrLog = logger('fuse:err')
     const log = logger('fuse')
     const env = process.env
     if (debug) env['INVARIANT_LOG'] = 'debug'
-    const childProcess = spawn(command, [filesUrl.toString(), directory, JSON.stringify(root)], { env })
+    const childProcess = spawn(command, [filesUrl.toString(), directory, '--root', `${root_node}`], { env })
 
     childProcess.stdout.on('data', data => { stdoutLog(trim(decode(data))) })
     childProcess.stderr.on('data', data => { stderrLog(trim(decode(data))) })
