@@ -9,6 +9,7 @@ import { SlotsClient } from '../../slots/slot_client';
 import { ProductionsClient } from '../../productions/productions_client';
 import { FilesClient } from '../../files/files_client';
 import { DistributeClient } from '../../distribute/distribute_client';
+import { NamesClient } from '../../names/names_client';
 
 export interface MockBrokerClient extends BrokerClient {
     id: string
@@ -29,6 +30,7 @@ export function mockBroker(): MockBrokerClient {
     const distributeMap = new Map<string, DistributeClient>()
     const filesMap = new Map<string, FilesClient>()
     const findMap = new Map<string, FindClient>()
+    const namesMap = new Map<string, NamesClient>()
     const productionsMap = new Map<string, ProductionsClient>()
     const storages = new Map<string, StorageClient>()
     const slotsMap = new Map<string, SlotsClient>()
@@ -59,6 +61,10 @@ export function mockBroker(): MockBrokerClient {
         return productionsMap.get(id)
     }
 
+    async function names(id: string): Promise<NamesClient | undefined> {
+        return namesMap.get(normalizeCode(id) ?? '')
+    }
+
     async function storage(id: string): Promise<StorageClient | undefined> {
         return storages.get(normalizeCode(id) ?? '')
     }
@@ -71,7 +77,11 @@ export function mockBroker(): MockBrokerClient {
         let values: Iterable<string>
         switch (kind) {
             case 'broker': values = brokerMap.keys(); break
+            case 'distribute': values = distributeMap.keys(); break
             case 'find': values = findMap.keys(); break
+            case 'files': values = filesMap.keys(); break
+            case 'names': values = namesMap.keys(); break
+            case 'productions': values = productionsMap.keys(); break
             case 'storage': values = storages.keys(); break
             case 'slots': values = slotsMap.keys(); break
             default: throw new Error('Not found')
@@ -125,6 +135,7 @@ export function mockBroker(): MockBrokerClient {
         distribute,
         files,
         find,
+        names,
         productions,
         slots,
         storage,

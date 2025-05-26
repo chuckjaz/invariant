@@ -11,6 +11,8 @@ import { FilesClient } from "../../files/files_client";
 import { FilesWebClient } from "../../files/web/files_web_client";
 import { FindClient } from "../../find/client";
 import { Find } from "../../find/web/find_client";
+import { NamesClient } from "../../names/names_client";
+import { NamesWebClient } from "../../names/web/names_web_client";
 import { ProductionsClient } from "../../productions/productions_client";
 import { ProductionWebClient } from "../../productions/web/web_productions_client";
 import { SlotsClient } from "../../slots/slot_client";
@@ -61,6 +63,10 @@ export class BrokerWebClient extends PingableClient implements BrokerClient {
 
     find(id: string): Promise<FindClient | undefined> {
         return this.client(id, async (id, url) => new Find(url, id))
+    }
+
+    names(id: string): Promise<NamesClient | undefined> {
+        return this.client(id, async (id, url) => new NamesWebClient(url, id))
     }
 
     productions(id: string): Promise<ProductionsClient | undefined> {

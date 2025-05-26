@@ -15,7 +15,7 @@ import { findStorage } from './common/common_storage';
 import { error } from '../common/errors';
 import { BrokerClient } from '../broker/broker_client';
 import { SlotsClient } from '../slots/slot_client';
-import { normalizeCode } from '../common/codes';
+import { resolveId } from './common/common_resolve';
 
 export default {
     command: "upload [directory]",
@@ -351,17 +351,23 @@ class ShaCache {
 
 async function publish(broker: BrokerClient, slot: string | undefined, address: string) {
     if (!slot) return
-    const effectiveSlot = normalizeCode(slot)
-    if (!effectiveSlot) error(`Invalid slot address ${slot}`)
+    const slotContent = await resolveId(broker, slot)
+    if (!slotContent) {
+        error(`Invalid slot address ${slot}`)
+    }
+    if (!slotContent.slot) {
+        error(`The slot address ${slot} does not refer to a slot`)
+    }
+
     // Find the slot server
-    const currentAndSlots = await slotServerOf(broker, effectiveSlot)
+    const currentAndSlots = await slotServerOf(broker, slotContent.address)
     if (!currentAndSlots) {
-        error(`Could not find slot server for slot ${effectiveSlot}`)
+        error(`Could not find slot server for slot ${slotContent.address}`)
     }
     const [slots, previous] = currentAndSlots
-    const result = await slots.put(slot, { address, previous })
+    const result = await slots.put(slotContent.address, { address, previous })
     if (!result) {
-        console.error(`Update of the slot ${effectiveSlot} was refused`)
+        console.error(`Update of the slot ${slot} was refused`)
     }
 }
 
