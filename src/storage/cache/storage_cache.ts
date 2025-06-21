@@ -1,10 +1,10 @@
-import { randomBytes } from 'node:crypto'
 import { Data, ManagedStorageClient, StorageClient } from "../storage_client";
 import { Lru } from '../../common/lru';
 import { measureTransform, splitStream } from '../../common/data';
+import { randomId } from '../../common/id';
 
 export class StorageCache implements StorageClient {
-    private id = randomBytes(32).toString('hex')
+    private id = randomId()
     private writeThrough: StorageClient
     private backingStore: ManagedStorageClient
     private lru = new Lru<string>()

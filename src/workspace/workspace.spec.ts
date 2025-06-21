@@ -12,7 +12,7 @@ import { mockSlots } from "../slots/mock/slots_mock_client";
 import { SlotsClient } from "../slots/slot_client";
 import { mockStorage } from "../storage/mock";
 import { StorageClient } from "../storage/storage_client";
-import { Commit, commitFromData, commitToData } from "./repository";
+import { Commit, commitFromData, commitToData, workspaceFromData, workspaceToData } from "./repository";
 import { createWorkspace } from "./workspaces";
 
 describe("workspace/workspace", () => {
@@ -107,6 +107,64 @@ describe("workspace/workspace", () => {
         const outputFileContent = await dataToString(files.readFile(outputFileHandle));
         expect(outputFileContent).toEqual("This is an output file");
         files.stop
+    })
+    it("can commit a new change to an upstream branch", async () => {
+        const services = mockServices()
+        const helloWorldLink = await helloWorldSources(services)
+        const files = new Files(randomId(), services.storage, services.slots, services.broker, 1)
+        const upstreamLink = await createUpstream(helloWorldLink, files, services.slots);
+        const resolvedUpstream = await resolveContent(upstreamLink, services.slots);
+        expectDefined(resolvedUpstream);
+
+        // Create a workspace from the upstream link
+        const workspaceLink = await createWorkspace(upstreamLink.address, services.slots, files, files, services.broker);
+        expectDefined(workspaceLink);
+
+        // Mount the workspace
+        const layerFiles = new LayeredFiles(randomId(), files, services.storage, services.slots, services.broker);
+        const workspaceRoot = await layerFiles.mount(workspaceLink);
+
+        // Modify the hello world file
+        const srcDir = await layerFiles.lookup(workspaceRoot, "src");
+        expectDefined(srcDir);
+        const helloWorldFile = await layerFiles.lookup(srcDir, "hello_world.ts");
+        expectDefined(helloWorldFile);
+        const helloWorldContent = await dataToString(layerFiles.readFile(helloWorldFile));
+        expect(helloWorldContent).toEqual("console.log('Hello, World!')\n");
+        const modifiedContent = helloWorldContent + "console.log('This is a modification');\n";
+        await layerFiles.writeFile(helloWorldFile, stringsToData(modifiedContent));
+        await delay(2) // Wait for the file to be written
+        await layerFiles.sync()
+
+        // Commit the change
+        const commitMessage = "Made a modification to hello world";
+        const commit: Commit = {
+            date: new Date().toUTCString(),
+            message: commitMessage,
+            author: "Test User",
+            committer: "Test User",
+            content: await resolveContent(workspaceLink, services.slots),
+            parents: [resolvedUpstream],
+        }
+        const commitLink = await files.writeContentLink(commitToData(commit));
+        const response = await services.slots.put(upstreamLink.address, {
+            address: commitLink.address,
+            previous: resolvedUpstream.address,
+            time: Date.now(),
+        })
+        expect(response).toBeTrue();
+
+        // Update workspace description
+        const workspaceHandle = await layerFiles.lookup(workspaceRoot, ".workspace");
+        expectDefined(workspaceHandle);
+        const workspaceData = await workspaceFromData(layerFiles.readFile(workspaceHandle));
+        workspaceData.baseCommit = commitLink;
+
+        const written = await layerFiles.writeFile(workspaceHandle, workspaceToData(workspaceData));
+        await layerFiles.setSize(workspaceHandle, written)
+        await delay(2) // Wait for the file to be written
+        await layerFiles.sync()
+        files.stop()
     })
 });
 
