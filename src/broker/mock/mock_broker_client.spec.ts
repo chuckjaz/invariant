@@ -34,9 +34,9 @@ describe('broker/mock/client', () => {
 })
 
 async function expectRegistered(kind: string, id: string, broker: BrokerClient) {
-    const result = await broker.registered(kind)
-    for await (const registered of result) {
-        if (id == registered) return
-    }
-    throw new Error(`Id ${id} not registered`)
+  const result = await broker.registered(kind)
+  for await (const registered of result) {
+    if (id == registered) return
+  }
+  throw new Error(`Id ${id} not registered`)
 }
