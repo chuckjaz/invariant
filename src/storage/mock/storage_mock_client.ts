@@ -8,17 +8,22 @@ export interface MockStorageClient extends ManagedStorageClient {
     id: string
 }
 
-export function mockStorage(broker?: BrokerClient): MockStorageClient {
-    const store = new Map<string, MockStorageBlock>()
-    const idBytes = randomBytes(32)
-    const id = idBytes.toString('hex')
+class MockStorageClientImpl implements MockStorageClient {
+    store = new Map<string, MockStorageBlock>()
+    idBytes = randomBytes(32)
+    id = this.idBytes.toString('hex')
+    broker?: BrokerClient
 
-    async function ping(): Promise<string> { return id }
+    constructor(broker?: BrokerClient) {
+        this.broker = broker
+    }
 
-    async function get(address: string): Promise<Data | false> {
+    async ping(): Promise<string> { return this.id }
+
+    async get(address: string): Promise<Data | false> {
         const normalCode = normalizeCode(address)
         if (normalCode) {
-            const block = store.get(normalCode)
+            const block = this.store.get(normalCode)
             if (block) {
                 block.lastAccess = Date.now()
                 return dataOf(block.buffers)
@@ -27,34 +32,34 @@ export function mockStorage(broker?: BrokerClient): MockStorageClient {
         return false
     }
 
-    async function has(address: string): Promise<boolean> {
+    async has(address: string): Promise<boolean> {
         const normalCode = normalizeCode(address)
-        return normalCode != undefined && store.has(normalCode)
+        return normalCode != undefined && this.store.has(normalCode)
     }
 
-    async function post(data: Data): Promise<string | false> {
+    async post(data: Data): Promise<string | false> {
         const hash = createHash('sha256')
         const buffers = await buffersOfData(hashTransform(data, hash))
         const id = hash.digest().toString('hex')
         const size = sizeOfBuffers(buffers)
-        store.set(id, { buffers, size, lastAccess: Date.now() })
+        this.store.set(id, { buffers, size, lastAccess: Date.now() })
         return id
     }
 
-    async function put(address: string, data: Data): Promise<boolean> {
+    async put(address: string, data: Data): Promise<boolean> {
         const hash = createHash('sha256')
         const buffers = await buffersOfData(hashTransform(data, hash))
         const id = hash.digest().toString('hex')
         if (address != id) return false
         const size = sizeOfBuffers(buffers)
-        store.set(id, { buffers, size, lastAccess: Date.now() })
+        this.store.set(id, { buffers, size, lastAccess: Date.now() })
         return true
     }
 
-    async function fetch(address: string, container?: string): Promise<boolean> {
+    async fetch(address: string, container?: string): Promise<boolean> {
         let otherStorage: StorageClient | undefined = undefined
-        if (broker && container) {
-            otherStorage = await broker.storage(container)
+        if (this.broker && container) {
+            otherStorage = await this.broker.storage(container)
         }
         if (otherStorage) {
             const data = await otherStorage.get(address)
@@ -64,23 +69,23 @@ export function mockStorage(broker?: BrokerClient): MockStorageClient {
                 const id = hash.digest().toString('hex')
                 if (address != id) return false
                 const size = sizeOfBuffers(buffers)
-                store.set(id, { buffers, size, lastAccess: Date.now() })
+                this.store.set(id, { buffers, size, lastAccess: Date.now() })
                 return true
             }
         }
         return false
     }
 
-    async function forget(address: string) {
-        if (store.has(address)) {
-            store.delete(address)
+    async forget(address: string) {
+        if (this.store.has(address)) {
+            this.store.delete(address)
             return true
         }
         return false
     }
 
-    async function *blocks(): AsyncIterable<StorageBlock> {
-        for (const [address, block] of store.entries()) {
+    async *blocks(): AsyncIterable<StorageBlock> {
+        for (const [address, block] of this.store.entries()) {
             yield {
                 address,
                 size: block.size,
@@ -88,18 +93,10 @@ export function mockStorage(broker?: BrokerClient): MockStorageClient {
             }
         }
     }
+}
 
-    return {
-        id,
-        ping,
-        get,
-        has,
-        post,
-        put,
-        fetch,
-        forget,
-        blocks
-    }
+export function mockStorage(broker?: BrokerClient): MockStorageClient {
+    return new MockStorageClientImpl(broker)
 }
 
 interface MockStorageBlock {

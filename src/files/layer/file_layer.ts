@@ -297,19 +297,11 @@ export class LayeredFiles implements FilesClient {
         // Create and mount the layers from the specification
         const fileLayers: FileLayer[] = []
         for (const layerDescription of layerDescriptions) {
-            let client: FilesClient
+            let client = controlPlane
             let layerRoot: Node
             if (layerDescription.content == "Self") {
-                client = controlPlane
                 layerRoot = controlNode
             } else {
-                client = new Files(
-                    randomId(),
-                    this.storage,
-                    this.slots,
-                    this.broker,
-                    layerDescription.syncFrequency ?? defaultFrequency
-                )
                 layerRoot = await client.mount(layerDescription.content as ContentLink)
             }
             let layer: FileLayer

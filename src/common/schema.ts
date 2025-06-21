@@ -12,6 +12,18 @@ export const idSchema = z.string().transform((arg, ctx) => {
     }
 })
 
+export const dateSchema = z.string().transform((arg, ctx) => {
+    try {
+        new Date(arg)
+    } catch(e) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Invalid date format"
+        })
+        return arg
+    }
+})
+
 export const blocksTransformSchema = z.object({
     kind: z.literal("Blocks")
 })
@@ -35,6 +47,15 @@ export const contentTransformSchema = z.discriminatedUnion(
 
 export const contentLinkSchema = z.object({
     address: idSchema,
+    slot: z.optional(z.boolean()),
+    transforms: z.optional(z.array(contentTransformSchema)),
+    expected: z.optional(idSchema),
+    primary: z.optional(idSchema),
+    etag: z.optional(idSchema),
+})
+
+export const namedContentLinkSchema = z.object({
+    name: z.string(),
     slot: z.optional(z.boolean()),
     transforms: z.optional(z.array(contentTransformSchema)),
     expected: z.optional(idSchema),

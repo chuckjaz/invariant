@@ -106,6 +106,8 @@ export interface ContentLink {
     etag?: string
 }
 
+export type ContentLinkTemplate = Omit<ContentLink, "address">
+
 export function etagOf(content: ContentLink): string {
     return content.etag ?? content.expected ?? content.address
 }

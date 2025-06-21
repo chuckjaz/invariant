@@ -1,7 +1,7 @@
 import { BrokerClient } from "../../broker/broker_client";
 import { normalizeCode } from "../../common/codes";
 import { jsonFromText } from "../../common/data";
-import { contentLinkSchema } from "../../common/schema";
+import { contentLinkSchema, namedContentLinkSchema } from "../../common/schema";
 import { ContentLink } from "../../common/types";
 import { NamesDnsClient } from "../../names/dns/names_dns_client";
 
@@ -23,6 +23,14 @@ export async function resolveId(
         return content
     }
 
+    // Try a named content link
+    const namedContentLink = jsonFromText(namedContentLinkSchema, id)
+    let additionalFields: any = { }
+    if (namedContentLink) {
+        let {name: id, ...additionalFields} = namedContentLink
+        // Fall through to resolve the id as a name
+    }
+
     // If the id is not a valid code, try to resolve it using the broker
 
     // Try to resolve it first with thought DNS
@@ -31,9 +39,9 @@ export async function resolveId(
         const result = await dnsNameService.lookup(id)
         if (result && result.address) {
             if (result.slot) {
-                return { address: result.address, slot: true }
+                return { address: result.address, slot: true, ...additionalFields }
             }
-            return { address: result.address }
+            return { address: result.address, ...additionalFields }
         }
     } catch (e) {
     }
@@ -47,9 +55,9 @@ export async function resolveId(
             const result = await namesClient.lookup(id)
             if (result && result.address) {
                 if (result.slot) {
-                    return { address: result.address, slot: true }
+                    return { address: result.address, slot: true, ...additionalFields }
                 }
-                return { address: result.address }
+                return { address: result.address, ...additionalFields }
             }
         } catch (e) {
         }
