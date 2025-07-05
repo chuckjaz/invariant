@@ -22,7 +22,7 @@ export async function createWorkspace(
     if (!upstreamLink.slot) invalid(`Branch '${upstream} does not reference a slot`);
     const baseCommit = await resolveSlotLink(slots, upstreamLink);
 
-    // Reader the commit in the slot
+    // Read the commit in the slot
     const commit = await commitFromData(reader.readContentLink(baseCommit));
     const additionalFields: ContentLinkTemplate = upstreamLink.transforms ? { transforms: upstreamLink.transforms } : {}
 
@@ -67,7 +67,8 @@ export async function createWorkspace(
     const layerDescription = [inputLayer, outputLayer, workspaceLayer]
 
     // Write the layer description to a file
-    const layerDescriptionLink = await writer.writeContentLink(dataFromString(JSON.stringify(layerDescription)))
+    const layerDescriptionText = JSON.stringify(layerDescription)
+    const layerDescriptionLink = await writer.writeContentLink(dataFromString(layerDescriptionText))
 
     // Create the workspace description
     const workspace: Workspace = {
@@ -77,12 +78,13 @@ export async function createWorkspace(
         upstreamSlot: upstreamLink,
         baseCommit
     }
-    const workspaceLink = await writer.writeContentLink(workspaceToData(workspace))
+    const workspaceText = JSON.stringify(workspace)
+    const workspaceLink = await writer.writeContentLink(dataFromString(workspaceText))
 
     //  Create the initial directory for the workspace configuration
     const workspaceEntries: Entry[] = [
-        { kind: EntryKind.File, name: '.layers', content: layerDescriptionLink },
-        { kind: EntryKind.File, name: '.workspace', content: workspaceLink }
+        { kind: EntryKind.File, name: '.layers', content: layerDescriptionLink, size: layerDescriptionText.length },
+        { kind: EntryKind.File, name: '.workspace', content: workspaceLink, size: workspaceText.length }
     ]
 
     // Write the configuration and create its slot

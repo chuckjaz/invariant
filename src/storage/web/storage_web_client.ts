@@ -2,6 +2,7 @@ import { normalizeCode } from "../../common/codes";
 import { PingableClient } from "../../common/pingable_client";
 import { Data, StorageClient } from "../storage_client";
 import { streamBlob } from "../../common/blob";
+import { log_fetch } from "../../common/log_fetch";
 
 const storagePrefix = '/storage/'
 
@@ -18,7 +19,7 @@ export class StorageWebClient extends PingableClient implements StorageClient {
         const id = normalizeCode(code)
         if (id) {
             const request = new URL(`${storagePrefix}${id}`, this.url)
-            const response = await fetch(request, this.hook(request))
+            const response = await log_fetch(request, this.hook(request))
             if (response.status == 200) {
                 return streamBlob(await response.blob())
             }
@@ -30,7 +31,7 @@ export class StorageWebClient extends PingableClient implements StorageClient {
         const id = normalizeCode(code)
         if (id) {
             const request = new URL(`${storagePrefix}${id}`, this.url)
-            const response = await fetch(request, this.hook(request, { method: 'HEAD' }))
+            const response = await log_fetch(request, this.hook(request, { method: 'HEAD' }))
             return response.status == 200
         }
         return false
@@ -40,7 +41,7 @@ export class StorageWebClient extends PingableClient implements StorageClient {
         const id = normalizeCode(code)
         if (id) {
             const request = new URL(`${storagePrefix}${id}`, this.url)
-            const response = await fetch(request, this.hook(request, {
+            const response = await log_fetch(request, this.hook(request, {
                 method: 'PUT',
                 body: data,
                 duplex: 'half'
@@ -52,7 +53,7 @@ export class StorageWebClient extends PingableClient implements StorageClient {
 
     async post(data: Data): Promise<string | false> {
         const request = new URL(storagePrefix, this.url)
-        const response = await fetch(request, this.hook(request, {
+        const response = await log_fetch(request, this.hook(request, {
             method: 'POST',
             body: data,
             duplex: 'half'
@@ -66,7 +67,7 @@ export class StorageWebClient extends PingableClient implements StorageClient {
     async fetch(address: string, container?: string): Promise<boolean> {
         if (!this.fetchSupported) return false
         const request = new URL(`${storagePrefix}fetch`, this.url)
-        const response = await fetch(request, this.hook(request, {
+        const response = await log_fetch(request, this.hook(request, {
             method: 'PUT',
             body: JSON.stringify({ address, container }),
             duplex: 'half'

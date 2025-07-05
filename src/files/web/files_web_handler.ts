@@ -36,6 +36,28 @@ function convertString(value: string | string[] | undefined): string | undefined
     return value
 }
 
+function convertContentLink(value: string | string[] | undefined): ContentLink | undefined {
+    if (!value || value == '' || Array.isArray(value)) return undefined
+    const json = JSON.parse(value)
+    const result = contentLinkSchema.safeParse(json)
+    if (result.success) return result.data as ContentLink
+    return undefined
+}
+
+function convertBoolean(value: string | string[] | undefined) {
+    if (!value || value == '' || Array.isArray(value)) return undefined
+    switch (value.toLocaleLowerCase()) {
+        case 'true': return true
+        case 'false': return false
+    }
+    return undefined
+}
+
+function convertInt(value: string | string[] | undefined): number | undefined {
+    if (!value || value == '' || Array.isArray(value)) return undefined
+    return Number.parseInt(value)
+}
+
 interface OffsetLength {
     offset?: number
     length?: number
@@ -54,8 +76,12 @@ export function filesWebHandlers(client: FilesClient): ResponseFunc {
             'mount': {
                 method: 'POST',
                 body: contentLinkSchema,
-                handler: async (ctx, next, content: ContentLink) => {
-                    ctx.body = await client.mount(content)
+                query: {
+                    'executable': convertBoolean,
+                    'writable': convertBoolean,
+                },
+                handler: async (ctx, next, query, content: ContentLink) => {
+                    ctx.body = await client.mount(content, query.executable, query.writable)
                     ctx.status = 200
                 }
             },
@@ -89,8 +115,17 @@ export function filesWebHandlers(client: FilesClient): ResponseFunc {
                         ctx.body = result
                         ctx.status = 200
                     } else {
-                        console.log("lookup: Not Found")
+                        ctx.status = 404
                     }
+                }
+            },
+            'content': {
+                method: 'GET',
+                params: [nodeSchema],
+                handler: async (ctx, next, node: number) => {
+                    const result = await client.content(node)
+                    ctx.body = result
+                    ctx.status = 200
                 }
             },
             'directory': {
@@ -125,9 +160,16 @@ export function filesWebHandlers(client: FilesClient): ResponseFunc {
             },
             'size': {
                 method: 'PUT',
-                params: [nodeSchema, nonNegativeIntSchema],
-                handler: async (ctx, next, node, size) => {
-                    await client.setSize(node, size)
+                params: [nodeSchema],
+                query: {
+                    'size': convertInt
+                },
+                handler: async (ctx, next, query, node) => {
+                    if (query.size === undefined) {
+                        ctx.status = 404
+                        return
+                    }
+                    await client.setSize(node, query.size)
                     ctx.body = ''
                     ctx.status = 200
                 }
@@ -143,7 +185,7 @@ export function filesWebHandlers(client: FilesClient): ResponseFunc {
                     const newParent = query.newParent
                     const newName = query.newName
                     ctx.body = ''
-                    if (newName === undefined || newParent === undefined || await client.rename(parent, name, newParent, newName)) {
+                    if (newName === undefined || newParent === undefined || !await client.rename(parent, name, newParent, newName)) {
                         ctx.status = 404
                     } else {
                         ctx.status = 200
@@ -157,7 +199,7 @@ export function filesWebHandlers(client: FilesClient): ResponseFunc {
                 handler: async (ctx, next, query: { node?: Node }, parent, name: string) => {
                     const node = query.node
                     ctx.body = ''
-                    if (node === undefined || await client.link(parent, node, name)) {
+                    if (node === undefined || !await client.link(parent, node, name)) {
                         ctx.status = 404
                     } else {
                         ctx.status = 200
@@ -199,9 +241,10 @@ export function filesWebHandlers(client: FilesClient): ResponseFunc {
             params: [nodeSchema, convertString],
             query: {
                 'kind': contentKind,
+                'content': convertContentLink,
             },
             handler: async (ctx, next, query, parent, name) => {
-                ctx.body = await client.createNode(parent, name, query.kind)
+                ctx.body = await client.createNode(parent, name, query.kind ?? ContentKind.File, query.content)
                 ctx.status = 200
             }
         }]

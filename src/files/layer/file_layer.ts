@@ -6,12 +6,9 @@ import { Node, ContentInformation, FileDirectoryEntry, ContentKind, EntryAttribu
 import { jsonFromData } from '../../common/data';
 import z from 'zod';
 import { contentLinkSchema } from '../../common/schema';
-import { Files } from '../files';
-import { SlotsClient } from '../../slots/slot_client';
-import { BrokerClient } from '../../broker/broker_client';
 import { dataToString } from '../../common/parseJson';
 import { invalid } from '../../common/errors';
-import { randomId } from '../../common/id';
+import { createHash } from 'crypto';
 
 export interface FileLayer {
     kind: LayerKind
@@ -49,7 +46,10 @@ export function ignoreLayer(ignore: Ignore, client: FilesClient, node?: Node): F
     function ignoreLayerFor(directory: string, client: FilesClient, node?: Node): FileLayer {
         return {
             kind: LayerKind.Ignore,
-            predicate: name => !ignore.ignores(path.join(directory, name)),
+            predicate: name => {
+                const ignorePath = path.join(directory, name)
+                return !ignore.ignores(ignorePath) && !ignore.ignores(ignorePath + '/')
+            },
             client,
             node,
             layerFor: (name, layerClient, node) =>
@@ -66,7 +66,10 @@ export function acceptsLayer(accept: Ignore, client: FilesClient, node?: Node): 
     function acceptLayerFor(directory: string, client: FilesClient, node?: Node): FileLayer {
         return {
             kind: LayerKind.Accepts,
-            predicate: name => accept.ignores(path.join(directory, name)),
+            predicate: name => {
+                const ignorePath = path.join(directory, name)
+                return accept.ignores(ignorePath) || accept.ignores(ignorePath + '/')
+            },
             client,
             node,
             layerFor: (name, layerClient, node) =>
@@ -131,10 +134,23 @@ const acceptLayerSchema = z.object({
 const fileLayerDescriptionSchema = z.discriminatedUnion('kind', [baseLayerSchema, ignoreLayerSchema, acceptLayerSchema])
 const fileLayerDescriptionsSchema = z.array(fileLayerDescriptionSchema)
 
+enum NodeKind {
+    Client,
+    Directory,
+}
+
 interface ClientNode {
+    kind: NodeKind.Client
     client: FilesClient
     node: number
 }
+
+interface DirectoryNode {
+    kind: NodeKind.Directory
+    directory: LayeredDirectory
+}
+
+type LayerNode = ClientNode | DirectoryNode
 
 interface Realizable {
     findDirectoryNode(client: FilesClient, index: number): Promise<Node | undefined>
@@ -160,6 +176,88 @@ class LayeredDirectory  {
             index++
         }
         return [this.fileLayers[0], 0]
+    }
+
+    async info(node: Node): Promise<ContentInformation> {
+        const hash = createHash('sha256')
+        let createTime = Date.now()
+        let modifyTime = 0
+        let executable = false
+        let writable = false
+        for (let index = 0; index < this.fileLayers.length; index++) {
+            const layer = this.fileLayers[index]
+            const client = layer.client
+            const directoryNode = await this.findDirectoryNode(layer.client, index)
+            if (directoryNode === undefined) {
+                hash.write(undefined)
+                continue
+            }
+            const directoryInfo = await layer.client.info(directoryNode)
+            if (directoryInfo === undefined) {
+                hash.write(undefined)
+                continue
+            }
+            if (directoryInfo.createTime < createTime) {
+                createTime = directoryInfo.createTime
+            }
+            if (directoryInfo.modifyTime > modifyTime) {
+                modifyTime = directoryInfo.modifyTime
+            }
+            if (directoryInfo.writable) {
+                writable = true
+            }
+            if (directoryInfo.executable) {
+                executable = true
+            }
+            hash.write(directoryInfo.etag)
+        }
+        if (modifyTime == 0) {
+            modifyTime = Date.now()
+        }
+        const etag = hash.digest().toString('hex')
+        return {
+            node,
+            kind: ContentKind.Directory,
+            modifyTime,
+            createTime,
+            executable,
+            writable,
+            etag,
+        }
+    }
+
+    async setAttributes(attributes: EntryAttributes) {
+        for (const layer of this.fileLayers) {
+            const node = await this.realizeNode(layer)
+            await layer.client.setAttributes(node, attributes)
+        }
+    }
+
+    async rename(name: string, newParentDirectory: LayeredDirectory, newName: string): Promise<boolean> {
+        const [layer, index] = this.select(name)
+        const [newLayer, newIndex] = newParentDirectory.select(newName)
+        const directoryNode = await this.realizeFor(layer.client, index)
+        const newDirectoryNode = await newParentDirectory.realizeFor(newLayer.client, newIndex)
+        if (layer.client == newLayer.client) {
+            return layer.client.rename(directoryNode, name, newDirectoryNode, newName)
+        } else {
+            // To rename between clients we need create a new node in the new client and remove the
+            // node in the old client.
+            const node = await layer.client.lookup(directoryNode, name)
+            if (node === undefined) return false
+            const info = await layer.client.info(node)
+            if (info === undefined) return false
+            const content = await layer.client.content(node)
+            await newLayer.client.createNode(newDirectoryNode, newName, info.kind, content)
+            return await layer.client.removeNode(directoryNode, name)
+        }
+    }
+
+    async remove(name: string): Promise<boolean> {
+        const [layer] = this.select(name)
+        const parentNode = layer.node
+        if (!parentNode) return false
+        return layer.client.removeNode(parentNode, name)
     }
 
     layerFor(name: string): FileLayer {
@@ -190,7 +288,7 @@ class LayeredDirectory  {
             for await (const entry of client.readDirectory(parent)) {
                 if (sent.has(entry.name)) continue;
                 sent.add(entry.name)
-                yield [entry.name, { client, node: entry.node }, entry.kind ]
+                yield [entry.name, { kind: NodeKind.Client, client: client, node: entry.node }, entry.kind ]
             }
         }
     }
@@ -254,26 +352,16 @@ const defaultFrequency = 10 * 1000
 export class LayeredFiles implements FilesClient {
     private id: string
     private controlPlane: FilesClient
-    private storage: StorageClient
-    private slots: SlotsClient
-    private broker: BrokerClient
     private nextNode = 1
-    private nodeMap = new Map<Node, ClientNode>()
+    private map = new Map<Node, LayerNode>()
     private invertNodeMap = new Map<FilesClient, Map<Node, Node>>()
-    private directories = new Map<Node, LayeredDirectory>()
 
     constructor (
         id: string,
         controlPlane: FilesClient,
-        storage: StorageClient,
-        slots: SlotsClient,
-        broker: BrokerClient
     ) {
         this.id = id
         this.controlPlane = controlPlane
-        this.storage = storage
-        this.slots = slots
-        this.broker = broker
     }
 
     async ping(): Promise<string | undefined> {
@@ -290,7 +378,7 @@ export class LayeredFiles implements FilesClient {
         const layerNode = await controlPlane.lookup(controlNode, '.layers')
         if (layerNode === undefined) invalid("Invalid control plain, does not contain a .layer file");
         const layerDescriptions = await jsonFromData(fileLayerDescriptionsSchema, controlPlane.readFile(layerNode))
-        if (layerDescriptions == undefined) invalid("Incorrect layer schema");
+        if (layerDescriptions == undefined) invalid("Incorrect layer file");
 
         const rootNode = this.allocNode()
 
@@ -339,7 +427,7 @@ export class LayeredFiles implements FilesClient {
         }
 
         const directory = new LayeredDirectory(fileLayers, '')
-        this.directories.set(rootNode, directory)
+        this.map.set(rootNode, { kind: NodeKind.Directory, directory })
         return rootNode
     }
 
@@ -348,125 +436,124 @@ export class LayeredFiles implements FilesClient {
     }
 
     async lookup(parent: Node, name: string): Promise<Node | undefined> {
-        const directory = nRequired(this.directories.get(parent))
+        const directory = this.requireDirectory(parent)
         const [client, clientNode] = await directory.lookup(name)
         if (clientNode !== undefined) {
-            const node = this.mapNode(client, clientNode)
-            const info = await client.info(clientNode)
-            if (info && info.kind == ContentKind.Directory) {
-                this.ensureDirectory(directory, node, name, client, clientNode)
-            }
-            return node
+            return await this.nodeMap(directory, name, client, clientNode, undefined,
+                async () => (await client.info(clientNode))?.kind ?? ContentKind.File)
         }
         return undefined
     }
 
-    info(node: Node): Promise<ContentInformation | undefined> {
-        const { client, node: clientNode } = nRequired(this.nodeMap.get(node))
-        return client.info(clientNode)
+    async info(node: Node): Promise<ContentInformation | undefined> {
+        const layerNode = nRequired(this.map.get(node))
+        if (layerNode.kind == NodeKind.Client) {
+            const clientInfo = await layerNode.client.info(layerNode.node)
+            if (clientInfo) clientInfo.node = node
+            return clientInfo
+        }
+        const directory = layerNode.directory
+        return directory.info(node)
     }
 
     content(node: Node): Promise<ContentLink> {
-        const { client, node: clientNode } = nRequired(this.nodeMap.get(node))
+        const { client, node: clientNode } = this.requireFile(node)
         return client.content(clientNode)
     }
 
     readFile(node: Node, offset?: number, length?: number): Data {
-        const { client, node: clientNode } = nRequired(this.nodeMap.get(node))
+        const { client, node: clientNode } = this.requireFile(node)
         return client.readFile(clientNode, offset, length)
     }
 
     writeFile(node: Node, data: Data, offset?: number, length?: number): Promise<number> {
-        const { client, node: clientNode } = nRequired(this.nodeMap.get(node))
+        const { client, node: clientNode } = this.requireFile(node)
         return client.writeFile(clientNode, data, offset, length)
     }
 
     setSize(node: Node, size: number): Promise<void> {
-        const { client, node: clientNode } = nRequired(this.nodeMap.get(node))
+        const { client, node: clientNode } = this.requireFile(node)
         return client.setSize(clientNode, size)
     }
 
     async *readDirectory(parent: Node, offset?: number, length?: number): AsyncIterable<FileDirectoryEntry> {
-        const directory = nRequired(this.directories.get(parent))
+        const directory = this.requireDirectory(parent)
         let start = offset ?? 0
-        let end = start + (length ?? Number.MAX_SAFE_INTEGER)
+        let end = length ? start + length : Number.MAX_SAFE_INTEGER
         let index = 0
         for await (const [name, {client, node: clientNode}, kind] of directory.readDirectory()) {
-            const node = this.mapNode(client, clientNode)
-            if (kind == ContentKind.Directory) {
-                this.ensureDirectory(directory, node, name, client, clientNode)
+            if (index >= start) {
+                const node = await this.nodeMap(directory, name, client, clientNode, kind)
+                yield { name, node, kind };
             }
-            if (index >= start) yield { name, node, kind };
             index++
             if (index >= end) break
         }
     }
 
-    async createNode(parent: Node, name: string, kind: ContentKind): Promise<Node> {
-        const directory = nRequired(this.directories.get(parent))
+    async createNode(parent: Node, name: string, kind: ContentKind, content?: ContentLink): Promise<Node> {
+        const directory = this.requireDirectory(parent)
         const layer = directory.layerFor(name + (kind == ContentKind.Directory ? '/' : ''))
         const directoryNode = await directory.realizeNode(layer)
-        const clientNode = await layer.client.createNode(directoryNode, name, kind)
-        const node = this.mapNode(layer.client, clientNode)
-        if (kind == ContentKind.Directory) {
-            this.ensureDirectory(directory, node, name, layer.client, clientNode)
-        }
-        return node
+        const clientNode = await layer.client.createNode(directoryNode, name, kind, content)
+        return await this.nodeMap(directory, name, layer.client, clientNode, kind)
     }
 
     async removeNode(parent: Node, name: string): Promise<boolean> {
-        const { client, node: clientParent } = nRequired(this.nodeMap.get(parent))
-        const clientNode = await client.lookup(clientParent, name)
+        const directory = this.requireDirectory(parent)
+        const [client, clientNode] = await directory.lookup(name)
         if (clientNode === undefined) return false
-        const info = await client.info(clientNode)
-        if (info == undefined) return false
-        const node = this.mapNode(client, clientNode)
-        if (await client.removeNode(clientParent, name)) {
-            this.forget(client, clientNode, node)
-            if (info.kind == ContentKind.Directory) {
-                this.directories.delete(node)
-            }
-            return true
+        const result = await directory.remove(name)
+        if (result) {
+            this.forget(client, clientNode)
         }
-        return false
+        return result
     }
 
     setAttributes(node: Node, attributes: EntryAttributes): Promise<void> {
-        const { client, node: clientNode } = nRequired(this.nodeMap.get(node))
-        return client.setAttributes(clientNode, attributes)
+        const layerNode = nRequired(this.map.get(node))
+        if (layerNode.kind == NodeKind.Client) {
+            return layerNode.client.setAttributes(layerNode.node, attributes)
+        }
+        const directory = layerNode.directory
+        return directory.setAttributes(attributes)
     }
 
-    rename(parent: Node, name: string, newParent: Node, newName: string): Promise<boolean> {
-        const { node: clientParentNode, client } = nRequired(this.nodeMap.get(parent) )
-        const { node: clientNewParentNode, client: newParentClient } = nRequired(this.nodeMap.get(newParent))
-        if (client != newParentClient) {
-            invalid("Cannot rename across layers")
-        }
-        const newParentDirectory = nRequired(this.directories.get(newParent))
-        const newLayer = newParentDirectory.layerFor(newName)
-        if (newLayer.client != client) {
-            invalid("Cannot rename across layers")
-        }
-        return client.rename(clientParentNode, name, clientNewParentNode, newName)
+    async rename(parent: Node, name: string, newParent: Node, newName: string): Promise<boolean> {
+        if (name == newName) return true
+        const parentDirectory = this.requireDirectory(parent)
+        const newParentDirectory = this.requireDirectory(newParent)
+        return parentDirectory.rename(name, newParentDirectory, newName)
     }
 
-    link(parent: Node, node: Node, name: string): Promise<boolean> {
-        const { client, node: clientParent } = nRequired(this.nodeMap.get(parent))
-        const { node: clientNode} = nRequired(this.nodeMap.get(node))
-        const directory = nRequired(this.directories.get(parent))
-        const newLayer = directory.layerFor(name)
-        if (newLayer.client != client) {
-            invalid("Cannot link across layers")
+    async link(parent: Node, node: Node, name: string): Promise<boolean> {
+        const directory = this.requireDirectory(parent)
+        const layer = directory.layerFor(name)
+        const directoryNode = await directory.realizeNode(layer)
+        const { client, node: clientNode } = this.requireFile(node)
+        if (layer.client == client) {
+            return layer.client.link(directoryNode, clientNode, name)
+        } else {
+            const content = await client.content(clientNode)
+            await layer.client.createNode(directoryNode, name, ContentKind.File, content)
+            return true
         }
-        return client.link(clientParent, clientNode, name)
     }
 
     sync(): Promise<void> {
-        const directory = nRequired(this.directories.get(1))
+        const directoryNode = nRequired(this.map.get(1))
+        const directory = nRequired(directoryNode.kind == NodeKind.Directory ? directoryNode.directory : undefined)
         return directory.sync()
     }
 
-    private mapNode(client: FilesClient, clientNode: Node): Node {
+    private async nodeMap(
+        parent: LayeredDirectory,
+        name: string,
+        client: FilesClient,
+        clientNode: Node,
+        kind?: ContentKind,
+        computeKind?: () => Promise<ContentKind>,
+    ): Promise<Node> {
         let clientMap = this.invertNodeMap.get(client)
         if (!clientMap) {
             clientMap = new Map()
@@ -476,28 +563,57 @@ export class LayeredFiles implements FilesClient {
         if (allocatedNode === undefined) {
             allocatedNode = this.allocNode()
             clientMap.set(clientNode, allocatedNode)
-            this.nodeMap.set(allocatedNode, { client, node: clientNode })
+            if (kind === undefined && computeKind) {
+                kind = await computeKind()
+            }
+            if (kind === undefined) invalid("Invalid call to nodeMap")
+            if (kind == ContentKind.Directory) {
+                this.map.set(
+                    allocatedNode, {
+                        kind: NodeKind.Directory,
+                        directory: parent.nested(name, client, clientNode)
+                    }
+                )
+            } else {
+                this.map.set(
+                    allocatedNode,
+                    {
+                        kind: NodeKind.Client,
+                        client,
+                        node: clientNode
+                     }
+                )
+            }
         }
         return allocatedNode
     }
 
-    private forget(client: FilesClient, clientNode: Node, allocatedNode: Node) {
-        this.nodeMap.delete(allocatedNode)
+    private forget(client: FilesClient, clientNode: Node) {
         let clientMap = this.invertNodeMap.get(client)
         if (clientMap) {
-            clientMap.delete(clientNode)
+            const allocatedNode = clientMap.get(clientNode)
+            if (allocatedNode) {
+                this.map.delete(allocatedNode)
+                clientMap.delete(clientNode)
+                if (clientMap.size == 0) {
+                    this.invertNodeMap.delete(client)
+                }
+            }
         }
     }
 
-    private ensureDirectory(
-        parent: LayeredDirectory,
-        node: Node,
-        name: string,
-        filesClient: FilesClient,
-        clientNode: Node
-    ) {
-        if (this.directories.has(node)) return;
-        this.directories.set(node, parent.nested(name, filesClient, clientNode))
+    private requireFile(node: Node): ClientNode {
+        const layerNode = this.map.get(node)
+        if (layerNode && layerNode.kind == NodeKind.Client) {
+            return layerNode
+        }
+        invalid("Node is not a file")
+    }
+
+    private requireDirectory(node: Node): LayeredDirectory {
+        const layerNode = nRequired(this.map.get(node))
+        if (layerNode.kind != NodeKind.Directory) invalid("Node is not a directory");
+        return layerNode.directory
     }
 
     private allocNode(): Node {

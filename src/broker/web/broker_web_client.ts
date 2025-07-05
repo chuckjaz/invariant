@@ -1,6 +1,7 @@
 import { Channel } from "../../common/channel";
 import { normalizeCode } from "../../common/codes";
 import { invalid } from "../../common/errors";
+import { log_fetch } from "../../common/log_fetch";
 import { safeParseJson } from "../../common/parseJson";
 import { PingableClient } from "../../common/pingable_client";
 import { BrokerLocationResponse, BrokerRegisterResponse } from "../../common/types";
@@ -35,7 +36,7 @@ export class BrokerWebClient extends PingableClient implements BrokerClient {
     async location(id: string): Promise<BrokerLocationResponse | undefined> {
         const normalId = normalizeCode(id)
         if (!normalId) return
-        const response = await fetch(new URL(brokerLocationPrefix + normalId, this.url))
+        const response = await log_fetch(new URL(brokerLocationPrefix + normalId, this.url))
         switch (response.status) {
             case 200: {
                 const result = await response.json() as BrokerLocationResponse
@@ -84,7 +85,7 @@ export class BrokerWebClient extends PingableClient implements BrokerClient {
     async *registered(kind: string): AsyncIterable<string> {
         const channel = new Channel<string>()
         try {
-            const response = await fetch(new URL(`${brokerRegisteredPrefix}${kind}`, this.url))
+            const response = await log_fetch(new URL(`${brokerRegisteredPrefix}${kind}`, this.url))
             if (response.status == 200) {
                 // TODO: Stream response
                 const result = await response.text()
@@ -110,7 +111,7 @@ export class BrokerWebClient extends PingableClient implements BrokerClient {
     private async client<T>(id: string, factory: ClientFactory<T>): Promise<T | undefined> {
         const normalId = normalizeCode(id)
         if (!normalId) return
-        const response = await fetch(new URL(brokerLocationPrefix + normalId, this.url))
+        const response = await log_fetch(new URL(brokerLocationPrefix + normalId, this.url))
         if (response.status == 200) {
             const result = await response.json() as BrokerLocationResponse
             if ('id' in result &&  normalId == normalizeCode(result.id) && 'urls' in result) {
