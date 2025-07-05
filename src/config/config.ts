@@ -10,6 +10,7 @@ export interface Configuration {
     broker?: URL
     servers?: ServerConfiguration[]
     tools?: ToolConfiguration[]
+    options?: any
 }
 
 export type Server = "broker" | "distribute" | "find" | "files" | "productions" | "slots" | "storage"
@@ -101,6 +102,7 @@ interface ConfigurationJson {
     broker: string
     servers?: ServerConfigurationJson[]
     tools?: ToolConfigurationJson[]
+    options?: any
 }
 
 
@@ -190,12 +192,14 @@ export async function loadConfiguration(): Promise<Configuration> {
             }
         }
     }
+    const options = json.options
 
     const result: Configuration = {
         configPath: configurationPath(),
         broker: json.broker ? new URL(json.broker) : undefined,
         servers,
-        tools
+        tools,
+        options
     }
     return  result
 }

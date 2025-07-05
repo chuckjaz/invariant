@@ -1,5 +1,6 @@
 import { error } from "./errors"
-import { dataToReadable, jsonStream, jsonStreamToText, safeParseJson, textStreamFromWeb, textToReadable } from "./parseJson"
+import { log_fetch } from "./log_fetch"
+import { jsonStream, jsonStreamToText, textStreamFromWeb, textToReadable } from "./parseJson"
 
 const idPrefix = '/id/'
 
@@ -14,7 +15,7 @@ export class PingableClient {
 
     async ping(): Promise<string | undefined> {
         try {
-            const result = await fetch(new URL(idPrefix, this.url))
+            const result = await log_fetch(new URL(idPrefix, this.url))
             if (result.status == 200) {
                 const id = await result.text()
                 this.id = id
@@ -29,7 +30,7 @@ export class PingableClient {
         const request = {
             headers: { 'Content-Type': 'application/json' },
         }
-        const response = await fetch(new URL(prefix, this.url), request)
+        const response = await log_fetch(new URL(prefix, this.url), request)
         if (response.ok) {
             const text = await response.text()
             try {
@@ -46,12 +47,12 @@ export class PingableClient {
         const request = {
             headers: { 'Content-Type': 'application/json' },
         }
-        const response = await fetch(new URL(prefix, this.url), request)
+        const response = await log_fetch(new URL(prefix, this.url), request)
         if (response.ok) {
             const text = await response.text()
             try {
                 return JSON.parse(text) as T
-            } finally {
+            } catch(e) {
                 throw new Error("Invalid JSON format received")
             }
         } else if (response.status == 404) {
@@ -72,7 +73,7 @@ export class PingableClient {
             duplex: "half",
             body: JSON.stringify(data)
         }
-        const response = await fetch(new URL(prefix, this.url), request)
+        const response = await log_fetch(new URL(prefix, this.url), request)
         if (response.ok) return true
         if (response.status >= 500) throw new Error(`Invalid response: ${response.status}`)
         return false
@@ -86,7 +87,7 @@ export class PingableClient {
             body: JSON.stringify(data)
         }
         const url = typeof prefix == 'string' ? new URL(prefix, this.url) : prefix
-        const response = await fetch(url, request)
+        const response = await log_fetch(url, request)
         if (response.ok) {
             return await response.json() as T
         }
@@ -102,7 +103,7 @@ export class PingableClient {
             duplex: "half",
             body: JSON.stringify(data)
         }
-        const response = await fetch(new URL(prefix, this.url), request)
+        const response = await log_fetch(new URL(prefix, this.url), request)
         if (response.ok) {
             return await response.json() as T
         } else if (response.status == 404) {
@@ -119,7 +120,7 @@ export class PingableClient {
             duplex: "half",
             body: textToReadable(jsonStreamToText(stream))
         }
-        const response = await fetch(new URL(prefix, this.url), request)
+        const response = await log_fetch(new URL(prefix, this.url), request)
         if (!response) throw new Error('Invalid request');
         if (response.status != 200) error(`Service error: ${response.status}: ${response.statusText}`)
     }
@@ -131,7 +132,7 @@ export class PingableClient {
             duplex: "half",
             body: textToReadable(jsonStreamToText(stream))
         }
-        const response = await fetch(new URL(prefix, this.url), request)
+        const response = await log_fetch(new URL(prefix, this.url), request)
         if (!response || !response.body) throw new Error('Invalid request');
         if (response.status != 200) error(`Service error: ${response.status}: ${response.statusText}`)
         const textStream = textStreamFromWeb(response.body.getReader())

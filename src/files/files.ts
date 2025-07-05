@@ -10,6 +10,7 @@ import { Data, StorageClient } from "../storage/storage_client";
 import { createHash } from 'node:crypto'
 import { ContentInformation, ContentKind, ContentReader, EntryAttributes, FileDirectoryEntry, FilesClient, Node } from "./files_client";
 import { stringCompare } from "../common/compares";
+import { delay } from "../common/delay";
 
 export class Files implements FilesClient, ContentReader {
     private id: string
@@ -48,7 +49,9 @@ export class Files implements FilesClient, ContentReader {
             this.slotMounts.set(node, slotId)
             const current = await this.slots.get(slotId)
             if (current == undefined) invalid(`Could not find slot ${slotId}`);
-            writable = true
+            if (writable == undefined) {
+                writable = true
+            }
             content = {...content, address: current.address }
             delete content.slot
             this.scheduleSlotReads()
@@ -123,9 +126,13 @@ export class Files implements FilesClient, ContentReader {
         await lock.writeLock()
         try {
             const buffer = await readAllData(limitData(data, length))
-            this.addOverride(node, { offset: offset ?? 0, buffer })
+            const effectiveOffset = offset ?? 0
+            this.addOverride(node, { offset: effectiveOffset, buffer })
             const info = nRequired(this.infos.get(node))
             info.modifyTime = Date.now()
+            const effectiveSize = info.size ?? 0
+            const maxWritten = effectiveOffset + buffer.length
+            if (maxWritten > effectiveSize) info.size = maxWritten
             const parent = nRequired(this.parents.get(node))
             this.invalidDirectories.add(parent)
             return buffer.length
@@ -164,7 +171,12 @@ export class Files implements FilesClient, ContentReader {
         }
     }
 
-    async createNode(parent: Node, name: string, kind: ContentKind): Promise<number> {
+    async createNode(
+        parent: Node,
+        name: string,
+        kind: ContentKind,
+        content?: ContentLink,
+    ): Promise<number> {
         this.assertWritable(parent, ContentKind.Directory)
         const lock = nRequired(this.locks.get(parent))
         await lock.writeLock()
@@ -189,11 +201,15 @@ export class Files implements FilesClient, ContentReader {
             entries.set(name, node)
             this.parents.set(node, parent)
             this.invalidDirectories.add(parent)
-            if (kind == ContentKind.Directory) {
-                this.directories.set(node, new Map())
-                this.transforms.set(node, () => dataFromString("[]"))
+            if (content) {
+                this.contentMap.set(node, content)
             } else {
-                this.transforms.set(node, () => dataFromString(""))
+                if (kind == ContentKind.Directory) {
+                    this.directories.set(node, new Map())
+                    this.invalidDirectories.add(node)
+                } else {
+                    this.transforms.set(node, () => dataFromString(""))
+                }
             }
             this.scheduleSync()
             return node
@@ -294,7 +310,7 @@ export class Files implements FilesClient, ContentReader {
         if (this.syncTimeout) {
             clearTimeout(this.syncTimeout)
             this.syncTimeout = undefined
-            this.scheduleSync()
+            this.scheduleSync(0)
         }
         return this.previousSync
     }
@@ -375,7 +391,8 @@ export class Files implements FilesClient, ContentReader {
             const info = nRequired(this.infos.get(node))
             if (info.kind != ContentKind.Directory) invalid("Node is not a directory");
             const content = nRequired(this.contentMap.get(node))
-            let data = validateData(this.readContentLink(content), content.expected ?? content.address)
+            let data = this.readContentLink(content);
+            if (!content.slot) data = validateData(data, content.expected ?? content.address)
             const directory = await jsonFromData(directorySchema, data) as Entry[]
             if (!directory) invalid(`Could not read directory`);
             for (const entry of directory) {
@@ -397,7 +414,7 @@ export class Files implements FilesClient, ContentReader {
                     if (entry.size !== undefined) info.size = entry.size
                 }
                 this.infos.set(entryNode, info)
-                this.contentMap.set(entryNode, entry.content as any as ContentLink)
+                this.contentMap.set(entryNode, entry.content)
                 entries.set(entry.name, entryNode)
                 this.parents.set(entryNode, node)
             }
@@ -506,11 +523,14 @@ export class Files implements FilesClient, ContentReader {
     private syncTimeout?: NodeJS.Timeout
 
     private scheduleSync(timeout: number = this.syncFrequency) {
-        if (this.syncTimeout) return
+        if (this.syncTimeout) {
+            return
+        }
         this.syncTimeout = setTimeout(this.sinkTimeoutFunc.bind(this), timeout)
     }
 
     private sinkTimeoutFunc() {
+        this.syncTimeout = undefined
         this.previousSync = this.doSync(this.previousSync)
     }
 
@@ -525,7 +545,6 @@ export class Files implements FilesClient, ContentReader {
         for (const node of [...this.invalidDirectories]) {
             let current = node
             if (seen.has(current)) break
-            let last: Node | undefined = node
             while (true) {
                 seen.add(current)
                 this.invalidDirectories.add(current)
@@ -541,11 +560,15 @@ export class Files implements FilesClient, ContentReader {
     }
 
     private async syncDirectory(node: Node) {
+        // Prevent a sync from dominating the scheduling
+        await delay(0)
         const lock = nRequired(this.locks.get(node))
         await lock.writeLock()
         try {
             const entries = this.directories.get(node)
-            if (!entries) return
+            if (!entries) {
+                return
+            }
             for (const entryNode of entries.values()) {
                 if (this.invalidDirectories.has(entryNode)) {
                     await this.syncDirectory(entryNode)
@@ -556,12 +579,18 @@ export class Files implements FilesClient, ContentReader {
                 const info = this.infos.get(entryNode)
                 if (!info) error(`Could not find info for ${name} in directory node ${node}, file node: ${entryNode}`);
                 const content = this.contentMap.get(entryNode)
-                if (!content) error(`Could not find content for ${name} in directory node ${node}, file node: ${entryNode}`);
+                if (!content) {
+                    // This entry was create during the sync. Ignore the entry for now as another sync
+                    // is coming that will give this entry content
+                    continue
+                }
                 if (info.kind == ContentKind.Directory) {
                     const directoryEntry: DirectoryEntry = {
                         kind: EntryKind.Directory,
                         name,
-                        content
+                        content,
+                        createTime: info.createTime,
+                        modifyTime: info.modifyTime
                     }
                     directoryEntries.push(directoryEntry)
                 } else {
@@ -569,6 +598,8 @@ export class Files implements FilesClient, ContentReader {
                         kind: EntryKind.File,
                         name,
                         content,
+                        createTime: info.createTime,
+                        modifyTime: info.modifyTime,
                         size: info.size,
                         type: info.type
                     }

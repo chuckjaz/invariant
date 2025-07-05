@@ -9,7 +9,7 @@ import { storageHandlers } from '../storage/web/storage_web_handlers'
 import { LocalStorage } from '../storage/local/local_storage'
 import { LocalBrokerServer } from '../broker/local/broker_local_server'
 import { brokerHandlers } from '../broker/web/broker_web_handler'
-import { error } from '../common/errors'
+import { error, invalid } from '../common/errors'
 import { Files } from '../files/files'
 import { ManagedStorageClient, StorageClient } from '../storage/storage_client'
 import { FindClient } from '../find/client'
@@ -319,13 +319,32 @@ export async function firstStorage(broker: BrokerClient): Promise<StorageClient 
     return firstServer(broker, 'storage', id => broker.storage(id))
 }
 
+export async function defaultStorage(broker: BrokerClient): Promise<StorageClient> {
+    const storage = await firstStorage(broker)
+    if (!storage) invalid("Could not find a storage to use");
+    return storage
+}
+
 export async function firstFinder(broker: BrokerClient): Promise<FindClient | undefined> {
     return firstServer(broker, 'find', id => broker.find(id))
+}
+
+export async function defaultFinder(broker: BrokerClient): Promise<FindClient> {
+    const finder = await firstFinder(broker)
+    if (!finder) invalid("Could not find a finder to use");
+    return finder
 }
 
 export async function firstSlots(broker: BrokerClient): Promise<SlotsClient | undefined> {
     return firstServer(broker, 'slots', id => broker.slots(id))
 }
+
+export async function defaultSlots(broker: BrokerClient): Promise<SlotsClient> {
+    const slots = await firstSlots(broker)
+    if (!slots) invalid("Could not find a slots to use");
+    return slots
+}
+
 
 export async function firstDistribute(broker: BrokerClient): Promise<DistributeClient | undefined> {
     return firstServer(broker, 'distribute', id => broker.distribute(id))

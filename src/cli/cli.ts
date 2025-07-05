@@ -9,6 +9,7 @@ import mount from "./mount"
 import pin from "./pin"
 import init from "./init"
 import add from "./add"
+import workspace from "./workspace"
 
 export function startCli() {
     yargs
@@ -22,8 +23,9 @@ export function startCli() {
         .command(slot)
         .command(task)
         .command(upload)
+        .command(workspace)
         .demandCommand()
-        .wrap(90)
+        .wrap(120)
         .help()
         .parse()
 }

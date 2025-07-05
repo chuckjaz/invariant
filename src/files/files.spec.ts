@@ -182,7 +182,95 @@ describe("files", () => {
             files.stop()
         }
     })
+    it("can create a lot of files and directories", async () => {
+        const [files, node] = await filesWithEmptyDirectory()
+        try {
+            let count = 0
+            async function checkSync() {
+                if (++count % 100 == 0) {
+                    await files.sync()
+                    await delay(2)
+                }
+            }
+            async function writeRandomFile(parent: Node) {
+                const name = randomId()
+                const fileNode = await files.createNode(parent, name, ContentKind.File)
+                for (let i = 0; i < 10; i++) {
+                    const buffer = randomBytes(10)
+                    await files.writeFile(fileNode, dataFromBuffers([buffer]), i * 10)
+                }
+                await checkSync()
+            }
+            async function writeDirectory(parent: Node, depth: number, width: number) {
+                const name = randomId()
+                const dirNode = await files.createNode(parent, name, ContentKind.Directory)
+                for (let i = 0; i < width; i++) {
+                    await writeRandomFile(dirNode)
+                }
+                if (depth > 0) {
+                    for (let i = 0; i < width; i++) {
+                        await writeDirectory(dirNode, depth - 1, width)
+                    }
+                }
+                await checkSync()
+            }
+            for (let i = 0; i < 10; i++) {
+                await writeDirectory(node, 2, 5)
+            }
+        } finally {
+            files.stop()
+        }
+    }, 100 * 1000)
 
+    it("can create files with no content, wait, sync(), then write files then sync()", async () => {
+        const [files, node] = await filesWithEmptyDirectory()
+        try {
+            const fileNodes: number[] = []
+            const dirNode = await files.createNode(node, 'dir', ContentKind.Directory)
+            for (let i = 0; i < 100; i++) {
+                const name = randomId()
+                const fileNode = await files.createNode(dirNode, name, ContentKind.File)
+                fileNodes.push(fileNode)
+            }
+            await delay(10)
+            await files.sync()
+            for (const fileNode of fileNodes) {
+                await files.writeFile(fileNode, dataFromBuffers([randomBytes(100)]))
+            }
+            await files.sync()
+        } finally {
+            files.stop()
+        }
+    })
+    it("can create a file while sync'ing", async () => {
+        const [files, node] = await filesWithEmptyDirectory()
+        try {
+            const dirNode = await files.createNode(node, 'dir', ContentKind.Directory)
+            async function nested(parent: Node, depth: number): Promise<number> {
+                const child = await files.createNode(parent, `dir-${depth}`, ContentKind.Directory)
+                if (depth > 0) return await nested(child, depth - 1);
+                return child
+            }
+            const deep = await nested(dirNode, 100)
+            for (let i = 0; i < 1000; i++) {
+                const name = randomId()
+                const fileNode = await files.createNode(deep, name, ContentKind.File)
+                await files.writeFile(fileNode, dataFromBuffers([randomBytes(100)]))
+            }
+            const syncPromise = files.sync()
+            await delay(0)
+            {
+                const name = randomId()
+                const fileNode = await files.createNode(dirNode, name, ContentKind.File)
+                await files.writeFile(fileNode, dataFromBuffers([randomBytes(10)]))
+            }
+            await delay(10)
+            await syncPromise
+            await files.sync()
+        } finally {
+            files.stop()
+        }
+    })
 })
 
 function decipherTx(): ContentTransform {
