@@ -48,7 +48,9 @@ export class Files implements FilesClient, ContentReader {
             this.slotMounts.set(node, slotId)
             const current = await this.slots.get(slotId)
             if (current == undefined) invalid(`Could not find slot ${slotId}`);
-            writable = true
+            if (writable == undefined) {
+                writable = true
+            }
             content = {...content, address: current.address }
             delete content.slot
             this.scheduleSlotReads()
@@ -164,7 +166,12 @@ export class Files implements FilesClient, ContentReader {
         }
     }
 
-    async createNode(parent: Node, name: string, kind: ContentKind): Promise<number> {
+    async createNode(
+        parent: Node,
+        name: string,
+        kind: ContentKind,
+        content?: ContentLink,
+    ): Promise<number> {
         this.assertWritable(parent, ContentKind.Directory)
         const lock = nRequired(this.locks.get(parent))
         await lock.writeLock()
@@ -189,11 +196,15 @@ export class Files implements FilesClient, ContentReader {
             entries.set(name, node)
             this.parents.set(node, parent)
             this.invalidDirectories.add(parent)
-            if (kind == ContentKind.Directory) {
-                this.directories.set(node, new Map())
-                this.transforms.set(node, () => dataFromString("[]"))
+            if (content) {
+                this.contentMap.set(node, content)
             } else {
-                this.transforms.set(node, () => dataFromString(""))
+                if (kind == ContentKind.Directory) {
+                    this.directories.set(node, new Map())
+                    this.transforms.set(node, () => dataFromString("[]"))
+                } else {
+                    this.transforms.set(node, () => dataFromString(""))
+                }
             }
             this.scheduleSync()
             return node

@@ -37,7 +37,7 @@ export interface EntryAttributes {
 export interface FilesClient {
     ping(): Promise<string | undefined>
 
-    mount(content: ContentLink): Promise<Node>
+    mount(content: ContentLink, executable?: boolean, writable?: boolean): Promise<Node>
     unmount(node: Node): Promise<ContentLink>
 
     lookup(parent: Node, name: string): Promise<Node | undefined>
@@ -49,7 +49,7 @@ export interface FilesClient {
     setSize(node: Node, size: number): Promise<void>
 
     readDirectory(node: Node, offset?: number, length?: number): AsyncIterable<FileDirectoryEntry>
-    createNode(parent: Node, name: string, kind: ContentKind): Promise<Node>
+    createNode(parent: Node, name: string, kind: ContentKind, content?: ContentLink): Promise<Node>
     removeNode(parent: Node, name: string): Promise<boolean>
     setAttributes(node: Node, attributes: EntryAttributes): Promise<void>
     rename(parent: Node, name: string,  newParent: Node, newName: string): Promise<boolean>

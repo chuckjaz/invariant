@@ -351,7 +351,7 @@ class ShaCache {
 
 async function publish(broker: BrokerClient, slot: string | undefined, address: string) {
     if (!slot) return
-    const slotContent = await resolveId(broker, slot)
+    const slotContent = await resolveId(broker, slot, true)
     if (!slotContent) {
         error(`Invalid slot address ${slot}`)
     }
@@ -369,6 +369,7 @@ async function publish(broker: BrokerClient, slot: string | undefined, address: 
     if (!result) {
         console.error(`Update of the slot ${slot} was refused`)
     }
+    console.log(`Published to: ${slot} `)
 }
 
 async function slotServerOf(broker: BrokerClient, slot: string): Promise<[SlotsClient, string] | undefined> {

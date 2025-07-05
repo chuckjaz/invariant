@@ -35,7 +35,7 @@ export class FilesWebClient extends PingableClient implements FilesClient {
     }
 
     unmount(node: Node): Promise<ContentLink> {
-        return this.postJson<ContentLink>('', `${unmountPrefix}/:${node}`)
+        return this.postJson<ContentLink>('', `${unmountPrefix}/${node}`)
     }
 
     lookup(parent: Node, name: string): Promise<Node | undefined> {
@@ -50,12 +50,20 @@ export class FilesWebClient extends PingableClient implements FilesClient {
         return this.getJson<ContentLink>(`${contentPrefix}/${node}`)
     }
 
-    async createNode(parent: Node, name: string, kind: ContentKind): Promise<number> {
-        const url = new URL(`${filesPrefix}/${parent}`, this.url)
+    async createNode(
+        parent: Node,
+        name: string,
+        kind: ContentKind,
+        content?: ContentLink
+    ): Promise<number> {
+        const url = new URL(`${filesPrefix}/${parent}/${name}`, this.url)
         let headers = { }
         url.searchParams.append('kind', kind)
+        if (content) {
+            url.searchParams.append('content', JSON.stringify(content))
+        }
         const response = await fetch(url, {
-            method: 'POST',
+            method: 'PUT',
             headers
         })
         if (response.ok) {
@@ -101,6 +109,7 @@ export class FilesWebClient extends PingableClient implements FilesClient {
         const response = await fetch(url, {
             method: 'POST',
             headers,
+            duplex: 'half',
             body: data
         })
         if (response.ok) {
@@ -116,12 +125,12 @@ export class FilesWebClient extends PingableClient implements FilesClient {
             method: 'PUT',
         })
         if (!response.ok) {
-            error(`Could not set the size of ${node}: ${response.status}`)
+            error(`Could not set the size of node ${node}: ${response.status}`)
         }
     }
 
     async *readDirectory(node: Node, offset?: number, length?: number): AsyncIterable<FileDirectoryEntry> {
-        const url = new URL(`${filesPrefix}/${node}`, this.url)
+        const url = new URL(`${filesPrefix}/directory/${node}`, this.url)
         if (offset !== undefined) {
             url.searchParams.append('offset', `${offset}`)
         }
@@ -145,11 +154,11 @@ export class FilesWebClient extends PingableClient implements FilesClient {
     async setAttributes(node: Node, attributes: EntryAttributes): Promise<void> {
         const url = new URL(`${attributesPrefix}/${node}`, this.url)
         const response = await fetch(url, {
-            method: 'POST',
+            method: 'PUT',
             body: JSON.stringify(attributes)
         })
         if (!response.ok) {
-            error(`Could not set attributes of ${node}`)
+            error(`Could not set attributes of ${node}: status: ${response.status}`)
         }
     }
 

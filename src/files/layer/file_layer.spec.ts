@@ -20,13 +20,7 @@ describe("file_layer", () => {
         const broker = mockBroker()
         const controlPlane = new Files(randomId(), storage, slots, broker, 1)
 
-        const layer = new LayeredFiles(
-            randomId(),
-            controlPlane,
-            storage,
-            slots,
-            broker
-        )
+        const layer = new LayeredFiles(randomId(), controlPlane)
 
         expect(layer).toBeDefined()
 
@@ -47,7 +41,7 @@ describe("file_layer", () => {
         ])
 
         const controlPlane = new Files(randomId(), storage, slots, broker, 1)
-        const layer = new LayeredFiles(randomId(), controlPlane, storage, slots, broker)
+        const layer = new LayeredFiles(randomId(), controlPlane)
         await layer.mount(controlRoot)
     })
     it("can write to a layer", async () => {
@@ -81,7 +75,7 @@ describe("file_layer", () => {
                 syncFrequency: 1
             }
         ])
-        const layers = new LayeredFiles(randomId(), controlPlane, storage, slots, broker)
+        const layers = new LayeredFiles(randomId(), controlPlane)
         await layers.mount(layersContent)
         await writeFile(layers, 'src/hello.ts', 'console.log("hello, world!")')
         await writeFile(layers, 'dist/hello.js', 'console.log("hello, world!")')
@@ -90,6 +84,26 @@ describe("file_layer", () => {
         expect(newSourceSlot.address).not.toEqual(emptyDirectory.address)
         const newBackingSlot = await slots.get(backingSlot)
         expect(newBackingSlot.address).not.toEqual(emptyDirectory.address)
+    })
+    it("can get the attributes of the root directory of a layer", async () => {
+        const storage = mockStorage()
+        const slots = mockSlots()
+        const broker = mockBroker()
+
+        const directory = await createRandomDirectory(storage)
+        const controlRoot = await createConfiguration(storage, [
+            {
+                kind: LayerKind.Base,
+                content: directory
+            }
+        ])
+
+        const controlPlane = new Files(randomId(), storage, slots, broker, 1)
+
+        const layer = new LayeredFiles(randomId(), controlPlane)
+        const root = await layer.mount(controlRoot)
+        const info = await layer.info(root)
+        expect(info).toBeDefined()
     })
 })
 

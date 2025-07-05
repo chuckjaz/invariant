@@ -9,7 +9,7 @@ import { ContentLink } from "../common/types";
 import { BrokerWebClient } from "../broker/web/broker_web_client";
 import { error, invalid } from "../common/errors";
 import { FilesWebClient } from "../files/web/files_web_client";
-import { logger } from "../common/web";
+import { logger, logHandler } from "../common/web";
 import { firstLive } from "../common/verify";
 import { resolveId } from "./common/common_resolve";
 import { findStorage, firstSlots } from "./start";
@@ -44,7 +44,7 @@ async function mount(root: string, directory: string, debug: boolean) {
     const normalDirectory = path.resolve(directory)
     const exists = await directoryExists(normalDirectory)
     if (!exists) invalid(`Directory ${normalDirectory} does not exist`);
-    const [filesClientUrl, root_node] = await firstFilesUrl(broker, content) ?? await startLocalFilesServer(broker, content)
+    const [filesClientUrl, root_node] = await firstFilesUrl(broker, content) ?? await startLocalFilesServer(broker, content, debug)
 
     const fuseTool = config.tools?.find(tool => tool.tool = 'fuse')
     if (!fuseTool) invalid("No fuse tools was configured");
@@ -54,7 +54,8 @@ async function mount(root: string, directory: string, debug: boolean) {
 
 async function startLocalFilesServer(
     broker: BrokerWebClient,
-    content: ContentLink
+    content: ContentLink,
+    debug: boolean,
 ): Promise<[URL, Node]> {
     let storage = await findStorage(broker)
     if (!storage) error("Could not find a storage to use");
@@ -81,7 +82,7 @@ async function startLocalFilesServer(
     const layersNode = await files.lookup(rootOfMount, '.layers')
     if (layersNode) {
         // Load the layers configuration from the .layers file
-        const layeredFiles = new LayeredFiles(randomId(), files, storage, slots, broker)
+        const layeredFiles = new LayeredFiles(randomId(), files)
         const layerRoot = await layeredFiles.mount(content)
         effectiveFiles = layeredFiles
         effectiveRoot = layerRoot
@@ -89,12 +90,17 @@ async function startLocalFilesServer(
 
     const filesHandlers = filesWebHandlers(effectiveFiles)
     const app = new Koa()
+
+    if (debug) {
+        app.use(logHandler('files'))
+    }
     app.use(filesHandlers)
     const httpServer = app.listen()
     const address = httpServer.address();
     if (!address || typeof address !== 'object' || !('port' in address)) {
         throw new Error("Failed to retrieve the server port");
     }
+    console.log([new URL(`http://localhost:${address.port}`), effectiveRoot])
     return [new URL(`http://localhost:${address.port}`), effectiveRoot];
 }
 

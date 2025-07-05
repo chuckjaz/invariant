@@ -58,7 +58,7 @@ describe("workspace/workspace", () => {
         expectDefined(workspaceLink);
 
         // Check the workspace has been created by mounting it in a layered file system
-        const layerFiles = new LayeredFiles(randomId(), files, services.storage, services.slots, services.broker);
+        const layerFiles = new LayeredFiles(randomId(), files);
         const workspaceRoot = await layerFiles.mount(workspaceLink);
 
         const srcDir = await layerFiles.lookup(workspaceRoot, "src");
@@ -80,7 +80,7 @@ describe("workspace/workspace", () => {
         expectDefined(workspaceLink);
 
         // Check the workspace has been created by mounting it in a layered file system
-        const layerFiles = new LayeredFiles(randomId(), files, services.storage, services.slots, services.broker);
+        const layerFiles = new LayeredFiles(randomId(), files);
         const workspaceRoot = await layerFiles.mount(workspaceLink);
 
         // Write to the output layer
@@ -121,7 +121,7 @@ describe("workspace/workspace", () => {
         expectDefined(workspaceLink);
 
         // Mount the workspace
-        const layerFiles = new LayeredFiles(randomId(), files, services.storage, services.slots, services.broker);
+        const layerFiles = new LayeredFiles(randomId(), files);
         const workspaceRoot = await layerFiles.mount(workspaceLink);
 
         // Modify the hello world file
