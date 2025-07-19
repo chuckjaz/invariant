@@ -1,4 +1,5 @@
 import { streamBlob } from "../../common/blob";
+import { dataFromReadable, dataToStrings, linesToNumbers, stringsToLines } from "../../common/data";
 import { error } from "../../common/errors";
 import { PingableClient } from "../../common/pingable_client";
 import { ContentLink } from "../../common/types";
@@ -16,6 +17,7 @@ const attributesPrefix = `${filesPrefix}/attributes`
 const sizePrefix = `${filesPrefix}/size`
 const renamePrefix = `${filesPrefix}/rename`
 const linkPrefix = `${filesPrefix}/link`
+const watchPrefix = `${filesPrefix}/watch`
 const syncPrefix = `${filesPrefix}/sync`
 
 export class FilesWebClient extends PingableClient implements FilesClient {
@@ -137,7 +139,7 @@ export class FilesWebClient extends PingableClient implements FilesClient {
         if (length !== undefined) {
             url.searchParams.append('length', `${length}`)
         }
-        yield *await this.getJsonStream<FileDirectoryEntry>(url)
+        yield *this.getJsonStream<FileDirectoryEntry>(url)
     }
 
     async removeNode(parent: Node, name: string): Promise<boolean> {
@@ -181,6 +183,18 @@ export class FilesWebClient extends PingableClient implements FilesClient {
             body: ''
         })
         return response.ok
+    }
+
+    async *watch(): AsyncIterable<number> {
+        const url = new URL(watchPrefix, this.url)
+        const response = await fetch(url)
+        if (response.ok && response.body) {
+            const data = response.body as AsyncIterable<Buffer>;
+            const strings = dataToStrings(data)
+            const lines = stringsToLines(strings)
+            const nodes = linesToNumbers(lines)
+            yield *nodes
+        }
     }
 
     async sync(): Promise<void> {

@@ -9,6 +9,7 @@ import { contentLinkSchema } from '../../common/schema';
 import { dataToString } from '../../common/parseJson';
 import { invalid } from '../../common/errors';
 import { createHash } from 'crypto';
+import { Channel } from '../../common/channel';
 
 export interface FileLayer {
     kind: LayerKind
@@ -187,12 +188,12 @@ class LayeredDirectory  {
         for (let index = 0; index < this.fileLayers.length; index++) {
             const layer = this.fileLayers[index]
             const client = layer.client
-            const directoryNode = await this.findDirectoryNode(layer.client, index)
+            const directoryNode = await this.findDirectoryNode(client, index)
             if (directoryNode === undefined) {
                 hash.write(undefined)
                 continue
             }
-            const directoryInfo = await layer.client.info(directoryNode)
+            const directoryInfo = await client.info(directoryNode)
             if (directoryInfo === undefined) {
                 hash.write(undefined)
                 continue
@@ -278,7 +279,7 @@ class LayeredDirectory  {
         return new LayeredDirectory(nestedLayers, name, this)
     }
 
-    async *readDirectory(): AsyncIterable<[string, ClientNode, ContentKind]> {
+    async *readDirectory(): AsyncIterable<[string, FilesClient, ContentInformation]> {
         const sent = new Set<string>()
         let index = 0
         for (const layer of this.fileLayers) {
@@ -288,7 +289,7 @@ class LayeredDirectory  {
             for await (const entry of client.readDirectory(parent)) {
                 if (sent.has(entry.name)) continue;
                 sent.add(entry.name)
-                yield [entry.name, { kind: NodeKind.Client, client: client, node: entry.node }, entry.kind ]
+                yield [entry.name, client, entry.info]
             }
         }
     }
@@ -481,10 +482,11 @@ export class LayeredFiles implements FilesClient {
         let start = offset ?? 0
         let end = length ? start + length : Number.MAX_SAFE_INTEGER
         let index = 0
-        for await (const [name, {client, node: clientNode}, kind] of directory.readDirectory()) {
+        for await (const [name, client, info] of directory.readDirectory()) {
             if (index >= start) {
-                const node = await this.nodeMap(directory, name, client, clientNode, kind)
-                yield { name, node, kind };
+                const node = await this.nodeMap(directory, name, client, info.node, info.kind)
+                const mappedInfo = { ...info, node }
+                yield { name, info: mappedInfo };
             }
             index++
             if (index >= end) break
@@ -544,6 +546,15 @@ export class LayeredFiles implements FilesClient {
         const directoryNode = nRequired(this.map.get(1))
         const directory = nRequired(directoryNode.kind == NodeKind.Directory ? directoryNode.directory : undefined)
         return directory.sync()
+    }
+
+    async *watch(): AsyncIterable<number> {
+        for await (const node of this.controlPlane.watch()) {
+            const map = this.invertNodeMap.get(this.controlPlane)
+            if (!map) continue
+            const mappedNode = map.get(node)
+            if (mappedNode !== undefined) yield mappedNode
+        }
     }
 
     private async nodeMap(
