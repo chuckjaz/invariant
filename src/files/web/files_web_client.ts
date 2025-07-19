@@ -1,9 +1,11 @@
 import { streamBlob } from "../../common/blob";
+import { dataFromReadable, dataToStrings, linesToNumbers, stringsToLines } from "../../common/data";
 import { error } from "../../common/errors";
+import { jsonStream } from "../../common/parseJson";
 import { PingableClient } from "../../common/pingable_client";
 import { ContentLink } from "../../common/types";
 import { Data } from "../../storage/storage_client";
-import { ContentInformation, ContentKind, EntryAttributes, FileDirectoryEntry, FilesClient, Node } from "../files_client";
+import { ContentInformation, ContentKind, EntryAttributes, FileDirectoryEntry, FilesClient, Node, WatchItem } from "../files_client";
 
 const filesPrefix = '/files'
 const mountPrefix = `${filesPrefix}/mount`
@@ -16,6 +18,7 @@ const attributesPrefix = `${filesPrefix}/attributes`
 const sizePrefix = `${filesPrefix}/size`
 const renamePrefix = `${filesPrefix}/rename`
 const linkPrefix = `${filesPrefix}/link`
+const watchPrefix = `${filesPrefix}/watch`
 const syncPrefix = `${filesPrefix}/sync`
 
 export class FilesWebClient extends PingableClient implements FilesClient {
@@ -137,7 +140,7 @@ export class FilesWebClient extends PingableClient implements FilesClient {
         if (length !== undefined) {
             url.searchParams.append('length', `${length}`)
         }
-        yield *await this.getJsonStream<FileDirectoryEntry>(url)
+        yield *this.getJsonStream<FileDirectoryEntry>(url)
     }
 
     async removeNode(parent: Node, name: string): Promise<boolean> {
@@ -181,6 +184,17 @@ export class FilesWebClient extends PingableClient implements FilesClient {
             body: ''
         })
         return response.ok
+    }
+
+    async *watch(): AsyncIterable<WatchItem> {
+        const url = new URL(watchPrefix, this.url)
+        const response = await fetch(url)
+        if (response.ok && response.body) {
+            const data = response.body as AsyncIterable<Buffer>;
+            const strings = dataToStrings(data)
+            const items = jsonStream(strings) as AsyncIterable<WatchItem>
+            yield *items
+        }
     }
 
     async sync(): Promise<void> {

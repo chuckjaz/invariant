@@ -85,6 +85,31 @@ export async function *dataToStrings(data: Data): AsyncIterable<string> {
     }
 }
 
+export async function *stringsToLines(strings: AsyncIterable<string>): AsyncIterable<string> {
+    let prefix = ""
+    for await (const text of strings) {
+        const workingText = prefix + text
+        let offset = 0
+        while (true) {
+            const indexOfNewLine = workingText.indexOf('\n', offset)
+            if (indexOfNewLine >= 0) {
+                yield workingText.substring(offset, indexOfNewLine)
+                offset = indexOfNewLine + 1
+            } else {
+                prefix = workingText.substring(offset)
+                break
+            }
+        }
+    }
+    if (prefix != "") yield prefix
+}
+
+export async function *linesToNumbers(lines: AsyncIterable<string>): AsyncIterable<number> {
+    for await (const line of lines) {
+        yield parseFloat(line)
+    }
+}
+
 export async function *stringsToData(strings: string | Iterable<string> | AsyncIterable<string>): Data {
     if (typeof strings == 'string') {
         yield Buffer.from(new TextEncoder().encode(strings))
@@ -378,4 +403,8 @@ export async function *setDataSize(size: number, data: Data): Data {
         const bufferSize = size - current
         yield Buffer.alloc(bufferSize, 0)
     }
+}
+
+export async function *streamTextNumbersToStreamOfNumbers(data: Data): AsyncIterable<number> {
+    let pending = Buffer.alloc(0)
 }

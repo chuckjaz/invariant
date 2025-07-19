@@ -8,9 +8,10 @@ import { Block, BlockTree, ContentLink, ContentTransform, DirectoryEntry, Entry,
 import { SlotsClient } from "../slots/slot_client";
 import { Data, StorageClient } from "../storage/storage_client";
 import { createHash } from 'node:crypto'
-import { ContentInformation, ContentKind, ContentReader, EntryAttributes, FileDirectoryEntry, FilesClient, Node } from "./files_client";
+import { ContentInformation, ContentKind, ContentReader, EntryAttributes, FileDirectoryEntry, FilesClient, Node, WatchItem, WatchKind } from "./files_client";
 import { stringCompare } from "../common/compares";
 import { delay } from "../common/delay";
+import { Channel } from "../common/channel";
 
 export class Files implements FilesClient, ContentReader {
     private id: string
@@ -29,6 +30,7 @@ export class Files implements FilesClient, ContentReader {
     private slotMounts = new Map<Node, string>()
     private locks = new Map<Node, ReadWriteLock>()
     private nextNode = 1
+    private watches: Channel<WatchItem>[] = []
 
     constructor(id: string, storage: StorageClient, slots: SlotsClient, broker: BrokerClient, syncFrequency?: number) {
         this.id = id
@@ -135,6 +137,8 @@ export class Files implements FilesClient, ContentReader {
             if (maxWritten > effectiveSize) info.size = maxWritten
             const parent = nRequired(this.parents.get(node))
             this.invalidDirectories.add(parent)
+            this.invalidateNode(node)
+            this.invalidateNode(parent)
             return buffer.length
         } finally {
             lock.writeUnlock()
@@ -147,6 +151,10 @@ export class Files implements FilesClient, ContentReader {
         await lock.writeLock()
         try {
             this.addTransform(node, data => setDataSize(size, data))
+            const parent = nRequired(this.parents.get(node))
+            this.invalidDirectories.add(parent)
+            this.invalidateNode(node)
+            this.invalidateNode(parent)
         } finally {
             lock.writeUnlock()
         }
@@ -164,7 +172,7 @@ export class Files implements FilesClient, ContentReader {
                 if (current - offset > length) break
                 current++
                 const info = nRequired(this.infos.get(node))
-                yield { name, kind: info.kind, node }
+                yield { name, info }
             }
         } finally {
             lock.readUnlock()
@@ -201,6 +209,7 @@ export class Files implements FilesClient, ContentReader {
             entries.set(name, node)
             this.parents.set(node, parent)
             this.invalidDirectories.add(parent)
+            this.invalidateNode(parent)
             if (content) {
                 this.contentMap.set(node, content)
             } else {
@@ -229,6 +238,7 @@ export class Files implements FilesClient, ContentReader {
                 entries.delete(name)
                 this.forget(node)
                 this.invalidDirectories.add(parent)
+                this.invalidateNode(parent)
                 this.scheduleSync()
                 return true
             }
@@ -264,6 +274,7 @@ export class Files implements FilesClient, ContentReader {
                 }
             }
             this.invalidDirectories.add(parent)
+            this.invalidateNode(parent)
             this.scheduleSync()
         } finally {
             lock.writeUnlock()
@@ -281,8 +292,9 @@ export class Files implements FilesClient, ContentReader {
             entries.delete(name)
             newEntries.set(newName, node)
             this.invalidDirectories.add(parent)
-
             this.invalidDirectories.add(newParent)
+            this.invalidateNode(parent)
+            this.invalidateNode(newParent)
             this.scheduleSync()
             return true
         } finally {
@@ -299,6 +311,7 @@ export class Files implements FilesClient, ContentReader {
             if (found !== undefined) return false
             entries.set(name, node)
             this.invalidDirectories.add(parent)
+            this.invalidateNode(parent)
             this.scheduleSync()
             return true
         } finally {
@@ -306,13 +319,22 @@ export class Files implements FilesClient, ContentReader {
         }
     }
 
-    sync(): Promise<void> {
+    watch(): AsyncIterable<WatchItem> {
+        const newChannel = new Channel<WatchItem>()
+        this.watches.push(newChannel)
+        return newChannel.all()
+    }
+
+    async sync(): Promise<void> {
         if (this.syncTimeout) {
             clearTimeout(this.syncTimeout)
             this.syncTimeout = undefined
-            this.scheduleSync(0)
         }
-        return this.previousSync
+        const startPromise = new Promise<void>(resolve => this.syncStarted = resolve)
+        this.scheduleSync(0)
+        await startPromise
+        this.syncStarted = () => { }
+        await this.previousSync
     }
 
     stop() {
@@ -323,6 +345,9 @@ export class Files implements FilesClient, ContentReader {
         if (this.slotReadsTimeout) {
             clearInterval(this.slotReadsTimeout)
             this.slotReadsTimeout = undefined
+        }
+        for (const channel of this.watches) {
+            channel.close()
         }
     }
 
@@ -341,6 +366,7 @@ export class Files implements FilesClient, ContentReader {
         while (remove.length > 0) {
             const node = remove.pop()
             if (!node) break
+            this.forgetNode(node)
             const entries = this.directories.get(node)
             if (entries) remove.push(...entries.values());
             this.directories.delete(node)
@@ -521,6 +547,7 @@ export class Files implements FilesClient, ContentReader {
 
     private previousSync = Promise.resolve()
     private syncTimeout?: NodeJS.Timeout
+    private syncStarted: () => void = () => {}
 
     private scheduleSync(timeout: number = this.syncFrequency) {
         if (this.syncTimeout) {
@@ -535,6 +562,7 @@ export class Files implements FilesClient, ContentReader {
     }
 
     private async doSync(previousSync: Promise<void>) {
+        this.syncStarted()
         await previousSync
         const nodes = [...this.transforms.keys()]
         for (const node of nodes) {
@@ -759,6 +787,36 @@ export class Files implements FilesClient, ContentReader {
             return storageClient
         }
         return undefined
+    }
+
+    private forgetNode(node: Node) {
+        const watches = this.watches
+        let i = 0
+        while (i < watches.length) {
+            const channel = watches[i]
+            if (channel.closed) {
+                watches.splice(i, 1)
+            } else {
+                channel.send({ kind: WatchKind.Forgotten, node })
+            }
+        }
+    }
+
+    private invalidateNode(node: Node) {
+        const watches = this.watches
+        let i = 0;
+        while (i < watches.length) {
+            const channel = watches[i]
+            if (channel.closed) {
+                watches.splice(i, 1)
+            } else {
+                const info = this.infos.get(node)
+                if (info) {
+                    channel.send({ kind: WatchKind.Changed, info })
+                }
+            }
+            i++
+        }
     }
 
     private newNode(): number {

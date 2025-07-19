@@ -7,10 +7,11 @@ import { Files } from "../files"
 import { FilesWebClient } from "./files_web_client"
 import { filesWebHandlers } from "./files_web_handler"
 import { stringsToData } from '../../common/data'
-import { invalid } from '../../common/errors'
+import { error, invalid } from '../../common/errors'
 import { ContentLink, Entry, EntryKind } from '../../common/types'
-import { ContentKind, ContentWriter, FilesClient } from '../files_client'
-import { dataToString } from '../../common/parseJson'
+import { ContentKind, ContentWriter, FilesClient, WatchKind } from '../files_client'
+import { dataFromString, dataToString } from '../../common/parseJson'
+import { delay } from '../../common/delay'
 
 // This test both the web client and web handlers by starting a web service and then
 // connecting a web client to the service
@@ -240,7 +241,29 @@ describe('files/web', () => {
             expect(readData).toEqual(data)
         })
     })
+    it("can watch for a file change", async () => {
+        await withFiles({ "hello": "Hello, world!" }, async (client, root) => {
+            const modified = new Set<number>()
+            async function watch() {
+                for await (const watchItem of client.watch()) {
+                    if (watchItem.kind == WatchKind.Changed) {
+                        modified.add(watchItem.info.node)
+                    }
+                }
+            }
+            watch()
+            const helloHandle = required(await client.lookup(root, 'hello'))
+            await client.writeFile(helloHandle!!, dataFromString("See ya later!"))
+            await client.sync()
+            expect(modified.has(helloHandle)).toBeTrue()
+        })
+    })
 })
+
+function required<V>(value: V | undefined): V {
+    if (!value) error("Missing value");
+    return value
+}
 
 interface MockServices {
     storage: MockStorageClient

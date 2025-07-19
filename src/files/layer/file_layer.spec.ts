@@ -1,6 +1,5 @@
 import { mockBroker } from "../../broker/mock/mock_broker_client"
 import { dataFromBuffers, stringsToData } from "../../common/data"
-import { delay } from "../../common/delay"
 import { error } from "../../common/errors"
 import { randomId } from "../../common/id"
 import { dataFromString } from "../../common/parseJson"
@@ -79,7 +78,7 @@ describe("file_layer", () => {
         await layers.mount(layersContent)
         await writeFile(layers, 'src/hello.ts', 'console.log("hello, world!")')
         await writeFile(layers, 'dist/hello.js', 'console.log("hello, world!")')
-        await delay(10)
+        await layers.sync()
         const newSourceSlot = await slots.get(sourceSlot)
         expect(newSourceSlot.address).not.toEqual(emptyDirectory.address)
         const newBackingSlot = await slots.get(backingSlot)

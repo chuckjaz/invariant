@@ -5,7 +5,8 @@ import { contentLinkSchema } from "../../common/schema"
 import { ContentLink } from "../../common/types"
 import { ResponseFunc, route, Route } from "../../common/web"
 import { ContentKind, EntryAttributes, FilesClient, Node } from "../files_client"
-import { dataToReadable } from "../../common/parseJson"
+import { dataToReadable, textToReadable } from "../../common/parseJson"
+import { Channel } from "../../common/channel"
 
 const nodeSchema = z.number().int().nonnegative('Expected a node') satisfies Schema
 const nonNegativeIntSchema = z.number().int().nonnegative('Expected a positive number') satisfies Schema
@@ -204,6 +205,20 @@ export function filesWebHandlers(client: FilesClient): ResponseFunc {
                     } else {
                         ctx.status = 200
                     }
+                }
+            },
+            'watch': {
+                method: 'GET',
+                handler: async (ctx) => {
+                    const channel = new Channel<string>()
+                    ctx.body = textToReadable(channel.all())
+                    ctx.status = 200
+                    async function send() {
+                        for await (const watchItem of client.watch()) {
+                            channel.send(`${JSON.stringify(watchItem)}\n`)
+                        }
+                    }
+                    send()
                 }
             },
             'sync': {

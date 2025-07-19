@@ -11,8 +11,9 @@ import { Data, StorageClient } from "../storage/storage_client"
 import { mockStorage } from "../storage/mock"
 import { directoryEtag, Files } from "./files"
 import { createHash } from 'node:crypto'
-import { ContentKind, FileDirectoryEntry, Node } from "./files_client"
+import { ContentKind, FileDirectoryEntry, Node, WatchKind } from "./files_client"
 import { randomId } from "../common/id"
+import { Latch } from "../common/latch"
 
 describe("files", () => {
     it("can create a files server", () => {
@@ -99,7 +100,7 @@ describe("files", () => {
             const fileNode = await files.createNode(node, "test", ContentKind.File)
             const data = await readAllData(files.readFile(fileNode))
             expect(data).toEqual(Buffer.alloc(0, 0))
-            await delay(2)
+            await files.sync()
             await validateDirectory(files, node)
         } finally {
             files.stop()
@@ -131,7 +132,7 @@ describe("files", () => {
                 count++
             }
             expect(count).toBe(1)
-            await delay(2)
+            await files.sync()
             await validateDirectory(files, node)
         } finally {
             files.stop()
@@ -176,7 +177,7 @@ describe("files", () => {
             expect(directoryInfo).toBeDefined()
             if (!directoryInfo) return
             expect(directoryInfo.kind).toEqual(EntryKind.Directory)
-            await delay(2)
+            await files.sync()
             await validateDirectory(files, node)
         } finally {
             files.stop()
@@ -270,6 +271,31 @@ describe("files", () => {
         } finally {
             files.stop()
         }
+    })
+    it("can watch for changes in a client", async () => {
+        const [files, node] = await filesWithEmptyDirectory()
+        const changed = new Set<number>()
+        let watchDone = false
+        let latch = new Latch()
+        async function watch() {
+            for await (const watchEntry of files.watch()) {
+                if (watchEntry.kind == WatchKind.Changed) {
+                    changed.add(watchEntry.info.node)
+                }
+                latch.done()
+            }
+            watchDone = true
+        }
+        try {
+            watch()
+            await files.createNode(node, 'dir', ContentKind.Directory)
+            await latch.await()
+            expect(changed.has(node)).toBeTrue()
+        } finally {
+            files.stop()
+        }
+        await delay(1)
+        expect(watchDone).toBeTrue()
     })
 })
 
@@ -496,16 +522,15 @@ async function validateDirectory(files: Files, root: Node) {
         for await (const entry of files.readDirectory(node)) {
             if (previous) expect(entry.name > previous.name).toBeTrue();
             previous = entry
-            const info = await files.info(entry.node)
-            if (!info) error(`No info found for ${node}`);
+            const info = entry.info
             etagData.push({ name: entry.name, etag: info.etag })
             switch (info.kind) {
                 case ContentKind.Directory: {
-                    await validateDirectory(entry.node)
+                    await validateDirectory(info.node)
                     break
                 }
                 case ContentKind.File: {
-                    await validateFile(entry.node)
+                    await validateFile(info.node)
                     break
                 }
             }

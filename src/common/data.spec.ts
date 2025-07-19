@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import { BlockOverride, brotliCompressData, brotliDecompressData, cipherData, dataFromBuffers, decipherData, deflateData, inflateData, overrideData, readAllData, setDataSize, splitData, unzipData, zipData } from './data'
+import { BlockOverride, brotliCompressData, brotliDecompressData, cipherData, dataFromBuffers, dataToStrings, decipherData, deflateData, inflateData, overrideData, readAllData, setDataSize, splitData, stringsToData, stringsToLines, unzipData, zipData } from './data'
 
 describe("common/data", () => {
     it("can cipher and decipher data", async () => {
@@ -249,7 +249,7 @@ describe("common/data", () => {
                 Buffer.alloc(512, 0)
             ]))
         })
-        it("can shorten multiple datas", async () => {
+        it("can shorten multiple data", async () => {
             const buffers = [
                 Buffer.alloc(128, 1),
                 Buffer.alloc(128, 2),
@@ -265,4 +265,48 @@ describe("common/data", () => {
             expect(result).toEqual(Buffer.concat(buffers).subarray(0, 512))
         })
     })
+    describe("stringsToLines", () => {
+        it("can transform a single buffer of strings to lines", async () => {
+            const lines = await collect(stringsToLines(stringsOf("a\nb\nc\nd\n")))
+            expect(lines).toEqual(["a", "b", "c", "d"])
+        })
+        it("can transform multiple buffers into lines", async () => {
+            const lines = await collect(stringsToLines(stringsOf(
+                "abc",
+                "def",
+                "\nabcdef\na",
+                "bcde",
+                "f"
+            )))
+            expect(lines).toEqual([
+                "abcdef",
+                "abcdef",
+                "abcdef",
+            ])
+        })
+        it("can handle a utf-8 code unit being split at a buffer boundary", async () => {
+            const text = "\u2024\u2025\u2024\u2025\n\u2024\u2025\u2024\u2025\n\u2024\u2025\u2024\u2025\n"
+            const buffer = Buffer.from(text, 'utf-8')
+            const buffer1 = buffer.slice(0, 5)
+            const buffer2 = buffer.slice(5)
+            const strings = await collect(stringsToLines(dataToStrings(dataFromBuffers([buffer1, buffer2]))))
+            expect(strings).toEqual([
+                "\u2024\u2025\u2024\u2025",
+                "\u2024\u2025\u2024\u2025",
+                "\u2024\u2025\u2024\u2025",
+            ])
+        })
+    })
 })
+
+async function *stringsOf(...strings: string[]): AsyncIterable<string> {
+    yield *strings
+}
+
+async function collect<T>(iterable: AsyncIterable<T>): Promise<T[]> {
+    const result: T[] = []
+    for await (const item of iterable) {
+        result.push(item)
+    }
+    return result
+}

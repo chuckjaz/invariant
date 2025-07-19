@@ -22,8 +22,7 @@ export interface ContentInformation {
 
 export interface FileDirectoryEntry {
     name: string
-    kind: ContentKind
-    node: number
+    info: ContentInformation
 }
 
 export interface EntryAttributes {
@@ -33,6 +32,23 @@ export interface EntryAttributes {
     createTime?: number
     type?: string | null
 }
+
+export enum WatchKind {
+    Changed = "changed",
+    Forgotten = "forgotten"
+}
+
+export interface WatchChanged {
+    kind: WatchKind.Changed
+    info: ContentInformation
+}
+
+export interface WatchForgotten {
+    kind: WatchKind.Forgotten
+    node: Node
+}
+
+export type WatchItem = WatchChanged | WatchForgotten
 
 export interface FilesClient {
     ping(): Promise<string | undefined>
@@ -54,6 +70,8 @@ export interface FilesClient {
     setAttributes(node: Node, attributes: EntryAttributes): Promise<void>
     rename(parent: Node, name: string,  newParent: Node, newName: string): Promise<boolean>
     link(parent: Node, node: Node, name: string): Promise<boolean>
+
+    watch(): AsyncIterable<WatchItem>
 
     sync(): Promise<void>
 }
