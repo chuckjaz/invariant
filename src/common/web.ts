@@ -12,7 +12,10 @@ export function logger(name: string): Logger {
     return async (msg: string, kind?: string, request?: number) => {
         const requestNumber = request ?? i++
         const date = new Date().toLocaleString()
-        console.log(`${date} ${kind ?? 'LOG'}(${requestNumber}:${name}): ${msg}`)
+        const lines = msg.split('\n')
+        for (const line of lines) {
+            console.log(`${date} ${kind ?? 'LOG'}(${requestNumber}:${name}): ${line}`)
+        }
     }
 }
 

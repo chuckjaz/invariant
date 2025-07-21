@@ -424,7 +424,7 @@ export class Files implements FilesClient, ContentReader {
             for (const entry of directory) {
                 const entryNode = this.newNode()
                 const content = entry.content
-                let mode = entry.mode ?? entry.kind == EntryKind.File ? "" : "x";
+                let mode = entry.mode ?? (entry.kind == EntryKind.File ? "" : "x");
                 if (!directoryInfo.writable && mode.indexOf('r') < 0) mode += 'r'
                 const info: ContentInformation = {
                     node: entryNode,
@@ -630,6 +630,12 @@ export class Files implements FilesClient, ContentReader {
                         modifyTime: info.modifyTime,
                         size: info.size,
                         type: info.type
+                    }
+                    if (!info.writable || info.executable) {
+                        let mode = ""
+                        if (!info.writable) mode += "r"
+                        if (info.executable) mode += "x"
+                        fileEntry.mode = mode
                     }
                     directoryEntries.push(fileEntry)
                 }

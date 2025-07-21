@@ -52,6 +52,9 @@ export default {
     )
 } as yargs.CommandModule
 
+const W_BIT = 0o200;
+const X_BIT = 0o100;
+
 async function put(storage: StorageClient, data: Data): Promise<string> {
     const hasher = createHash('sha256')
     const buffer = await readAllData(data)
@@ -193,6 +196,16 @@ async function cachedUpload(
                         content: { address: cacheEntry.sha },
                         size: cacheEntry.size
                     }
+                    let mode = ""
+                    if ((cacheEntry.mode & W_BIT) == 0) {
+                        mode += "r"
+                    }
+                    if ((cacheEntry.mode & X_BIT) != 0) {
+                        mode += "x"
+                    }
+                    if (mode !== "") {
+                        treeEntry.mode = mode
+                    }
                     return treeEntry
                 })
                 continue
@@ -281,6 +294,7 @@ interface CacheEntry {
     mtime: number
     ctime: number
     size: number
+    mode: number
     dev: number
     sha: string
 }
@@ -289,6 +303,7 @@ interface CacheJSON {
     ino: number
     mtime: number
     ctime: number
+    mode: number
     size: number
     dev: number
     sha: string
@@ -312,7 +327,7 @@ class ShaCache {
         const buffer = await fs.readFile(name)
         hash.update(buffer)
         const sha = hash.digest().toString('hex')
-        const newEntry = { mtime, ctime, size: stat.size, dev: stat.dev, sha }
+        const newEntry: CacheEntry = { mtime, ctime, mode: stat.mode, size: stat.size, dev: stat.dev, sha }
         this.map.set(stat.ino, newEntry)
         return newEntry
     }
