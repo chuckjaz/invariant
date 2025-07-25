@@ -20,7 +20,7 @@ export async function markdownFileTask(
     contentReader: ContentReader,
     contentWriter: ContentWriter,
     productions: ProductionsClient
-): Promise<ContentLink> {
+): Promise<[ContentLink, number]> {
     const text = await dataToString(contentReader.readContentLink(content))
     const converter = new Converter({
         extensions: [showdownHighlight({
@@ -32,7 +32,7 @@ export async function markdownFileTask(
     const data = dataFromString(result)
     const output = await contentWriter.writeContentLink(data)
     await productions.put(markdownFileTaskId, content.address, output.address)
-    return output
+    return [output, result.length]
 }
 
 export interface MarkdownDirectoryRequest {
@@ -90,14 +90,15 @@ export async function markdownDirectoryTask(
 
     const specs = (request.specs ?? ["(.*)\\.(md|markdown),$1.html"]).map(spec => textToSpec(spec))
 
-    async function convertDirectory(content: ContentLink): Promise<ContentLink | undefined> {
+    async function convertDirectory(content: ContentLink): Promise<[ContentLink | undefined, number]> {
         const entryPromises: Promise<Entry | undefined>[] = []
         for await (const request of fileRequests(contentReader, content, specs)) {
-            switch (request.entry.kind) {
+            const entry = request.entry
+            switch (entry.kind) {
                 case EntryKind.File: {
                     entryPromises.push(context.run(async () => {
-                        const content = await markdownFileTask(
-                            request.entry.content,
+                        const [content, size] = await markdownFileTask(
+                            entry.content,
                             contentReader,
                             contentWriter,
                             productions
@@ -105,19 +106,21 @@ export async function markdownDirectoryTask(
                         return {
                             name: request.output,
                             kind: EntryKind.File,
-                            content
+                            content,
+                            size
                         }
                     }))
                     break
                 }
                 case EntryKind.Directory: {
                     entryPromises.push(context.run(async () => {
-                        const content = await convertDirectory(request.entry.content)
+                        const [content, size] = await convertDirectory(entry.content)
                         if (content) {
                             return {
                                 name: request.output,
                                 kind: EntryKind.Directory,
-                                content
+                                content,
+                                size
                             }
                         } else return undefined
                     }))
@@ -128,13 +131,13 @@ export async function markdownDirectoryTask(
         if (entries.length) {
             entries.sort((a, b) => stringCompare(a.name, b.name) )
             const text = JSON.stringify(entries)
-            return await contentWriter.writeContentLink(dataFromString(text))
+            return [await contentWriter.writeContentLink(dataFromString(text)), text.length]
         } else {
-            return undefined
+            return [undefined, 0]
         }
     }
 
-    const directoryContent = await convertDirectory(request.directory as ContentLink)
+    const [directoryContent] = await convertDirectory(request.directory as ContentLink)
     if (directoryContent) {
         return directoryContent
     }

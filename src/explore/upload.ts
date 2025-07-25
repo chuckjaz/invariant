@@ -80,7 +80,8 @@ async function upload(directory: string) {
                         name: entry.name,
                         createTime: Math.floor(stat.ctimeMs),
                         modifyTime: Math.floor(stat.mtimeMs),
-                        content: { address }
+                        content: { address },
+                        size: 0
                     }
                     return treeEntry
                 })

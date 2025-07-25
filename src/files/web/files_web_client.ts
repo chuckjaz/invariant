@@ -1,11 +1,9 @@
 import { streamBlob } from "../../common/blob";
-import { dataFromReadable, dataToStrings, linesToNumbers, stringsToLines } from "../../common/data";
 import { error } from "../../common/errors";
-import { jsonStream } from "../../common/parseJson";
 import { PingableClient } from "../../common/pingable_client";
 import { ContentLink } from "../../common/types";
 import { Data } from "../../storage/storage_client";
-import { ContentInformation, ContentKind, EntryAttributes, FileDirectoryEntry, FilesClient, Node, WatchItem } from "../files_client";
+import { ContentInformation, ContentKind, DirectoryContentInformation, EntryAttributes, FileContentInformation, FileDirectoryEntry, FilesClient, Node, SymbolicLinkContentInformation } from "../files_client";
 
 const filesPrefix = '/files'
 const mountPrefix = `${filesPrefix}/mount`
@@ -18,7 +16,6 @@ const attributesPrefix = `${filesPrefix}/attributes`
 const sizePrefix = `${filesPrefix}/size`
 const renamePrefix = `${filesPrefix}/rename`
 const linkPrefix = `${filesPrefix}/link`
-const watchPrefix = `${filesPrefix}/watch`
 const syncPrefix = `${filesPrefix}/sync`
 
 export class FilesWebClient extends PingableClient implements FilesClient {
@@ -41,27 +38,26 @@ export class FilesWebClient extends PingableClient implements FilesClient {
         return this.postJson<ContentLink>('', `${unmountPrefix}/${node}`)
     }
 
-    lookup(parent: Node, name: string): Promise<Node | undefined> {
+    lookup(parent: Node, name: string): Promise<ContentInformation | undefined> {
         return this.getJsonOrUndefined(`${lookupPrefix}/${parent}/${name}`)
     }
 
-    info(node: Node): Promise<ContentInformation | undefined> {
-        return this.getJsonOrUndefined(`${infoPrefix}/${node}`)
+    info(node: Node): Promise<ContentInformation> {
+        return this.getJson(`${infoPrefix}/${node}`)
     }
 
     content(node: Node): Promise<ContentLink> {
         return this.getJson<ContentLink>(`${contentPrefix}/${node}`)
     }
 
-    async createNode(
+    async createDirectory(
         parent: Node,
         name: string,
-        kind: ContentKind,
         content?: ContentLink
-    ): Promise<number> {
+    ): Promise<DirectoryContentInformation> {
         const url = new URL(`${filesPrefix}/${parent}/${name}`, this.url)
         let headers = { }
-        url.searchParams.append('kind', kind)
+        url.searchParams.append('kind', ContentKind.Directory)
         if (content) {
             url.searchParams.append('content', JSON.stringify(content))
         }
@@ -70,9 +66,49 @@ export class FilesWebClient extends PingableClient implements FilesClient {
             headers
         })
         if (response.ok) {
-            return await response.json() as number
+            return await response.json() as DirectoryContentInformation
         }
-        error(`Could not create node: ${response.status}`)
+        error(`Could not create directory: ${response.status}`)
+    }
+
+    async createFile(
+        parent: Node,
+        name: string,
+        content?: ContentLink
+    ): Promise<FileContentInformation> {
+        const url = new URL(`${filesPrefix}/${parent}/${name}`, this.url)
+        let headers = { }
+        url.searchParams.append('kind', ContentKind.File)
+        if (content) {
+            url.searchParams.append('content', JSON.stringify(content))
+        }
+        const response = await fetch(url, {
+            method: 'PUT',
+            headers
+        })
+        if (response.ok) {
+            return await response.json() as FileContentInformation
+        }
+        error(`Could not create file: ${response.status}`)
+    }
+
+    async createSymbolicLink(
+        parent: Node,
+        name: string,
+        target: string
+    ): Promise<SymbolicLinkContentInformation> {
+        const url = new URL(`${filesPrefix}/${parent}/${name}`, this.url)
+        let headers = { }
+        url.searchParams.append('kind', ContentKind.SymbolicLink)
+        url.searchParams.append('target', target)
+        const response = await fetch(url, {
+            method: 'PUT',
+            headers
+        })
+        if (response.ok) {
+            return await response.json() as SymbolicLinkContentInformation
+        }
+        error(`Could not create file: ${response.status}`)
     }
 
     async *readFile(node: Node, offset?: number, length?: number): Data {
@@ -121,15 +157,16 @@ export class FilesWebClient extends PingableClient implements FilesClient {
         error(`Could not write to file: ${response.status}`)
     }
 
-    async setSize(node: Node, size: number): Promise<void> {
+    async setSize(node: Node, size: number): Promise<ContentInformation> {
         const url = new URL(`${sizePrefix}/${node}`, this.url)
         url.searchParams.append('size', `${size}`)
         const response = await fetch(url, {
             method: 'PUT',
         })
-        if (!response.ok) {
-            error(`Could not set the size of node ${node}: ${response.status}`)
+        if (response.ok) {
+            return await response.json() as ContentInformation
         }
+        error(`Could not set the size of node ${node}: ${response.status}`)
     }
 
     async *readDirectory(node: Node, offset?: number, length?: number): AsyncIterable<FileDirectoryEntry> {
@@ -143,7 +180,7 @@ export class FilesWebClient extends PingableClient implements FilesClient {
         yield *this.getJsonStream<FileDirectoryEntry>(url)
     }
 
-    async removeNode(parent: Node, name: string): Promise<boolean> {
+    async remove(parent: Node, name: string): Promise<boolean> {
         const url = new URL(`${removePrefix}/${parent}/${name}`, this.url)
         const response = await fetch(url, {
             method: 'POST'
@@ -154,18 +191,19 @@ export class FilesWebClient extends PingableClient implements FilesClient {
         error(`Could not remove node: ${response.status}`)
     }
 
-    async setAttributes(node: Node, attributes: EntryAttributes): Promise<void> {
+    async setAttributes(node: Node, attributes: EntryAttributes): Promise<ContentInformation> {
         const url = new URL(`${attributesPrefix}/${node}`, this.url)
         const response = await fetch(url, {
             method: 'PUT',
             body: JSON.stringify(attributes)
         })
-        if (!response.ok) {
-            error(`Could not set attributes of ${node}: status: ${response.status}`)
+        if (response.ok) {
+            return await response.json() as ContentInformation
         }
+        error(`Could not set attributes of ${node}: status: ${response.status}`)
     }
 
-    async rename(parent: Node, name: string, newParent: Node, newName: string): Promise<boolean> {
+    async rename(parent: Node, name: string, newParent: Node, newName: string): Promise<void> {
         const url = new URL(`${renamePrefix}/${parent}/${name}`, this.url)
         url.searchParams.append("newParent", `${newParent}`)
         url.searchParams.append("newName", newName)
@@ -173,29 +211,23 @@ export class FilesWebClient extends PingableClient implements FilesClient {
             method: 'PUT',
             body: ''
         })
-        return response.ok
+        if (!response.ok) {
+            error(`Rename failed: status: ${response.status}`)
+        }
     }
 
-    async link(parent: Node, node: Node, name: string): Promise<boolean> {
+    async link(parent: Node, node: Node, name: string): Promise<void> {
         const url = new URL(`${linkPrefix}/${parent}/${name}`, this.url)
         url.searchParams.append("node", `${node}`)
         const response = await fetch(url, {
             method: 'PUT',
             body: ''
         })
-        return response.ok
-    }
-
-    async *watch(): AsyncIterable<WatchItem> {
-        const url = new URL(watchPrefix, this.url)
-        const response = await fetch(url)
-        if (response.ok && response.body) {
-            const data = response.body as AsyncIterable<Buffer>;
-            const strings = dataToStrings(data)
-            const items = jsonStream(strings) as AsyncIterable<WatchItem>
-            yield *items
+        if (!response.ok) {
+            error(`Link failed: status: ${response.status}`)
         }
     }
+
 
     async sync(): Promise<void> {
         const url = new URL(syncPrefix, this.url)

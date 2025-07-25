@@ -31,13 +31,22 @@ async function writeDirectory(code: string, location: string) {
     const mapper = new ParallelMapper<{entry: Entry, location: string}, undefined>(
         async ({entry, location}, schedule) => {
             const fullName = path.join(location, entry.name)
-            if (entry.kind == EntryKind.Directory) {
-                const entries = await getDirectoryEntries(entry.content.address)
-                schedule(...entries.map(entry => ({ entry, location: fullName })))
-            } else {
-                const data = await storage.get(entry.content.address)
-                if (!data) throw new Error(`Could not obtain file for ${fullName}`);
-                await writeDataToFile(data, fullName)
+            switch (entry.kind) {
+                case EntryKind.Directory: {
+                    const entries = await getDirectoryEntries(entry.content.address)
+                    schedule(...entries.map(entry => ({ entry, location: fullName })))
+                    break
+                }
+                case EntryKind.File: {
+                    const data = await storage.get(entry.content.address)
+                    if (!data) throw new Error(`Could not obtain file for ${fullName}`);
+                    await writeDataToFile(data, fullName)
+                    break
+                }
+                case EntryKind.SymbolicLink: {
+                    console.log(`symbolic link ignored ${location}/${entry.name}`)
+                    break
+                }
             }
         },
         100

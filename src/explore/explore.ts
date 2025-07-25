@@ -36,7 +36,8 @@ async function readDirectory(directory: string): Promise<string> {
                 name: entry.name,
                 createTime: Math.floor(stat.ctimeMs),
                 modifyTime: Math.floor(stat.mtimeMs),
-                content: { address }
+                content: { address },
+                size: 0
             }
             treeEntries.push(treeEntry)
         }

@@ -30,7 +30,7 @@ describe("tasks/markdown task", () => {
         const productions = mockProductions()
 
         const { content: markdownContent, expect: html } = await createMarkdownFile("# This is a test", storage)
-        const htmlContent = await markdownFileTask(markdownContent, files, files, productions)
+        const [htmlContent] = await markdownFileTask(markdownContent, files, files, productions)
         const htmlText = await dataToString(files.readContentLink(htmlContent))
         expect(htmlText).toEqual(html)
     })
@@ -76,40 +76,47 @@ async function createMarkdownDirectory(level: number, width: number, markdownTex
     let d = 0
     const expects: string[] = []
 
-    async function createFile(): Promise<ContentLink> {
-        const text = markdownText(f++)
+    async function createFile(): Promise<[ContentLink, number, number]> {
+        const index = f++
+        const text = markdownText(index)
         const { content, expect } = await createMarkdownFile(text, storage)
         expects.push(expect)
-        return content
+        return [content, text.length, index]
     }
 
-    async function createDirectory(l: number): Promise<ContentLink> {
+    async function createDirectory(l: number): Promise<[ContentLink, number, number]> {
         const entries: Entry[] = []
         for (let i = 0; i < width; i++) {
+            const [content, size, index] = await createFile()
             entries.push({
                 kind: EntryKind.File,
-                name: `f${f}.md`,
-                content: await createFile()
+                name: `f${index}.md`,
+                content,
+                size
             })
         }
 
         if (l < level) {
             for (let i = 0; i < width; i++) {
+                const [content, size, index] = await createDirectory(l + 1)
                 entries.push({
                     kind: EntryKind.Directory,
-                    name: `d${d++}`,
-                    content: await createDirectory(l + 1)
+                    name: `d${index}`,
+                    content,
+                    size
                 })
             }
         }
 
         entries.sort((a, b) => stringCompare(a.name, b.name))
-        const address = await storage.post(dataFromString(JSON.stringify(entries)))
+        const jsonText = JSON.stringify(entries)
+        const address = await storage.post(dataFromString(jsonText))
         if (!address) error("Could not write directory");
-        return { address }
+        const index = d++
+        return [{ address }, jsonText.length, index]
     }
 
-    const content = await createDirectory(0)
+    const [content] = await createDirectory(0)
     return { content, expects }
 }
 

@@ -74,12 +74,12 @@ export interface SlotConfiguration {
 export enum EntryKind {
     File = "File",
     Directory = "Directory",
+    SymbolicLink = "SymbolicLink",
 }
 
 export interface BaseEntry {
     kind: EntryKind
     name: string
-    content: ContentLink
     createTime?: number
     modifyTime?: number
     mode?: string
@@ -87,15 +87,23 @@ export interface BaseEntry {
 
 export interface FileEntry extends BaseEntry {
     kind: EntryKind.File
-    size?: number
+    content: ContentLink
+    size: number
     type?: string
 }
 
 export interface DirectoryEntry extends BaseEntry {
     kind: EntryKind.Directory
+    content: ContentLink
+    size: number
 }
 
-export type Entry = FileEntry | DirectoryEntry
+export interface SymbolicLinkEntry extends BaseEntry {
+    kind: EntryKind.SymbolicLink
+    target: string
+}
+
+export type Entry = FileEntry | DirectoryEntry | SymbolicLinkEntry
 
 export interface ContentLink {
     address: string

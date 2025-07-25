@@ -4,14 +4,13 @@ import { error, invalid } from "../common/errors";
 import { dataFromString } from "../common/parseJson";
 import { ReadWriteLock } from "../common/read-write-lock";
 import { blockTreeSchema, directorySchema, entryKindSchema } from "../common/schema";
-import { Block, BlockTree, ContentLink, ContentTransform, DirectoryEntry, Entry, EntryKind, etagOf, FileEntry } from "../common/types";
+import { Block, BlockTree, ContentLink, ContentTransform, DirectoryEntry, Entry, EntryKind, etagOf, FileEntry, SymbolicLinkEntry } from "../common/types";
 import { SlotsClient } from "../slots/slot_client";
 import { Data, StorageClient } from "../storage/storage_client";
 import { createHash } from 'node:crypto'
-import { ContentInformation, ContentKind, ContentReader, EntryAttributes, FileDirectoryEntry, FilesClient, Node, WatchItem, WatchKind } from "./files_client";
+import { ContentInformation, ContentInformationCommon, ContentKind, ContentReader, DirectoryContentInformation, EntryAttributes, FileContentInformation, FileDirectoryEntry, FilesClient, Node, SymbolicLinkContentInformation } from "./files_client";
 import { stringCompare } from "../common/compares";
 import { delay } from "../common/delay";
-import { Channel } from "../common/channel";
 
 export class Files implements FilesClient, ContentReader {
     private id: string
@@ -30,7 +29,6 @@ export class Files implements FilesClient, ContentReader {
     private slotMounts = new Map<Node, string>()
     private locks = new Map<Node, ReadWriteLock>()
     private nextNode = 1
-    private watches: Channel<WatchItem>[] = []
 
     constructor(id: string, storage: StorageClient, slots: SlotsClient, broker: BrokerClient, syncFrequency?: number) {
         this.id = id
@@ -61,14 +59,15 @@ export class Files implements FilesClient, ContentReader {
         this.contentMap.set(node, content)
 
         const now = Date.now()
-        const info: ContentInformation = {
+        const info: DirectoryContentInformation = {
             node,
             kind: ContentKind.Directory,
             modifyTime: now,
             createTime: now,
             executable: executable ?? false,
             writable: writable ?? content.slot === true,
-            etag: etagOf(content)
+            etag: etagOf(content),
+            size: 0
         }
         this.infos.set(node, info)
         this.mounts.add(node)
@@ -84,13 +83,16 @@ export class Files implements FilesClient, ContentReader {
         return content
     }
 
-    async lookup(parent: Node, name: string): Promise<Node | undefined> {
+    async lookup(parent: Node, name: string): Promise<ContentInformation | undefined> {
         const directory = await this.ensureDirectory(parent)
-        return directory.get(name)
+        const node = directory.get(name)
+        if (node === undefined) return undefined
+        const info = nRequired(this.infos.get(node))
+        return info
     }
 
-    async info(node: Node): Promise<ContentInformation | undefined> {
-        return this.infos.get(node)
+    async info(node: Node): Promise<ContentInformation> {
+        return nRequired(this.infos.get(node))
     }
 
     async content(node: Node): Promise<ContentLink> {
@@ -132,29 +134,30 @@ export class Files implements FilesClient, ContentReader {
             this.addOverride(node, { offset: effectiveOffset, buffer })
             const info = nRequired(this.infos.get(node))
             info.modifyTime = Date.now()
-            const effectiveSize = info.size ?? 0
+            if (info.kind == ContentKind.SymbolicLink) return 0
+            const effectiveSize =  info.size
             const maxWritten = effectiveOffset + buffer.length
             if (maxWritten > effectiveSize) info.size = maxWritten
             const parent = nRequired(this.parents.get(node))
             this.invalidDirectories.add(parent)
-            this.invalidateNode(node)
-            this.invalidateNode(parent)
             return buffer.length
         } finally {
             lock.writeUnlock()
         }
     }
 
-    async setSize(node: Node, size: number): Promise<void> {
+    async setSize(node: Node, size: number): Promise<ContentInformation> {
         this.assertWritable(node, ContentKind.File)
         const lock = nRequired(this.locks.get(node))
         await lock.writeLock()
         try {
+            const info = nRequired(this.infos.get(node))
+            if (info.kind != ContentKind.File) invalid("Node is not a file", 503);
+            info.size = size
             this.addTransform(node, data => setDataSize(size, data))
             const parent = nRequired(this.parents.get(node))
             this.invalidDirectories.add(parent)
-            this.invalidateNode(node)
-            this.invalidateNode(parent)
+            return info
         } finally {
             lock.writeUnlock()
         }
@@ -179,55 +182,19 @@ export class Files implements FilesClient, ContentReader {
         }
     }
 
-    async createNode(
-        parent: Node,
-        name: string,
-        kind: ContentKind,
-        content?: ContentLink,
-    ): Promise<number> {
-        this.assertWritable(parent, ContentKind.Directory)
-        const lock = nRequired(this.locks.get(parent))
-        await lock.writeLock()
-        try {
-            const entries = await this.ensureDirectory(parent)
-            const info = nRequired(this.infos.get(parent))
-            const now = Date.now()
-            info.modifyTime = now
-            this.invalidDirectories.add(parent)
-            const node = this.newNode()
-            const newInfo: ContentInformation = {
-                node,
-                kind,
-                modifyTime: now,
-                createTime: now,
-                writable: true,
-                executable: false,
-                etag: "",
-                size: 0
-            }
-            this.infos.set(node, newInfo)
-            entries.set(name, node)
-            this.parents.set(node, parent)
-            this.invalidDirectories.add(parent)
-            this.invalidateNode(parent)
-            if (content) {
-                this.contentMap.set(node, content)
-            } else {
-                if (kind == ContentKind.Directory) {
-                    this.directories.set(node, new Map())
-                    this.invalidDirectories.add(node)
-                } else {
-                    this.transforms.set(node, () => dataFromString(""))
-                }
-            }
-            this.scheduleSync()
-            return node
-        } finally {
-            lock.writeUnlock()
-        }
+    async createDirectory(parent: Node, name: string, content?: ContentLink): Promise<DirectoryContentInformation> {
+        return this.createNode(parent, name, ContentKind.Directory, content) as Promise<DirectoryContentInformation>
     }
 
-    async removeNode(parent: Node, name: string): Promise<boolean> {
+    async createFile(parent: Node, name: string, content?: ContentLink): Promise<FileContentInformation> {
+        return this.createNode(parent, name, ContentKind.File, content) as Promise<FileContentInformation>
+    }
+
+    async createSymbolicLink(parent: Node, name: string, target: string): Promise<SymbolicLinkContentInformation> {
+        return this.createNode(parent, name, ContentKind.SymbolicLink, target) as Promise<SymbolicLinkContentInformation>
+    }
+
+    async remove(parent: Node, name: string): Promise<boolean> {
         this.assertWritable(parent, ContentKind.Directory)
         const lock = nRequired(this.locks.get(parent))
         await lock.writeLock()
@@ -238,7 +205,6 @@ export class Files implements FilesClient, ContentReader {
                 entries.delete(name)
                 this.forget(node)
                 this.invalidDirectories.add(parent)
-                this.invalidateNode(parent)
                 this.scheduleSync()
                 return true
             }
@@ -248,7 +214,7 @@ export class Files implements FilesClient, ContentReader {
         }
     }
 
-    async setAttributes(node: Node, attributes: EntryAttributes): Promise<void> {
+    async setAttributes(node: Node, attributes: EntryAttributes): Promise<ContentInformation> {
         const parent = nRequired(this.parents.get(node))
         const lock = nRequired(this.locks.get(parent))
         await lock.writeLock()
@@ -266,7 +232,7 @@ export class Files implements FilesClient, ContentReader {
             if (attributes.writable !== undefined) {
                 info.writable = attributes.writable
             }
-            if (attributes.type !== undefined) {
+            if (attributes.type !== undefined && info.kind == ContentKind.File) {
                 if (attributes.type == null) {
                     delete attributes.type
                 } else {
@@ -274,55 +240,44 @@ export class Files implements FilesClient, ContentReader {
                 }
             }
             this.invalidDirectories.add(parent)
-            this.invalidateNode(parent)
             this.scheduleSync()
+            return info
         } finally {
             lock.writeUnlock()
         }
     }
 
-    async rename(parent: Node, name: string, newParent: Node, newName: string): Promise<boolean> {
+    async rename(parent: Node, name: string, newParent: Node, newName: string): Promise<void> {
         const lock = nRequired(this.locks.get(parent))
         await lock.writeLock()
         try {
             const entries = nRequired(this.directories.get(parent))
             const newEntries = nRequired(this.directories.get(newParent))
             const node = entries.get(name)
-            if (node === undefined) return false
+            if (node === undefined) return
             entries.delete(name)
             newEntries.set(newName, node)
             this.invalidDirectories.add(parent)
             this.invalidDirectories.add(newParent)
-            this.invalidateNode(parent)
-            this.invalidateNode(newParent)
             this.scheduleSync()
-            return true
         } finally {
             lock.writeUnlock()
         }
     }
 
-    async link(parent: Node, node: Node, name: string): Promise<boolean> {
+    async link(parent: Node, node: Node, name: string): Promise<void> {
         const lock = nRequired(this.locks.get(parent))
         await lock.writeLock()
         try {
             const entries = nRequired(this.directories.get(parent))
             const found = entries.get(name)
-            if (found !== undefined) return false
+            if (found !== undefined) invalid("Name already exists", 502)
             entries.set(name, node)
             this.invalidDirectories.add(parent)
-            this.invalidateNode(parent)
             this.scheduleSync()
-            return true
         } finally {
             lock.writeUnlock()
         }
-    }
-
-    watch(): AsyncIterable<WatchItem> {
-        const newChannel = new Channel<WatchItem>()
-        this.watches.push(newChannel)
-        return newChannel.all()
     }
 
     async sync(): Promise<void> {
@@ -346,8 +301,74 @@ export class Files implements FilesClient, ContentReader {
             clearInterval(this.slotReadsTimeout)
             this.slotReadsTimeout = undefined
         }
-        for (const channel of this.watches) {
-            channel.close()
+    }
+
+
+    private async createNode(
+        parent: Node,
+        name: string,
+        kind: ContentKind,
+        content?: ContentLink | string,
+    ): Promise<ContentInformation> {
+        this.assertWritable(parent, ContentKind.Directory)
+        const lock = nRequired(this.locks.get(parent))
+        await lock.writeLock()
+        try {
+            const entries = await this.ensureDirectory(parent)
+            const info = nRequired(this.infos.get(parent))
+            const now = Date.now()
+            info.modifyTime = now
+            this.invalidDirectories.add(parent)
+            const node = this.newNode()
+            const baseInfo: ContentInformationCommon = {
+                node,
+                kind,
+                modifyTime: now,
+                createTime: now,
+                writable: true,
+                executable: false,
+                etag: ""
+            }
+            let newInfo: ContentInformation
+            switch (kind) {
+                case ContentKind.Directory:
+                    newInfo = { ...baseInfo, kind: ContentKind.Directory, size: 0 }
+                    if (content) {
+                        if (typeof content == 'string') invalid('Content must be a content link');
+                        this.contentMap.set(node, content)
+                        newInfo.etag = etagOf(content)
+                    } else {
+                        this.directories.set(node, new Map())
+                        this.invalidDirectories.add(node)
+                        const emptyDirectory = await this.writeContentLink(dataFromString('[]'))
+                        newInfo.etag = etagOf(emptyDirectory)
+                    }
+                    break
+                case ContentKind.File:
+                    newInfo = { ...baseInfo, kind: ContentKind.File, size: 0 }
+                    if (content) {
+                        if (typeof content == 'string') invalid('Content must be a content link');
+                        this.contentMap.set(node, content)
+                        newInfo.etag = etagOf(content)
+                    } else {
+                        this.transforms.set(node, () => dataFromBuffers([]))
+                        const emptyFile = await this.writeContentLink(dataFromBuffers([]))
+                        newInfo.etag = etagOf(emptyFile)
+                    }
+                    break
+                case ContentKind.SymbolicLink:
+                    if (typeof content != 'string') invalid('Target not provided');
+                    newInfo = { ...baseInfo, kind: ContentKind.SymbolicLink, target: content }
+                    break
+            }
+            this.infos.set(node, newInfo)
+            entries.set(name, node)
+            this.parents.set(node, parent)
+            this.invalidDirectories.add(parent)
+            this.scheduleSync()
+            return newInfo
+        } finally {
+            lock.writeUnlock()
         }
     }
 
@@ -366,7 +387,6 @@ export class Files implements FilesClient, ContentReader {
         while (remove.length > 0) {
             const node = remove.pop()
             if (!node) break
-            this.forgetNode(node)
             const entries = this.directories.get(node)
             if (entries) remove.push(...entries.values());
             this.directories.delete(node)
@@ -423,24 +443,37 @@ export class Files implements FilesClient, ContentReader {
             if (!directory) invalid(`Could not read directory`);
             for (const entry of directory) {
                 const entryNode = this.newNode()
-                const content = entry.content
                 let mode = entry.mode ?? (entry.kind == EntryKind.File ? "" : "x");
                 if (!directoryInfo.writable && mode.indexOf('r') < 0) mode += 'r'
-                const info: ContentInformation = {
+                const baseInfo: ContentInformationCommon = {
                     node: entryNode,
                     kind: entry.kind == EntryKind.Directory ? ContentKind.Directory : ContentKind.File,
                     modifyTime: entry.modifyTime ?? Date.now(),
                     createTime: entry.createTime ?? Date.now(),
                     executable: mode.indexOf("x") >= 0,
                     writable: mode.indexOf("r") < 0,
-                    etag: etagOf(content),
+                    etag: "",
+
                 }
-                if (entry.kind == EntryKind.File) {
-                    if (entry.type) info.type = entry.type;
-                    if (entry.size !== undefined) info.size = entry.size
+                let info: ContentInformation
+                switch (entry.kind) {
+                    case EntryKind.Directory: {
+                        info = { ...baseInfo, kind: ContentKind.Directory, size: entry.size, etag: etagOf(entry.content) }
+                        this.contentMap.set(entryNode, entry.content)
+                        break
+                    }
+                    case EntryKind.File: {
+                        info = { ...baseInfo, kind: ContentKind.File, size: entry.size, etag: etagOf(entry.content) }
+                        if (entry.type) info.type = entry.type
+                        this.contentMap.set(entryNode, entry.content)
+                        break
+                    }
+                    case EntryKind.SymbolicLink: {
+                        info = { ...baseInfo, kind: ContentKind.SymbolicLink, target: entry.target, etag: hashText(entry.target)}
+                        break
+                    }
                 }
                 this.infos.set(entryNode, info)
-                this.contentMap.set(entryNode, entry.content)
                 entries.set(entry.name, entryNode)
                 this.parents.set(entryNode, node)
             }
@@ -607,37 +640,60 @@ export class Files implements FilesClient, ContentReader {
                 const info = this.infos.get(entryNode)
                 if (!info) error(`Could not find info for ${name} in directory node ${node}, file node: ${entryNode}`);
                 const content = this.contentMap.get(entryNode)
-                if (!content) {
-                    // This entry was create during the sync. Ignore the entry for now as another sync
-                    // is coming that will give this entry content
-                    continue
+                let mode = ""
+                if (!info.writable || info.executable) {
+                    if (!info.writable) mode += "r"
+                    if (info.executable) mode += "x"
                 }
-                if (info.kind == ContentKind.Directory) {
-                    const directoryEntry: DirectoryEntry = {
-                        kind: EntryKind.Directory,
-                        name,
-                        content,
-                        createTime: info.createTime,
-                        modifyTime: info.modifyTime
+                switch (info.kind) {
+                    case ContentKind.Directory: {
+                        if (!content) {
+                            // This entry was create during the sync. Ignore the entry for now as another sync
+                            // is coming that will give this entry content
+                            continue
+                        }
+                        const directoryEntry: DirectoryEntry = {
+                            kind: EntryKind.Directory,
+                            name,
+                            content,
+                            createTime: info.createTime,
+                            modifyTime: info.modifyTime,
+                            size: info.size
+                        }
+                        if (mode !== "") directoryEntry.mode = mode
+                        directoryEntries.push(directoryEntry)
+                        break
                     }
-                    directoryEntries.push(directoryEntry)
-                } else {
-                    const fileEntry: FileEntry = {
-                        kind: EntryKind.File,
-                        name,
-                        content,
-                        createTime: info.createTime,
-                        modifyTime: info.modifyTime,
-                        size: info.size,
-                        type: info.type
+                    case ContentKind.File: {
+                        if (!content) {
+                            // This entry was create during the sync. Ignore the entry for now as another sync
+                            // is coming that will give this entry content
+                            continue
+                        }
+                        const fileEntry: FileEntry = {
+                            kind: EntryKind.File,
+                            name,
+                            content,
+                            createTime: info.createTime,
+                            modifyTime: info.modifyTime,
+                            size: info.size,
+                            type: info.type
+                        }
+                        if (mode !== "") fileEntry.mode = mode
+                        directoryEntries.push(fileEntry)
+                        break
                     }
-                    if (!info.writable || info.executable) {
-                        let mode = ""
-                        if (!info.writable) mode += "r"
-                        if (info.executable) mode += "x"
-                        fileEntry.mode = mode
+                    case ContentKind.SymbolicLink: {
+                        const symbolicLinkEntry: SymbolicLinkEntry = {
+                            kind: EntryKind.SymbolicLink,
+                            name,
+                            target: info.target,
+                            createTime: info.createTime,
+                            modifyTime: info.modifyTime,
+                        }
+                        if (mode !== "") symbolicLinkEntry.mode = mode
+                        directoryEntries.push(symbolicLinkEntry)
                     }
-                    directoryEntries.push(fileEntry)
                 }
             }
             directoryEntries.sort((a, b) => stringCompare(a.name, b.name))
@@ -650,7 +706,7 @@ export class Files implements FilesClient, ContentReader {
             this.contentMap.set(node, directoryBlock.content)
             this.invalidDirectories.delete(node)
             const info = this.infos.get(node)
-            if (info) info.etag = etag
+            if (info && info.kind != ContentKind.SymbolicLink) info.etag = etag
             if (previous) {
                 const slot = this.slotMounts.get(node)
                 if (slot) {
@@ -672,10 +728,11 @@ export class Files implements FilesClient, ContentReader {
         const lock = nRequired(this.locks.get(node))
         await lock.writeLock()
         try {
+            const info = nRequired(this.infos.get(node))
+            if (info.kind == ContentKind.SymbolicLink) return
             const data = this.readFileDataLocked(node)
             const dataBlock = await this.writeData(data, node)
             if (!dataBlock) return
-            const info = nRequired(this.infos.get(node))
             info.etag = etagOf(dataBlock.content)
             info.size = dataBlock.size
             this.contentMap.set(node, dataBlock.content)
@@ -795,36 +852,6 @@ export class Files implements FilesClient, ContentReader {
         return undefined
     }
 
-    private forgetNode(node: Node) {
-        const watches = this.watches
-        let i = 0
-        while (i < watches.length) {
-            const channel = watches[i]
-            if (channel.closed) {
-                watches.splice(i, 1)
-            } else {
-                channel.send({ kind: WatchKind.Forgotten, node })
-            }
-        }
-    }
-
-    private invalidateNode(node: Node) {
-        const watches = this.watches
-        let i = 0;
-        while (i < watches.length) {
-            const channel = watches[i]
-            if (channel.closed) {
-                watches.splice(i, 1)
-            } else {
-                const info = this.infos.get(node)
-                if (info) {
-                    channel.send({ kind: WatchKind.Changed, info })
-                }
-            }
-            i++
-        }
-    }
-
     private newNode(): number {
         const node = this.nextNode++
         this.locks.set(node, new ReadWriteLock())
@@ -846,8 +873,18 @@ function hashText(text: string): string {
 }
 
 export function directoryEtag(entries: Entry[]): string {
-    const etagData = entries.map(e => ({ name: e.name, etag: etagOf(e.content) }))
+    const etagData = entries.map(e => ({ name: e.name, etag: entryEtag(e) }))
     const etagText = JSON.stringify(etagData)
     const hash = hashText(etagText)
     return hash
+}
+
+function entryEtag(entry: Entry): string {
+    switch (entry.kind) {
+        case EntryKind.Directory:
+        case EntryKind.File:
+            return etagOf(entry.content)
+        case EntryKind.SymbolicLink:
+            return hashText(entry.target)
+    }
 }

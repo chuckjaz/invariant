@@ -145,7 +145,7 @@ export function filesWebHandlers(client: FilesClient): ResponseFunc {
                 method: 'POST',
                 params: [nodeSchema, convertString],
                 handler: async (ctx, next, parent: Node, name: string) => {
-                    ctx.body = await client.removeNode(parent, name)
+                    ctx.body = await client.remove(parent, name)
                     ctx.status = 200
                 }
             },
@@ -154,8 +154,7 @@ export function filesWebHandlers(client: FilesClient): ResponseFunc {
                 params: [nodeSchema],
                 body: attributesSchema,
                 handler: async (ctx, next, node, attributes: EntryAttributes) => {
-                    await client.setAttributes(node, attributes)
-                    ctx.body = ''
+                    ctx.body = await client.setAttributes(node, attributes)
                     ctx.status = 200
                 }
             },
@@ -170,8 +169,8 @@ export function filesWebHandlers(client: FilesClient): ResponseFunc {
                         ctx.status = 404
                         return
                     }
-                    await client.setSize(node, query.size)
-                    ctx.body = ''
+                    const info = await client.setSize(node, query.size)
+                    ctx.body = info
                     ctx.status = 200
                 }
             },
@@ -186,9 +185,10 @@ export function filesWebHandlers(client: FilesClient): ResponseFunc {
                     const newParent = query.newParent
                     const newName = query.newName
                     ctx.body = ''
-                    if (newName === undefined || newParent === undefined || !await client.rename(parent, name, newParent, newName)) {
+                    if (newName === undefined || newParent === undefined) {
                         ctx.status = 404
                     } else {
+                        await client.rename(parent, name, newParent, newName)
                         ctx.status = 200
                     }
                 }
@@ -200,25 +200,12 @@ export function filesWebHandlers(client: FilesClient): ResponseFunc {
                 handler: async (ctx, next, query: { node?: Node }, parent, name: string) => {
                     const node = query.node
                     ctx.body = ''
-                    if (node === undefined || !await client.link(parent, node, name)) {
+                    if (node === undefined) {
                         ctx.status = 404
                     } else {
+                        await client.link(parent, node, name)
                         ctx.status = 200
                     }
-                }
-            },
-            'watch': {
-                method: 'GET',
-                handler: async (ctx) => {
-                    const channel = new Channel<string>()
-                    ctx.body = textToReadable(channel.all())
-                    ctx.status = 200
-                    async function send() {
-                        for await (const watchItem of client.watch()) {
-                            channel.send(`${JSON.stringify(watchItem)}\n`)
-                        }
-                    }
-                    send()
                 }
             },
             'sync': {
@@ -257,10 +244,27 @@ export function filesWebHandlers(client: FilesClient): ResponseFunc {
             query: {
                 'kind': contentKind,
                 'content': convertContentLink,
+                'target': convertString,
             },
             handler: async (ctx, next, query, parent, name) => {
-                ctx.body = await client.createNode(parent, name, query.kind ?? ContentKind.File, query.content)
-                ctx.status = 200
+                switch (query.kind ?? ContentKind.File) {
+                    case ContentKind.Directory:
+                        ctx.body = await client.createDirectory(parent, name, query.content)
+                        ctx.state = 200
+                        break
+                    case ContentKind.File:
+                        ctx.body = await client.createFile(parent, name, query.content)
+                        ctx.state = 200
+                        break
+                    case ContentKind.SymbolicLink:
+                        ctx.body = await client.createSymbolicLink(parent, name, query.target)
+                        ctx.body = 200
+                        break
+                    default:
+                        ctx.status = 404
+                        ctx.body = ''
+                        break
+                }
             }
         }]
     }

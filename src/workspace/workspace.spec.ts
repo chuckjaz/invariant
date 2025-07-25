@@ -6,7 +6,7 @@ import { randomId } from "../common/id";
 import { dataToString } from "../common/parseJson";
 import { ContentLink } from "../common/types";
 import { Files } from "../files/files";
-import { ContentKind, ContentWriter } from "../files/files_client";
+import { ContentWriter } from "../files/files_client";
 import { FileLayersDescription, LayeredFiles } from "../files/layer/file_layer";
 import { mockSlots } from "../slots/mock/slots_mock_client";
 import { SlotsClient } from "../slots/slot_client";
@@ -26,10 +26,10 @@ describe("workspace/workspace", () => {
         const root = await files.mount(helloWorldLink, true, true)
         const srcDir = await files.lookup(root, "src");
         expectDefined(srcDir);
-        const helloWorldFile = await files.lookup(srcDir, "hello_world.ts");
-        expectDefined(helloWorldFile);
+        const helloWorldFileInfo = await files.lookup(srcDir.node, "hello_world.ts");
+        expectDefined(helloWorldFileInfo);
 
-        const content = await dataToString(files.readFile(helloWorldFile));
+        const content = await dataToString(files.readFile(helloWorldFileInfo.node));
         expect(content).toEqual("console.log('Hello, World!')\n");
 
         files.stop()
@@ -63,9 +63,9 @@ describe("workspace/workspace", () => {
 
         const srcDir = await layerFiles.lookup(workspaceRoot, "src");
         expectDefined(srcDir);
-        const helloWorldFile = await layerFiles.lookup(srcDir, "hello_world.ts");
+        const helloWorldFile = await layerFiles.lookup(srcDir.node, "hello_world.ts");
         expectDefined(helloWorldFile);
-        const content = await dataToString(layerFiles.readFile(helloWorldFile));
+        const content = await dataToString(layerFiles.readFile(helloWorldFile.node));
         expect(content).toEqual("console.log('Hello, World!')\n");
         files.stop
     });
@@ -84,12 +84,12 @@ describe("workspace/workspace", () => {
         const workspaceRoot = await layerFiles.mount(workspaceLink);
 
         // Write to the output layer
-        const outputDir = await layerFiles.createNode(workspaceRoot, "out", ContentKind.Directory);
-        const outputFile = await layerFiles.createNode(outputDir, "output.txt", ContentKind.File);
-        await layerFiles.writeFile(outputFile, stringsToData("This is an output file"));
+        const outputDir = await layerFiles.createDirectory(workspaceRoot, "out");
+        const outputFile = await layerFiles.createFile(outputDir.node, "output.txt");
+        await layerFiles.writeFile(outputFile.node, stringsToData("This is an output file"));
 
         // Check the file was written
-        const content = await dataToString(layerFiles.readFile(outputFile));
+        const content = await dataToString(layerFiles.readFile(outputFile.node));
         expect(content).toEqual("This is an output file");
 
         // Check that the output file when to the output layer
@@ -97,14 +97,14 @@ describe("workspace/workspace", () => {
         await layerFiles.sync()
         const layersFile = await layerFiles.lookup(workspaceRoot, ".layers");
         expectDefined(layersFile);
-        const layersContent = await dataToString(layerFiles.readFile(layersFile));
+        const layersContent = await dataToString(layerFiles.readFile(layersFile.node));
         const layers = JSON.parse(layersContent) as FileLayersDescription;
         const outputDirectory = await files.mount(layers[1].content as ContentLink)
         const outDirectory = await files.lookup(outputDirectory, "out");
         expectDefined(outDirectory);
-        const outputFileHandle = await files.lookup(outDirectory, "output.txt");
+        const outputFileHandle = await files.lookup(outDirectory.node, "output.txt");
         expectDefined(outputFileHandle);
-        const outputFileContent = await dataToString(files.readFile(outputFileHandle));
+        const outputFileContent = await dataToString(files.readFile(outputFileHandle.node));
         expect(outputFileContent).toEqual("This is an output file");
         files.stop
     })
@@ -127,12 +127,12 @@ describe("workspace/workspace", () => {
         // Modify the hello world file
         const srcDir = await layerFiles.lookup(workspaceRoot, "src");
         expectDefined(srcDir);
-        const helloWorldFile = await layerFiles.lookup(srcDir, "hello_world.ts");
+        const helloWorldFile = await layerFiles.lookup(srcDir.node, "hello_world.ts");
         expectDefined(helloWorldFile);
-        const helloWorldContent = await dataToString(layerFiles.readFile(helloWorldFile));
+        const helloWorldContent = await dataToString(layerFiles.readFile(helloWorldFile.node));
         expect(helloWorldContent).toEqual("console.log('Hello, World!')\n");
         const modifiedContent = helloWorldContent + "console.log('This is a modification');\n";
-        await layerFiles.writeFile(helloWorldFile, stringsToData(modifiedContent));
+        await layerFiles.writeFile(helloWorldFile.node, stringsToData(modifiedContent));
         await delay(2) // Wait for the file to be written
         await layerFiles.sync()
 
@@ -157,11 +157,11 @@ describe("workspace/workspace", () => {
         // Update workspace description
         const workspaceHandle = await layerFiles.lookup(workspaceRoot, ".workspace");
         expectDefined(workspaceHandle);
-        const workspaceData = await workspaceFromData(layerFiles.readFile(workspaceHandle));
+        const workspaceData = await workspaceFromData(layerFiles.readFile(workspaceHandle.node));
         workspaceData.baseCommit = commitLink;
 
-        const written = await layerFiles.writeFile(workspaceHandle, workspaceToData(workspaceData));
-        await layerFiles.setSize(workspaceHandle, written)
+        const written = await layerFiles.writeFile(workspaceHandle.node, workspaceToData(workspaceData));
+        await layerFiles.setSize(workspaceHandle.node, written)
         await delay(2) // Wait for the file to be written
         await layerFiles.sync()
         files.stop()
@@ -205,13 +205,13 @@ async function helloWorldSources(services: Services): Promise<ContentLink> {
     const root = await files.mount(slotLink, true, true)
 
     // Create a src directory
-    const srcDir = await files.createNode(root, "src", ContentKind.Directory);
+    const srcDir = await files.createDirectory(root, "src");
 
-    const helloWorldHandle = await files.createNode(srcDir, "hello_world.ts", ContentKind.File);
-    await files.writeFile(helloWorldHandle, stringsToData([helloWorldSource]));
+    const helloWorldHandle = await files.createFile(srcDir.node, "hello_world.ts");
+    await files.writeFile(helloWorldHandle.node, stringsToData([helloWorldSource]));
 
-    const gitIgnoreHandle = await files.createNode(root, ".gitignore", ContentKind.File);
-    await files.writeFile(gitIgnoreHandle, stringsToData("coverage/\nnode_modules/\nout/\ndist/"));
+    const gitIgnoreHandle = await files.createFile(root, ".gitignore");
+    await files.writeFile(gitIgnoreHandle.node, stringsToData("coverage/\nnode_modules/\nout/\ndist/"));
 
     await delay(2)
     await files.sync()

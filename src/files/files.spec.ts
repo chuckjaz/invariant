@@ -4,14 +4,14 @@ import { brotliCompressData, cipherData, dataFromBuffers, deflateData, hashTrans
 import { delay } from "../common/delay"
 import { error, invalid } from "../common/errors"
 import { dataFromString, dataToString } from "../common/parseJson"
-import { Block, ContentLink, ContentTransform, Entry, EntryKind } from "../common/types"
+import { Block, ContentLink, ContentTransform, DirectoryEntry, Entry, EntryKind, FileEntry } from "../common/types"
 import { mockSlots } from "../slots/mock/slots_mock_client"
 import { SlotsClient } from "../slots/slot_client"
 import { Data, StorageClient } from "../storage/storage_client"
 import { mockStorage } from "../storage/mock"
 import { directoryEtag, Files } from "./files"
 import { createHash } from 'node:crypto'
-import { ContentKind, FileDirectoryEntry, Node, WatchKind } from "./files_client"
+import { ContentKind, FileDirectoryEntry, Node } from "./files_client"
 import { randomId } from "../common/id"
 import { Latch } from "../common/latch"
 
@@ -97,8 +97,8 @@ describe("files", () => {
     it("can create a file", async () => {
         const [files, node, slot, slots, storage] = await filesWithEmptyDirectory()
         try {
-            const fileNode = await files.createNode(node, "test", ContentKind.File)
-            const data = await readAllData(files.readFile(fileNode))
+            const fileNode = await files.createFile(node, "test")
+            const data = await readAllData(files.readFile(fileNode.node))
             expect(data).toEqual(Buffer.alloc(0, 0))
             await files.sync()
             await validateDirectory(files, node)
@@ -118,11 +118,11 @@ describe("files", () => {
     it("can create and write to a file", async () => {
         const [files, node, slot, slots, storage] = await filesWithEmptyDirectory()
         try {
-            const fileNode = await files.createNode(node, "test", ContentKind.File)
+            const fileNode = await files.createFile(node, "test")
             const size = 1024
             const buffers = [randomBytes(size)]
-            const result = await files.writeFile(fileNode, dataFromBuffers(buffers))
-            const data = await readAllData(files.readFile(fileNode))
+            const result = await files.writeFile(fileNode.node, dataFromBuffers(buffers))
+            const data = await readAllData(files.readFile(fileNode.node))
             expect(result).toEqual(size)
             expect(data).toEqual(buffers[0])
 
@@ -151,9 +151,9 @@ describe("files", () => {
     it("can remove a file", async () => {
         const [files, node] = await filesWithEmptyDirectory()
         try {
-            const fileNode = await files.createNode(node, "test", ContentKind.File)
-            expect(fileNode).toBeGreaterThan(-1)
-            await files.removeNode(node, "test")
+            const fileNode = await files.createFile(node, "test")
+            expect(fileNode.node).toBeGreaterThan(-1)
+            await files.remove(node, "test")
             let count = 0
             for await (const entry of files.readDirectory(node)) {
                 count++
@@ -168,12 +168,12 @@ describe("files", () => {
     it("can create a directory", async () => {
         const [files, node] = await filesWithEmptyDirectory()
         try {
-            const directoryNode = await files.createNode(node, "test", ContentKind.Directory)
+            const directoryNode = await files.createDirectory(node, "test")
             const directoryLookup = await files.lookup(node, "test")
             expect(directoryLookup).toBeDefined()
             if (directoryLookup === undefined) return
             expect(directoryLookup).toEqual(directoryNode)
-            const directoryInfo = await files.info(directoryNode)
+            const directoryInfo = await files.info(directoryNode.node)
             expect(directoryInfo).toBeDefined()
             if (!directoryInfo) return
             expect(directoryInfo.kind).toEqual(EntryKind.Directory)
@@ -195,22 +195,22 @@ describe("files", () => {
             }
             async function writeRandomFile(parent: Node) {
                 const name = randomId()
-                const fileNode = await files.createNode(parent, name, ContentKind.File)
+                const fileNode = await files.createFile(parent, name)
                 for (let i = 0; i < 10; i++) {
                     const buffer = randomBytes(10)
-                    await files.writeFile(fileNode, dataFromBuffers([buffer]), i * 10)
+                    await files.writeFile(fileNode.node, dataFromBuffers([buffer]), i * 10)
                 }
                 await checkSync()
             }
             async function writeDirectory(parent: Node, depth: number, width: number) {
                 const name = randomId()
-                const dirNode = await files.createNode(parent, name, ContentKind.Directory)
+                const dirNode = await files.createDirectory(parent, name)
                 for (let i = 0; i < width; i++) {
-                    await writeRandomFile(dirNode)
+                    await writeRandomFile(dirNode.node)
                 }
                 if (depth > 0) {
                     for (let i = 0; i < width; i++) {
-                        await writeDirectory(dirNode, depth - 1, width)
+                        await writeDirectory(dirNode.node, depth - 1, width)
                     }
                 }
                 await checkSync()
@@ -227,11 +227,11 @@ describe("files", () => {
         const [files, node] = await filesWithEmptyDirectory()
         try {
             const fileNodes: number[] = []
-            const dirNode = await files.createNode(node, 'dir', ContentKind.Directory)
+            const dirNode = await files.createDirectory(node, 'dir')
             for (let i = 0; i < 100; i++) {
                 const name = randomId()
-                const fileNode = await files.createNode(dirNode, name, ContentKind.File)
-                fileNodes.push(fileNode)
+                const fileNode = await files.createFile(dirNode.node, name)
+                fileNodes.push(fileNode.node)
             }
             await delay(10)
             await files.sync()
@@ -246,24 +246,24 @@ describe("files", () => {
     it("can create a file while sync'ing", async () => {
         const [files, node] = await filesWithEmptyDirectory()
         try {
-            const dirNode = await files.createNode(node, 'dir', ContentKind.Directory)
+            const dirNode = await files.createDirectory(node, 'dir')
             async function nested(parent: Node, depth: number): Promise<number> {
-                const child = await files.createNode(parent, `dir-${depth}`, ContentKind.Directory)
-                if (depth > 0) return await nested(child, depth - 1);
-                return child
+                const child = await files.createDirectory(parent, `dir-${depth}`)
+                if (depth > 0) return await nested(child.node, depth - 1);
+                return child.node
             }
-            const deep = await nested(dirNode, 100)
+            const deep = await nested(dirNode.node, 100)
             for (let i = 0; i < 1000; i++) {
                 const name = randomId()
-                const fileNode = await files.createNode(deep, name, ContentKind.File)
-                await files.writeFile(fileNode, dataFromBuffers([randomBytes(100)]))
+                const fileNode = await files.createFile(deep, name)
+                await files.writeFile(fileNode.node, dataFromBuffers([randomBytes(100)]))
             }
             const syncPromise = files.sync()
             await delay(0)
             {
                 const name = randomId()
-                const fileNode = await files.createNode(dirNode, name, ContentKind.File)
-                await files.writeFile(fileNode, dataFromBuffers([randomBytes(10)]))
+                const fileNode = await files.createFile(dirNode.node, name)
+                await files.writeFile(fileNode.node, dataFromBuffers([randomBytes(10)]))
             }
             await delay(10)
             await syncPromise
@@ -271,31 +271,6 @@ describe("files", () => {
         } finally {
             files.stop()
         }
-    })
-    it("can watch for changes in a client", async () => {
-        const [files, node] = await filesWithEmptyDirectory()
-        const changed = new Set<number>()
-        let watchDone = false
-        let latch = new Latch()
-        async function watch() {
-            for await (const watchEntry of files.watch()) {
-                if (watchEntry.kind == WatchKind.Changed) {
-                    changed.add(watchEntry.info.node)
-                }
-                latch.done()
-            }
-            watchDone = true
-        }
-        try {
-            watch()
-            await files.createNode(node, 'dir', ContentKind.Directory)
-            await latch.await()
-            expect(changed.has(node)).toBeTrue()
-        } finally {
-            files.stop()
-        }
-        await delay(1)
-        expect(watchDone).toBeTrue()
     })
 })
 
@@ -485,12 +460,12 @@ async function randomDirectory(
                 content = c
                 size = s
             }
-            const newEntry: Entry = {
+            const newEntry: FileEntry | DirectoryEntry = {
                 kind,
                 name,
-                content
+                content,
+                size: size ?? 0
             }
-            if (size != undefined) (newEntry as any).size = size
             entries.push(newEntry)
         }
         entries.sort((a, b) => compare(a.name, b.name))
@@ -508,12 +483,13 @@ async function validateDirectory(files: Files, root: Node) {
         const info = await files.info(node)
         expect(info).toBeDefined()
         if (!info) return
+        if (info.kind != ContentKind.File) return
         let data = files.readFile(node)
         if (info.etag) {
             data = validateData(data, info.etag)
         }
         const buffer = await readAllData(data)
-        expect(buffer.length).toEqual(info.size!!)
+        expect(buffer.length).toEqual(info.size)
     }
 
     async function validateDirectory(node: Node) {

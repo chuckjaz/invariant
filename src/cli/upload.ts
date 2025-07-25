@@ -5,7 +5,7 @@ import ignore from "ignore";
 import yargs from "yargs";
 import { fileExists } from "../common/files";
 import { ParallelContext } from "../common/parallel_context";
-import { DirectoryEntry, Entry, EntryKind, FileEntry } from '../common/types';
+import { DirectoryEntry, Entry, EntryKind, FileEntry, SymbolicLinkEntry } from '../common/types';
 import { dataFromFile, dataFromString } from '../common/parseJson';
 import { Data, StorageClient } from '../storage/storage_client';
 import { dataFromBuffers, readAllData } from '../common/data';
@@ -128,10 +128,27 @@ async function upload(
                         name: entry.name,
                         createTime: Math.floor(stat.ctimeMs),
                         modifyTime: Math.floor(stat.mtimeMs),
-                        content: { address }
+                        content: { address },
+                        size: 0
                     }
                     return treeEntry
                 })
+            }
+            if (entry.isSymbolicLink()) {
+                if (ig.ignores(fullName)) continue
+                tasks.push(async () => {
+                    const target = await fs.readlink(fullName)
+                    const stat = await fs.stat(fullName)
+                    const treeEntry: SymbolicLinkEntry = {
+                        kind: EntryKind.SymbolicLink,
+                        name: entry.name,
+                        createTime: Math.floor(stat.ctimeMs),
+                        modifyTime: Math.floor(stat.mtimeMs),
+                        target
+                    }
+                    return treeEntry
+                })
+
             }
         }
         const treeEntries = await context.map(tasks, async task => await task())
@@ -176,7 +193,7 @@ async function cachedUpload(
 
     const directoryMap = new Map<string, Entry[]>()
 
-    async function readDirectory(directory: string): Promise<string> {
+    async function readDirectory(directory: string): Promise<[string, number]> {
         const entries = await fs.opendir(directory)
         let total = 0
         const tasks: (() => Promise<Entry>)[] = []
@@ -213,14 +230,30 @@ async function cachedUpload(
             if (entry.isDirectory()) {
                 if (ig.ignores(fullName + '/')) continue
                 tasks.push(async () => {
-                    const address = await readDirectory(fullName)
+                    const [address, size] = await readDirectory(fullName)
                     const stat = await fs.stat(fullName)
                     const treeEntry: DirectoryEntry = {
                         kind: EntryKind.Directory,
                         name: entry.name,
                         createTime: Math.floor(stat.ctimeMs),
                         modifyTime: Math.floor(stat.mtimeMs),
-                        content: { address }
+                        content: { address },
+                        size
+                    }
+                    return treeEntry
+                })
+            }
+            if (entry.isSymbolicLink()) {
+                if (ig.ignores(fullName)) continue
+                tasks.push(async () => {
+                    const target = await fs.readlink(fullName)
+                    const stat = await fs.stat(fullName)
+                    const treeEntry: SymbolicLinkEntry = {
+                        kind: EntryKind.SymbolicLink,
+                        name: entry.name,
+                        createTime: Math.floor(stat.ctimeMs),
+                        modifyTime: Math.floor(stat.mtimeMs),
+                        target
                     }
                     return treeEntry
                 })
@@ -229,12 +262,13 @@ async function cachedUpload(
         const treeEntries = await context.map(tasks, async task => await task())
         treeEntries.sort((a, b) => a.name > b.name ? 1 : a.name < b.name ? -1 : 0)
         const directoryJson = JSON.stringify(treeEntries)
+        const size = directoryJson.length
         const directoryBytes = new TextEncoder().encode(directoryJson)
         const hasher = createHash('sha256')
         hasher.update(directoryBytes)
         const directoryHash = hasher.digest().toString('hex')
         directoryMap.set(directoryHash, treeEntries)
-        return directoryHash
+        return [directoryHash, size]
     }
 
     const uploadPromises: Promise<any>[] = []
@@ -254,14 +288,19 @@ async function cachedUpload(
     async function uploadDirectory(sha: string, dir: string) {
         const entries = required(directoryMap.get(sha))
         for (const entry of entries) {
-            const address = entry.content.address
-            const has = await storage.has(address)
-            if (!has) {
-                const fullName = path.join(dir, entry.name)
-                if (entry.kind == EntryKind.File) {
-                    await uploadFile(address, fullName)
-                } else {
-                    await uploadDirectory(address, fullName)
+            switch (entry.kind) {
+                case EntryKind.Directory:
+                case EntryKind.File: {
+                    const address = entry.content.address
+                    const has = await storage.has(address)
+                    if (!has) {
+                        const fullName = path.join(dir, entry.name)
+                        if (entry.kind == EntryKind.File) {
+                            await uploadFile(address, fullName)
+                        } else {
+                            await uploadDirectory(address, fullName)
+                        }
+                    }
                 }
             }
         }
@@ -275,7 +314,7 @@ async function cachedUpload(
         })
     }
 
-    const root = await readDirectory(directory)
+    const [root] = await readDirectory(directory)
     if (!await storage.has(root)) {
         await uploadDirectory(root, directory)
     }

@@ -114,7 +114,7 @@ describe("file_layer", () => {
         const sourceSlot = randomId()
         const backingSlot = randomId()
 
-        const backingDirectory = await directoryFrom({
+        const [backingDirectory] = await directoryFrom({
             node_modules: { }
         }, controlPlane)
 
@@ -197,7 +197,8 @@ async function createConfiguration(storage: StorageClient, description: FileLaye
     const entry: FileEntry = {
         kind: EntryKind.File,
         name: '.layers',
-        content: { address }
+        content: { address },
+        size: text.length
     }
     const rootDirectoryText = JSON.stringify([entry])
     const rootAddress = required(await storage.post(dataFromString(rootDirectoryText)))
@@ -219,13 +220,13 @@ async function writeFile(files: FilesClient, filePath: string, content: string) 
         const directoryName = parts[index++]
         let directoryNode = await files.lookup(directory, directoryName)
         if (directoryNode === undefined) {
-            directoryNode = await files.createNode(directory, directoryName, ContentKind.Directory)
+            directoryNode = await files.createDirectory(directory, directoryName)
         }
-        directory = directoryNode
+        directory = directoryNode.node
     }
     const name = parts[parts.length - 1]
-    const fileNode = await files.createNode(directory, name, ContentKind.File)
-    await files.writeFile(fileNode, dataFromString(content))
+    const fileNode = await files.createFile(directory, name)
+    await files.writeFile(fileNode.node, dataFromString(content))
 }
 
 
@@ -233,7 +234,7 @@ interface DirectorySpec {
     [name: string]: string | DirectorySpec
 }
 
-async function directoryFrom(spec: DirectorySpec, writer: ContentWriter): Promise<ContentLink> {
+async function directoryFrom(spec: DirectorySpec, writer: ContentWriter): Promise<[ContentLink, number]> {
     const entries: Entry[] = []
     for (const name in spec) {
         const content = spec[name]
@@ -247,16 +248,19 @@ async function directoryFrom(spec: DirectorySpec, writer: ContentWriter): Promis
             }
             entries.push(entry)
         } else {
-            const contentLink = await directoryFrom(content, writer)
+            const [contentLink, size] = await directoryFrom(content, writer)
             const entry: Entry = {
                 kind: EntryKind.Directory,
                 name,
-                content: contentLink
+                content: contentLink,
+                size
             }
             entries.push(entry)
         }
     }
-    return await writer.writeContentLink(stringsToData(JSON.stringify(entries)))
+    const entriesText = JSON.stringify(entries)
+    const link = await writer.writeContentLink(stringsToData(entriesText))
+    return [link, entriesText.length]
 }
 
 function required<T>(n: T | false | null | undefined): T {

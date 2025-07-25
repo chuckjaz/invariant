@@ -7,11 +7,10 @@ import { Files } from "../files"
 import { FilesWebClient } from "./files_web_client"
 import { filesWebHandlers } from "./files_web_handler"
 import { stringsToData } from '../../common/data'
-import { error, invalid } from '../../common/errors'
+import { invalid } from '../../common/errors'
 import { ContentLink, Entry, EntryKind } from '../../common/types'
-import { ContentKind, ContentWriter, FilesClient, WatchKind } from '../files_client'
-import { dataFromString, dataToString } from '../../common/parseJson'
-import { delay } from '../../common/delay'
+import { ContentKind, ContentWriter, FilesClient } from '../files_client'
+import { dataToString } from '../../common/parseJson'
 
 // This test both the web client and web handlers by starting a web service and then
 // connecting a web client to the service
@@ -113,29 +112,29 @@ describe('files/web', () => {
     })
     it("can read a file", async () => {
         await withFiles({ "hello": "Hello, world!" }, async (client, root) => {
-            const handle = await client.lookup(root, 'hello')
-            if (!handle) invalid("Could not find hello");
-            const content = await dataToString(client.readFile(handle))
+            const info = await client.lookup(root, 'hello')
+            if (!info) invalid("Could not find hello");
+            const content = await dataToString(client.readFile(info.node))
             expect(content).toEqual("Hello, world!")
         })
     })
     it("can write a file", async () => {
         await withFiles({ "hello": "" }, async (client, root) => {
-            const handle = await client.lookup(root, 'hello')
-            if (!handle) invalid("Could not find hello");
+            const info = await client.lookup(root, 'hello')
+            if (!info) invalid("Could not find hello");
             const data = "Hello, world"
-            const result = await client.writeFile(handle, stringsToData(data))
+            const result = await client.writeFile(info.node, stringsToData(data))
             expect(result).toEqual(data.length)
-            const content = await dataToString(client.readFile(handle))
+            const content = await dataToString(client.readFile(info.node))
             expect(content).toEqual(data)
         })
     })
     it("can set the size of a file", async () => {
         await withFiles({ "hello": "Hello, world!" }, async (client, root) => {
-            const handle = await client.lookup(root, 'hello')
-            if (!handle) invalid("Could not find hello");
-            await client.setSize(handle, 5)
-            const content = await dataToString(client.readFile(handle))
+            const info = await client.lookup(root, 'hello')
+            if (!info) invalid("Could not find hello");
+            await client.setSize(info.node, 5)
+            const content = await dataToString(client.readFile(info.node))
             expect(content).toEqual("Hello")
         })
     })
@@ -148,37 +147,34 @@ describe('files/web', () => {
             expect(names).toEqual(["hello", "goodbye"])
         })
     })
-    it("can create a file node", async () => {
+    it("can create a file", async () => {
         await withFiles({ }, async (client, root) => {
-            const node = await client.createNode(root, "hello", ContentKind.File)
-            expect(node).toBeDefined()
-            const result = await client.lookup(root, 'hello')
-            expect(result).toEqual(node)
-            const info = await client.info(node)
-            expect(info?.kind).toEqual(ContentKind.File)
+            const info = await client.createFile(root, "hello")
+            expect(info).toBeDefined()
+            const fetchedInfo = await client.lookup(root, 'hello')
+            expect(fetchedInfo).toEqual(info)
+            expect(fetchedInfo?.kind).toEqual(ContentKind.File)
         })
     })
-    it("can create a directory node", async () => {
+    it("can create a directory", async () => {
         await withFiles({ }, async (client, root) => {
-            const node = await client.createNode(root, "test", ContentKind.Directory)
-            expect(node).toBeDefined()
-            const result = await client.lookup(root, 'test')
-            expect(result).toEqual(node)
-            const info = await client.info(node)
-            expect(info?.kind).toEqual(ContentKind.Directory)
+            const info = await client.createDirectory(root, "test")
+            expect(info).toBeDefined()
+            const readInfo = await client.lookup(root, 'test')
+            expect(readInfo).toEqual(info)
+            expect(readInfo?.kind).toEqual(ContentKind.Directory)
         })
     })
     it("can create a file with content", async () => {
         await withFiles({ }, async (client, root, { files }) => {
             const data = "Hello, world!"
             const helloContent = await files.writeContentLink(stringsToData(data))
-            const node = await client.createNode(root, "hello", ContentKind.File, helloContent)
-            expect(node).toBeDefined()
-            const result = await client.lookup(root, 'hello')
-            expect(result).toEqual(node)
-            const info = await client.info(node)
-            expect(info?.kind).toEqual(ContentKind.File)
-            const readData = await dataToString(client.readFile(node))
+            const info = await client.createFile(root, "hello", helloContent)
+            expect(info).toBeDefined()
+            const fetchedInfo = await client.lookup(root, 'hello')
+            expect(fetchedInfo).toEqual(info)
+            expect(fetchedInfo?.kind).toEqual(ContentKind.File)
+            const readData = await dataToString(client.readFile(info.node))
             expect(readData).toEqual(data)
         })
     })
@@ -189,23 +185,22 @@ describe('files/web', () => {
                 "hello": data,
                 "goodbye": "See ya later!"
             }, files)
-            const node = await client.createNode(root, "dir", ContentKind.Directory, subDirectory)
-            expect(node).toBeDefined()
-            const result = await client.lookup(root, 'dir')
-            expect(result).toEqual(node)
-            const info = await client.info(node)
-            expect(info?.kind).toEqual(ContentKind.Directory)
-            const dirHandle = await client.lookup(root, "dir")
-            expect(dirHandle).toBeDefined()
-            const helloHandle = await client.lookup(dirHandle!!, 'hello')
-            expect(helloHandle).toBeDefined()
-            const readData = await dataToString(client.readFile(helloHandle!!))
+            const info = await client.createDirectory(root, "dir", subDirectory)
+            expect(info).toBeDefined()
+            const fetchedInfo = await client.lookup(root, 'dir')
+            expect(fetchedInfo).toEqual(info)
+            expect(fetchedInfo?.kind).toEqual(ContentKind.Directory)
+            const dirInfo = await client.lookup(root, "dir")
+            expect(dirInfo).toBeDefined()
+            const helloLookedUp = await client.lookup(dirInfo!!.node, 'hello')
+            expect(helloLookedUp).toBeDefined()
+            const readData = await dataToString(client.readFile(helloLookedUp!!.node))
             expect(readData).toEqual(data)
         })
     })
     it("can remove a node", async () => {
         await withFiles({ "hello": "Hello, world!" }, async (client, root) => {
-            const result = await client.removeNode(root, 'hello')
+            const result = await client.remove(root, 'hello')
             expect(result).toBeTrue()
             const lookup = await client.lookup(root, 'hello')
             expect(lookup).toBeUndefined()
@@ -213,57 +208,34 @@ describe('files/web', () => {
     })
     it("can set the attributes of a node", async () => {
         await withFiles({ "hello": "Hello, world!" }, async (client, root) => {
-            const node = await client.lookup(root, 'hello')
-            expect(node).toBeDefined()
-            await client.setAttributes(node!!, {
+            const info = await client.lookup(root, 'hello')
+            expect(info).toBeDefined()
+            const newInfo = await client.setAttributes(info!!.node, {
                 type: 'text/plain'
             })
-            const info = await client.info(node!!)
-            expect(info?.type).toEqual('text/plain')
+            expect(newInfo?.kind == ContentKind.File && newInfo.type).toEqual('text/plain')
         })
     })
     it("can rename a file", async () => {
         await withFiles({ "hello": "Hello, world!" }, async (client, root) => {
-            const result = await client.rename(root, 'hello', root, 'Hello')
-            expect(result).toBeTrue()
+            await client.rename(root, 'hello', root, 'Hello')
+            const helloInfo = await client.lookup(root, 'Hello')
+            expect(helloInfo).toBeDefined()
         })
     })
     it("can link a file", async () => {
         const data = "Hello, world!"
         await withFiles({ "hello": data }, async (client, root) => {
-            const helloHandle = await client.lookup(root, 'hello')
-            expect(helloHandle).toBeDefined()
-            const result = await client.link(root, helloHandle!!, "HelloThere")
-            expect(result).toBeTrue()
-            const helloThereHandle = await client.lookup(root, "HelloThere")
-            expect(helloThereHandle).toBeDefined()
-            const readData = await dataToString(client.readFile(helloThereHandle!!))
+            const helloInfo = await client.lookup(root, 'hello')
+            expect(helloInfo).toBeDefined()
+            await client.link(root, helloInfo!!.node, "HelloThere")
+            const helloThereInfo = await client.lookup(root, "HelloThere")
+            expect(helloThereInfo).toBeDefined()
+            const readData = await dataToString(client.readFile(helloThereInfo!!.node))
             expect(readData).toEqual(data)
         })
     })
-    it("can watch for a file change", async () => {
-        await withFiles({ "hello": "Hello, world!" }, async (client, root) => {
-            const modified = new Set<number>()
-            async function watch() {
-                for await (const watchItem of client.watch()) {
-                    if (watchItem.kind == WatchKind.Changed) {
-                        modified.add(watchItem.info.node)
-                    }
-                }
-            }
-            watch()
-            const helloHandle = required(await client.lookup(root, 'hello'))
-            await client.writeFile(helloHandle!!, dataFromString("See ya later!"))
-            await client.sync()
-            expect(modified.has(helloHandle)).toBeTrue()
-        })
-    })
 })
-
-function required<V>(value: V | undefined): V {
-    if (!value) error("Missing value");
-    return value
-}
 
 interface MockServices {
     storage: MockStorageClient
@@ -321,27 +293,35 @@ interface DirectorySpec {
 }
 
 async function directoryFrom(spec: DirectorySpec, writer: ContentWriter): Promise<ContentLink> {
-    const entries: Entry[] = []
-    for (const name in spec) {
-        const content = spec[name]
-        if (typeof content == 'string') {
-            const contentLink = await writer.writeContentLink(stringsToData(content))
-            const entry: Entry = {
-                kind: EntryKind.File,
-                name,
-                content: contentLink,
-                size: content.length
+
+    async function createDirectory(spec: DirectorySpec): Promise<[ContentLink, number]> {
+        const entries: Entry[] = []
+        for (const name in spec) {
+            const content = spec[name]
+            if (typeof content == 'string') {
+                const contentLink = await writer.writeContentLink(stringsToData(content))
+                const entry: Entry = {
+                    kind: EntryKind.File,
+                    name,
+                    content: contentLink,
+                    size: content.length
+                }
+                entries.push(entry)
+            } else {
+                const [contentLink, size] = await createDirectory(content)
+                const entry: Entry = {
+                    kind: EntryKind.Directory,
+                    name,
+                    content: contentLink,
+                    size
+                }
+                entries.push(entry)
             }
-            entries.push(entry)
-        } else {
-            const contentLink = await directoryFrom(content, writer)
-            const entry: Entry = {
-                kind: EntryKind.Directory,
-                name,
-                content: contentLink
-            }
-            entries.push(entry)
         }
+        const jsonText = JSON.stringify(entries)
+        return [await writer.writeContentLink(stringsToData(jsonText)), jsonText.length]
     }
-    return await writer.writeContentLink(stringsToData(JSON.stringify(entries)))
+
+    const [link] = await createDirectory(spec)
+    return link
 }
