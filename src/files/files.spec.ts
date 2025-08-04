@@ -13,7 +13,6 @@ import { directoryEtag, Files } from "./files"
 import { createHash } from 'node:crypto'
 import { ContentKind, FileDirectoryEntry, Node } from "./files_client"
 import { randomId } from "../common/id"
-import { Latch } from "../common/latch"
 
 describe("files", () => {
     it("can create a files server", () => {

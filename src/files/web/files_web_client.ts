@@ -194,7 +194,7 @@ export class FilesWebClient extends PingableClient implements FilesClient {
     async setAttributes(node: Node, attributes: EntryAttributes): Promise<ContentInformation> {
         const url = new URL(`${attributesPrefix}/${node}`, this.url)
         const response = await fetch(url, {
-            method: 'PUT',
+            method: 'POST',
             body: JSON.stringify(attributes)
         })
         if (response.ok) {

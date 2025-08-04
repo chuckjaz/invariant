@@ -69,6 +69,7 @@ export class Distribute implements DistributeClient {
 
     async unpin(request: DistributorPutUnpinRequest): Promise<void> {
         for await (const blockId of request) {
+            this.log(`UNPINNING: ${blockId}`)
             const block = this.blockMap.get(blockId)
             if (block) {
                 const ref = --block.refCount
@@ -81,6 +82,7 @@ export class Distribute implements DistributeClient {
 
     async register(request: DistributorPutRegisterStorage): Promise<void> {
         for await (const storageId of request) {
+            this.log(`REGISTERING: ${storageId}`)
             const id = Buffer.from(storageId, 'hex')
             const storage = this.storageLayers.find(id)
             if (storage) {
@@ -100,6 +102,7 @@ export class Distribute implements DistributeClient {
 
     async unregister(request: DistributorPutUnregisterStorage): Promise<void> {
         for await (const storageId of request) {
+            this.log(`UNREGISTERING: ${storageId}`)
             const id = Buffer.from(storageId, 'hex')
             const storage = this.storageLayers.find(id)
             if (storage) {
@@ -113,6 +116,7 @@ export class Distribute implements DistributeClient {
     }
 
     async *blocks(request: DistributorPostBlocksRequest): DistributorPostBlocksResponse {
+        this.log('BLOCKS request')
         for await (const blockId of request) {
             const block = this.blockMap.get(blockId)
             if (block) {
@@ -227,7 +231,7 @@ export class Distribute implements DistributeClient {
         storage.active = true
     }
 
-    private async rebalanceBlocks() {
+    private async   rebalanceBlocks() {
         for (const [_, block] of this.blockMap.entries()) {
             const nearest =  this.storageLayers.findNearestActive(block.id, this.n)
             if (!areEffectivelyEqual(block.stores, nearest)) {
@@ -344,7 +348,7 @@ enum DistributeTaskKind {
     RebalanceBlocks = "RebalanceBlocks",
     MoveBlock = "MoveBlock",
     NotifyFinder = "NotifyFinder",
-    Wait = "Wait"
+    Wait = "Wait",
 }
 
 type DistributeTask = PingStorage | Stop | RebalanceBlocks | MoveBlock | NotifyFinder | Wait

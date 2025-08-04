@@ -3,6 +3,7 @@ import { Data, ManagedStorageClient, StorageClient, StorageBlock } from "../stor
 import { normalizeCode } from '../../common/codes';
 import { hashTransform } from '../../common/data';
 import { BrokerClient } from '../../broker/broker_client';
+import { Logger } from '../../common/web';
 
 export interface MockStorageClient extends ManagedStorageClient {
     id: string

@@ -150,7 +150,7 @@ export function filesWebHandlers(client: FilesClient): ResponseFunc {
                 }
             },
             'attributes': {
-                method: 'PUT',
+                method: 'POST',
                 params: [nodeSchema],
                 body: attributesSchema,
                 handler: async (ctx, next, node, attributes: EntryAttributes) => {

@@ -47,9 +47,9 @@ export function distributeHandlers(client: DistributeClient): ResponseFunc {
                 }
             },
             'blocks': {
-                method: 'PUT',
+                method: 'POST',
                 handler: async function (ctx) {
-                    ctx.body = allOfStream(client.blocks(ctxToStrings(ctx)))
+                    ctx.body = await allOfStream(client.blocks(ctxToStrings(ctx)))
                     ctx.status = 200
                 }
             }
