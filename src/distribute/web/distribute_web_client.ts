@@ -24,6 +24,6 @@ export class DistributeWebClient extends PingableClient implements DistributeCli
     }
 
     async *blocks(request: DistributorPostBlocksRequest): DistributorPostBlocksResponse {
-        return this.postJsonStreams<string, DistributorPostBlocksResponseItem>(request, '/distributor/blocks')
+        yield *this.postJsonStreams<string, DistributorPostBlocksResponseItem>(request, '/distributor/blocks')
     }
 }
