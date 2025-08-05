@@ -232,6 +232,12 @@ export class Files implements FilesClient, ContentReader {
             if (attributes.writable !== undefined) {
                 info.writable = attributes.writable
             }
+            const size = attributes.size
+            if (size !== undefined) {
+                if (info.kind != ContentKind.File) error("Not a file")
+                info.size = size
+                this.addTransform(node, data => setDataSize(size, data))
+            }
             if (attributes.type !== undefined && info.kind == ContentKind.File) {
                 if (attributes.type == null) {
                     delete attributes.type

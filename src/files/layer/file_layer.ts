@@ -9,7 +9,6 @@ import { contentLinkSchema } from '../../common/schema';
 import { dataToString } from '../../common/parseJson';
 import { invalid } from '../../common/errors';
 import { createHash } from 'crypto';
-import { Channel } from '../../common/channel';
 
 export interface FileLayer {
     kind: LayerKind
@@ -465,7 +464,7 @@ export class LayeredFiles implements FilesClient {
         const layerNode = nRequired(this.map.get(node))
         if (layerNode.kind == NodeKind.Client) {
             const clientInfo = await layerNode.client.info(layerNode.node)
-            if (clientInfo) clientInfo.node = node
+            if (clientInfo) return { ...clientInfo, node }
             return clientInfo
         }
         const directory = layerNode.directory
@@ -503,6 +502,7 @@ export class LayeredFiles implements FilesClient {
             if (index >= start) {
                 const node = await this.nodeMap(directory, name, client, info.node, info.kind)
                 const mappedInfo = { ...info, node }
+                console.log('FileLayer: entry', info.node, '->', node, name)
                 yield { name, info: mappedInfo };
             }
             index++
@@ -516,8 +516,7 @@ export class LayeredFiles implements FilesClient {
         const directoryNode = await directory.realizeNode(layer)
         const info = await layer.client.createDirectory(directoryNode, name, content)
         const newNode = await this.nodeMap(directory, name, layer.client, info.node, ContentKind.Directory)
-        info.node = newNode
-        return info
+        return { ...info, node: newNode }
     }
 
     async createFile(parent: Node, name: string, content?: ContentLink): Promise<FileContentInformation> {
@@ -526,8 +525,7 @@ export class LayeredFiles implements FilesClient {
         const directoryNode = await directory.realizeNode(layer)
         const info = await layer.client.createFile(directoryNode, name, content)
         const newNode = await this.nodeMap(directory, name, layer.client, info.node, ContentKind.File)
-        info.node = newNode
-        return info
+        return { ...info, node: newNode }
     }
 
     async createSymbolicLink(parent: Node, name: string, target: string): Promise<SymbolicLinkContentInformation> {
@@ -536,8 +534,7 @@ export class LayeredFiles implements FilesClient {
         const directoryNode = await directory.realizeNode(layer)
         const info = await layer.client.createSymbolicLink(directoryNode, name, target)
         const newNode = await this.nodeMap(directory, name, layer.client, info.node, ContentKind.SymbolicLink)
-        info.node = newNode
-        return info
+        return { ...info, node: newNode }
     }
 
     async remove(parent: Node, name: string): Promise<boolean> {
@@ -555,8 +552,7 @@ export class LayeredFiles implements FilesClient {
         const layerNode = nRequired(this.map.get(node))
         if (layerNode.kind == NodeKind.Client) {
             const info = await layerNode.client.setAttributes(layerNode.node, attributes)
-            info.node = node
-            return info
+            return {...info, node }
         }
         const directory = layerNode.directory
         return directory.setAttributes(node, attributes)

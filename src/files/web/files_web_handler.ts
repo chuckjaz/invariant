@@ -5,17 +5,17 @@ import { contentLinkSchema } from "../../common/schema"
 import { ContentLink } from "../../common/types"
 import { ResponseFunc, route, Route } from "../../common/web"
 import { ContentKind, EntryAttributes, FilesClient, Node } from "../files_client"
-import { dataToReadable, textToReadable } from "../../common/parseJson"
-import { Channel } from "../../common/channel"
+import { dataToReadable } from "../../common/parseJson"
 
 const nodeSchema = z.number().int().nonnegative('Expected a node') satisfies Schema
 const nonNegativeIntSchema = z.number().int().nonnegative('Expected a positive number') satisfies Schema
-const contentKindSchema = z.union([z.literal("File"), z.literal("Directory")])
+const contentKindSchema = z.union([z.literal("File"), z.literal("Directory"), z.literal("SymbolicLink")])
 const attributesSchema = z.object({
     executable: z.optional(z.boolean()),
     writable: z.optional(z.boolean()),
     modifyTime: z.optional(nonNegativeIntSchema),
     createTime: z.optional(nonNegativeIntSchema),
+    size: z.optional(nonNegativeIntSchema),
     type: z.optional(z.union([z.string(), z.null()])),
 })
 

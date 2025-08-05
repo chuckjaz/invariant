@@ -48,6 +48,7 @@ export interface EntryAttributes {
     writable?: boolean
     modifyTime?: number
     createTime?: number
+    size?: number
     type?: string | null
 }
 
