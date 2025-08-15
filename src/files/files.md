@@ -60,7 +60,7 @@ A directory entry is a `:content-info` with a `name` string.
 ```ts
 interface FileDirectoryEntry{
     name: string
-    info: ContentLink
+    info: ContentInformation
 }
 ```
 
@@ -74,6 +74,7 @@ export interface EntryAttributes {
     writable?: boolean
     modifyTime?: number
     createTime?: number
+    size?: number
     type?: string | null
 }
 ```
@@ -90,40 +91,45 @@ The node ID number.
 
 ## Response
 
-The content of a file or directory. If the node is a directory the response is a sequence of `:directory-entry` JSON objects. If `:node` is a file, the the response is bytes of the file. If the `:node` is a symbolic link, this returns the target of the link.
+The content of a file. If `:node` is a file, the the response is bytes of the file.
 
 ### Query Parameters
 
 #### `offset=:number`
 
-Offset into the file or directory to start; if it is not specified it starts the beginning of the file. If the node is a directory the offset and length refer to directory entries not bytes.
+Offset into the file to start; if it is not specified it starts the beginning of the file.
 
 #### `length=:number`
 
-The length of the response. If `length` is not specified then the length is the rest of the file or directory. If the node is a file the length is in bytes. For directories it is the number of entries.
+The length of the response. If `length` is not specified then the length is the rest of the file. The length is in bytes.
 
-# `PUT /files/:node`
+# `GET /files/directory/:node`
+
+## Response
+
+If the node is a directory the response is a sequence of `:directory-entry` JSON objects.
+
+### Query Parameters
+
+#### `offset=:number`
+
+Offset into the directory to start. The offset and length refer to directory entries not bytes.
+
+#### `length=:number`
+
+The length of the response. For directories it is the number of entries.
+
+# `POST /files/:node`
 
 ## Request
 
 Write bytes to the file. If the node is a directory or symbolic link this results in an error.
-
-### Headers
-
-#### `Content-Type`
-
-If specified the content type is recorded in the directory.
 
 ### Query Parameters
 
 #### `offset=:number`
 
 If offset is specified the write starts at the `offset` bytes into the file.
-
-#### `size=:number`
-
-If specified the size will be at least `size` bytes. If the `size` is less than the size of the file then the file is truncated to the size. If the `size` is larger than the size of the file the size is zero filled to `size`. After the file is made `size` long, the rest of the write operation is performed. To just set the size, include the `size` query parameter but no content in the request.
-
 
 # `PUT /files/:node/:name`
 
@@ -139,17 +145,9 @@ If unspecified, `"File"` is assumed. The supported kinds are `"File"`, `"Directo
 
 For `kind` of `"File"` or `"Directory"`, an optional `:content-link` to specify the initial content.
 
-#### `executable=:boolean`
-
-Sets if the file or directory is executable.
-
 #### `target=:string`
 
 For `kind` of `"SymbolicLink"`, the target path for the link. The parameter is required for `"SymbolicLink"` nodes.
-
-#### `writeable=:boolean`
-
-Sets if the file or directory is writable.
 
 ## Request
 
@@ -187,13 +185,9 @@ Retrieve information about a `:node`.
 
 The response is `:content-info`.
 
-## Response
-
-The response is a `:content-link`
-
 # `PUT /files/link/:node/:name`
 
-Link a node to the given `:name`. The `:name` will not have the same node for the life-time of the file system server. The mapping currently does not survive persistence. That is, the name is only liked to other `:node` for as long as the server is running. If it stopped and restarted the two files will change independently.
+Link a node to the given `:name`.
 
 ### Query parameters
 
@@ -209,6 +203,16 @@ Lookup `:name` in the directory `:node`
 
 Mount a content link to the files server. Once the content link is a mounted the file becomes accessible from the other methods. If the content-link is slot reference then the directory is writable; otherwise the directory and all its content are read-only. Changing a mounted slot will cause a change request to the associated slot.
 
+### Query parameters
+
+#### `executable=:boolean`
+
+Sets if the file or directory is executable.
+
+#### `writeable=:boolean`
+
+Sets if the file or directory is writable.
+
 ## Request
 
 The request is a `:content-link`.
@@ -217,9 +221,9 @@ The request is a `:content-link`.
 
 The response is a `:node`
 
-# `POST /files/remove/:node`
+# `POST /files/remove/:parent/:name`
 
-Remove the requested `:node`.
+Remove the requested entry from a directory.
 
 ## Response
 
@@ -231,11 +235,25 @@ The response is a `:boolean` which is `true` when the file was removed, or `fals
 
 #### `newParent=:node`
 
-The node of the new parent. If missing the `:node` is from the URL is used as the new `newParent`.
+The node of the new parent.
 
 #### `newName=:name`
 
 The new name to give the file.
+
+# `PUT /files/size/:node`
+
+Set the size of a file.
+
+### Query parameters
+
+#### `size=:number`
+
+The new size of the file.
+
+# `PUT /files/sync`
+
+Wait for all pending changes to be written to storage.
 
 # `POST /files/unmount/:node`
 
@@ -244,8 +262,3 @@ Unmount `:node`.
 ## Response
 
 The response is a `:content-link` which is a link to the content of previously mounted file system.
-
-## Response
-
-The response is status 200 and `:content-link` or 404 if the name is not found.
-
