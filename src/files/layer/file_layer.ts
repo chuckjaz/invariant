@@ -502,7 +502,6 @@ export class LayeredFiles implements FilesClient {
             if (index >= start) {
                 const node = await this.nodeMap(directory, name, client, info.node, info.kind)
                 const mappedInfo = { ...info, node }
-                console.log('FileLayer: entry', info.node, '->', node, name)
                 yield { name, info: mappedInfo };
             }
             index++

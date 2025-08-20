@@ -75,6 +75,8 @@ export type ToolConfiguration = FuseToolConfiguration
 export interface FuseToolConfiguration {
     tool: "fuse"
     path: string
+    args?: string[]
+    log?: string
 }
 
 interface ServerConfigurationJson {
@@ -96,6 +98,8 @@ interface ServerConfigurationJson {
 interface ToolConfigurationJson {
     tool: string
     path?: string
+    args?: string[]
+    log?: string
 }
 
 interface ConfigurationJson {
@@ -187,7 +191,9 @@ export async function loadConfiguration(): Promise<Configuration> {
                     const toolPath = path.resolve(configurationPath(), tool.path)
                     tools.push({
                         tool: "fuse",
-                        path: toolPath
+                        path: toolPath,
+                        args: tool.args,
+                        log: tool.log,
                     })
             }
         }

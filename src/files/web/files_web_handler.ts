@@ -258,7 +258,7 @@ export function filesWebHandlers(client: FilesClient): ResponseFunc {
                         break
                     case ContentKind.SymbolicLink:
                         ctx.body = await client.createSymbolicLink(parent, name, query.target)
-                        ctx.body = 200
+                        ctx.state = 200
                         break
                     default:
                         ctx.status = 404

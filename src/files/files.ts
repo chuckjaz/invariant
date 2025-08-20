@@ -44,7 +44,8 @@ export class Files implements FilesClient, ContentReader {
 
     async mount(content: ContentLink, executable?: boolean, writable?: boolean): Promise<Node> {
         const node = this.newNode()
-        if (content.slot !== undefined) {
+        const slotContent = content.slot === true;
+        if (slotContent === true) {
             const slotId = content.address
             this.slotMounts.set(node, slotId)
             const current = await this.slots.get(slotId)
@@ -65,7 +66,7 @@ export class Files implements FilesClient, ContentReader {
             modifyTime: now,
             createTime: now,
             executable: executable ?? false,
-            writable: writable ?? content.slot === true,
+            writable: writable ?? slotContent,
             etag: etagOf(content),
             size: 0
         }

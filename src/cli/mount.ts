@@ -33,7 +33,7 @@ export default {
         }).option('slot', {
             describe: "assume the root is a slot",
             alias: 's',
-            boolean: true
+            boolean: false
         }).demandOption(['root', 'directory'])
     },
     handler: async (argv: any) => { await mount(argv.root, argv.directory, argv.debug, argv.slot) }
@@ -53,7 +53,7 @@ export async function mount(root: string, directory: string, debug: boolean, ass
     const fuseTool = config.tools?.find(tool => tool.tool = 'fuse')
     if (!fuseTool) invalid("No fuse tools was configured");
 
-    spawnFuse(fuseTool.path, filesClientUrl, directory, root_node, debug)
+    spawnFuse(fuseTool.path, filesClientUrl, directory, root_node, debug, fuseTool.args, fuseTool.log)
 }
 
 async function startLocalFilesServer(
@@ -122,13 +122,29 @@ async function firstFilesUrl(broker: BrokerWebClient, content: ContentLink): Pro
     }
 }
 
-function spawnFuse(command: string, filesUrl: URL, directory: string, root_node: Node, debug: boolean) {
+function spawnFuse(
+    command: string,
+    filesUrl: URL,
+    directory: string,
+    root_node: Node,
+    debug: boolean,
+    args_spec: string[] = ["--root", "$root", "$url", "$path"],
+    log_env: string = "INVARIANT_LOG",
+) {
     const stdoutLog = logger('fuse:out')
     const stderrLog = logger('fuse:err')
     const log = logger('fuse')
     const env = process.env
-    if (debug) env['INVARIANT_LOG'] = 'debug'
-    const childProcess = spawn(command, [filesUrl.toString(), directory, '--root', `${root_node}`], { env })
+    if (debug) env[log_env] = 'debug'
+    const args = args_spec.map(n => {
+        switch (n) {
+            case "$root": return `${root_node}`;
+            case "$url": return filesUrl.toString();
+            case "$path": return directory;
+            default: return n;
+        }
+    })
+    const childProcess = spawn(command, args, { env })
 
     childProcess.stdout.on('data', data => { stdoutLog(trim(decode(data))) })
     childProcess.stderr.on('data', data => { stderrLog(trim(decode(data))) })
