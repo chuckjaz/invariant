@@ -10,6 +10,8 @@ import pin from "./pin"
 import init from "./init"
 import add from "./add"
 import workspace from "./workspace"
+import name from "./name"
+import put from "./put"
 
 export function startCli() {
     yargs
@@ -17,9 +19,11 @@ export function startCli() {
         .command(check)
         .command(init)
         .command(mount)
-        .command(start)
+        .command(name)
         .command(pin)
         .command(publish)
+        .command(put)
+        .command(start)
         .command(slot)
         .command(task)
         .command(upload)

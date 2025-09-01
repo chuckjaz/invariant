@@ -40,22 +40,25 @@ async function check(specifiedUrl?: string) {
     reportKind('distribute', broker)
     reportKind('files', broker)
     reportKind('find', broker)
+    reportKind('names', broker)
     reportKind('slots', broker)
     reportKind('storage', broker)
 }
 
 async function reportKind(kind: Server, broker: BrokerClient) {
-    for await (const id of await broker.registered(kind)) {
+    for await (const id of broker.registered(kind)) {
         let pingable: Pingable | undefined
         switch (kind) {
             case 'storage': pingable = await broker.storage(id); break;
             case 'slots': pingable = await broker.slots(id); break;
             case 'find': pingable = await broker.find(id); break;
             case 'broker': pingable = await broker.broker(id); break;
+            case 'names': pingable = await broker.names(id); break;
             case 'files':
             case 'distribute':
                 console.log(`${kind}: check not supported yet`)
                 continue
+            default: error(`Unknown server kind: ${kind}`)
         }
         if (!pingable) {
             console.log(`  ${kind}: ${id} was reported by the broker but the broker couldn't find it`)

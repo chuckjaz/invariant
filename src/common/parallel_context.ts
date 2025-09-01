@@ -56,7 +56,9 @@ export class ParallelContext {
                         rejected = true
                         reject(e)
                     }
-                    if (pending == 0) resolve(result as R[])
+                    if (pending == 0) {
+                        resolve(result as R[])
+                    }
                 })
             }
             if (pending == 0 && result.length == 0) resolve([])

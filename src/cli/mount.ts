@@ -20,13 +20,15 @@ import { LayeredFiles } from '../files/layer/file_layer';
 import { FilesClient, Node } from '../files/files_client';
 
 export default {
-    command: "mount [root] [directory]",
+    command: "mount",
     describe: "Mount files to a directory",
     builder: yargs => {
-        return yargs.positional('root', {
-            describe: "the content link root of the directory to mount"
-        }).positional('directory', {
-            describe: "the directory to mount"
+        return yargs.option('root', {
+            describe: "the content link root of the directory to mount",
+            alias: 'r'
+        }).option('directory', {
+            describe: "the directory to mount",
+            alias: 'd'
         }).option('debug', {
             describe: "turn on debug logs",
             boolean: true

@@ -35,7 +35,25 @@
             "outFiles": [
                 "${workspaceFolder}/dist/**/*.js"
             ]
-        }
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "mount",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "program": "${workspaceFolder}/dist/cli.js",
+            "args": [
+                "mount",
+                "-s",
+                "132172839c7f54933608e2874b3219dc69bc221279b0ed6d120f04798f024162",
+                "~/mount/invariant"
+            ],
+            "outFiles": [
+                "${workspaceFolder}/dist/**/*.js"
+            ]
+        },
 
     ]
 }

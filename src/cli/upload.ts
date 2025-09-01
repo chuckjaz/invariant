@@ -178,7 +178,6 @@ async function cachedUpload(
     const cache = new ShaCache()
     await cache.load(config)
     if (!directory) directory = "."
-    const context = new ParallelContext()
     const ig = ignore()
     const broker = await defaultBroker(config)
     const storage = await findStorage(broker, storageSpec, auth)
@@ -196,13 +195,13 @@ async function cachedUpload(
     async function readDirectory(directory: string): Promise<[string, number]> {
         const entries = await fs.opendir(directory)
         let total = 0
-        const tasks: (() => Promise<Entry>)[] = []
+        const tasks: Promise<Entry>[] = []
 
         for await (const entry of entries) {
             const fullName = path.join(directory, entry.name)
             if (entry.isFile()) {
                 if (ig.ignores(fullName)) continue
-                tasks.push(async () => {
+                tasks.push((async () => {
                     const cacheEntry = await cache.compute(fullName)
 
                     const treeEntry: FileEntry = {
@@ -224,12 +223,12 @@ async function cachedUpload(
                         treeEntry.mode = mode
                     }
                     return treeEntry
-                })
+                })())
                 continue
             }
             if (entry.isDirectory()) {
                 if (ig.ignores(fullName + '/')) continue
-                tasks.push(async () => {
+                tasks.push((async () => {
                     const [address, size] = await readDirectory(fullName)
                     const stat = await fs.stat(fullName)
                     const treeEntry: DirectoryEntry = {
@@ -241,11 +240,11 @@ async function cachedUpload(
                         size
                     }
                     return treeEntry
-                })
+                })())
             }
             if (entry.isSymbolicLink()) {
                 if (ig.ignores(fullName)) continue
-                tasks.push(async () => {
+                tasks.push((async () => {
                     const target = await fs.readlink(fullName)
                     const stat = await fs.stat(fullName)
                     const treeEntry: SymbolicLinkEntry = {
@@ -256,10 +255,10 @@ async function cachedUpload(
                         target
                     }
                     return treeEntry
-                })
+                })())
             }
         }
-        const treeEntries = await context.map(tasks, async task => await task())
+        const treeEntries = await Promise.all(tasks)
         treeEntries.sort((a, b) => a.name > b.name ? 1 : a.name < b.name ? -1 : 0)
         const directoryJson = JSON.stringify(treeEntries)
         const size = directoryJson.length
@@ -279,7 +278,7 @@ async function cachedUpload(
     async function uploadFile(sha: string, fullName: string) {
         a(async () => {
             console.log('uploading', fullName)
-            const data = dataFromFile(fullName)
+            const data = dataFromBuffers([await fs.readFile(fullName)])
             const result = await storage.put(sha, data)
             if (!result) error(`Could not upload '${fullName}'`)
         })
@@ -314,9 +313,14 @@ async function cachedUpload(
         })
     }
 
+    console.log('Computing root for:', directory)
     const [root] = await readDirectory(directory)
+    console.log('Root computed:', root)
     if (!await storage.has(root)) {
+        console.log('uploading directory', directory)
         await uploadDirectory(root, directory)
+    } else {
+        console.log('storage already has', root)
     }
     a(() => cache.store(config))
     await Promise.all(uploadPromises)
@@ -366,6 +370,7 @@ class ShaCache {
         const buffer = await fs.readFile(name)
         hash.update(buffer)
         const sha = hash.digest().toString('hex')
+        console.log('name:', name, 'length:', buffer.length, 'sha:', sha)
         const newEntry: CacheEntry = { mtime, ctime, mode: stat.mode, size: stat.size, dev: stat.dev, sha }
         this.map.set(stat.ino, newEntry)
         return newEntry

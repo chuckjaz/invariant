@@ -36,7 +36,7 @@ export class LocalNamesServer implements NamesClient {
     }
 
     async register(name: string, address: string, ttl?: number, slot?: boolean): Promise<void> {
-        const effectiveName = await this.effectiveName(name)
+        const effectiveName = this.effectiveName(name)
         const map = await this.ensureMap()
         if (map.has(effectiveName)) {
             invalid('Name already registered', 400)
@@ -89,7 +89,7 @@ export class LocalNamesServer implements NamesClient {
     }
 
     private effectiveName(name: string): string {
-        return name.indexOf('.') >= 0 ? name : `${name}.local`
+        return (name.indexOf('.') >= 0 ? name : `${name}.local`).toLocaleLowerCase()
     }
 
     private saving = false
@@ -155,4 +155,4 @@ export class LocalNamesServer implements NamesClient {
     }
 }
 
-const THIRTY_MINUTES = 30 * 60 * 60 * 1000
+const THIRTY_MINUTES = 30 * 60 * 1000

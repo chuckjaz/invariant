@@ -13,13 +13,22 @@ export interface Configuration {
     options?: any
 }
 
-export type Server = "broker" | "distribute" | "find" | "files" | "productions" | "slots" | "storage"
+export type Server =
+    "broker" |
+    "distribute" |
+    "find" |
+    "files" |
+    "names" |
+    "productions" |
+    "slots" |
+    "storage"
 
 export type ServerConfiguration =
     BrokerConfiguration |
     DistributeConfiguration |
     FindConfiguration |
     FilesConfiguration |
+    NamesConfiguration |
     ProductionsConfiguration |
     SlotsConfiguration |
     StorageConfiguration
@@ -68,6 +77,10 @@ export interface SlotsConfiguration extends CommonServerConfiguration {
 
 export interface StorageConfiguration extends CommonServerConfiguration {
     server: "storage"
+}
+
+export interface NamesConfiguration extends CommonServerConfiguration {
+    server: "names"
 }
 
 export type ToolConfiguration = FuseToolConfiguration
@@ -155,6 +168,7 @@ export async function loadConfiguration(): Promise<Configuration> {
                     })
                     break
                 case "find":
+                case "names":
                 case "productions":
                 case "slots":
                 case "storage":

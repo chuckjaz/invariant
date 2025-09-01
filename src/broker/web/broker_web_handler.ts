@@ -12,6 +12,7 @@ function kindConverter(value: string | string[] | undefined): string | undefined
         case "distribute":
         case "files":
         case "find":
+        case "names":
         case "productions":
         case "slots":
         case "storage":
@@ -23,7 +24,7 @@ function kindConverter(value: string | string[] | undefined): string | undefined
 const brokerRegisterRequestSchema = z.object({
     id: idSchema,
     urls: z.string().url().array(),
-    kind: z.enum(["broker", "distribute", "files", "find", "productions", "slots", "storage"])
+    kind: z.enum(["broker", "distribute", "files", "find", "names", "productions", "slots", "storage"])
 })
 
 export function brokerHandlers(server: BrokerServer): ResponseFunc {

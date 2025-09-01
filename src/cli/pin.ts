@@ -16,7 +16,7 @@ import { BlockFindingStorage } from "../storage/find/storage_find";
 
 export default {
     command: 'pin [content]',
-    describe: "Publish a value to a slot",
+    describe: "Pin content to storage",
     builder: yargs => {
         return yargs.positional('content', {
             describe: "The content to pin. This can be a content address object or just the address",

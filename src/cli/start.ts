@@ -30,6 +30,8 @@ import { Distribute } from '../distribute/distribute'
 import { distributeHandlers } from '../distribute/web/distribute_web_handlers'
 import { DistributeClient } from '../distribute/distribute_client'
 import { allOfStream } from '../common/data'
+import { LocalNamesServer } from '../names/local/names_local_server'
+import { namesHandler } from '../names/web/names_web_handler'
 
 const starters: { [index: string]: (config: ServerConfiguration, broker?: BrokerClient) => Promise<any>} = {
     'broker': startBroker,
@@ -39,6 +41,7 @@ const starters: { [index: string]: (config: ServerConfiguration, broker?: Broker
     'productions': startProductions,
     'slots': startSlots,
     'storage': startStorage,
+    'names': startNames,
 }
 
 export default {
@@ -279,6 +282,19 @@ async function startDistribute(config: ServerConfiguration, broker?: BrokerClien
     if (config.serverIds) {
         await client.register(sendAll(config.serverIds))
     }
+}
+
+async function startNames(config: ServerConfiguration, broker?: BrokerClient) {
+    if (config.server != 'names') error("Unexpected names configuration");
+    const app = new Koa()
+    const log = logger('names')
+    const client = new LocalNamesServer(config.directory, config.id)
+    const httpServer = app.listen(config.port)
+    const handlers = namesHandler(client)
+    app.use(logHandlerOf(log))
+    app.use(handlers)
+    listening('Names', config.id, httpServer)
+    await registerServer(config, httpServer, 'names', broker)
 }
 
 async function *sendAll<T>(arr: T[]): AsyncIterable<T> {
