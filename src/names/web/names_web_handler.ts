@@ -14,14 +14,16 @@ const nameConverter: Converter<string> = (value: string | string[] | undefined) 
 const registerSchema = z.object({
     name: z.string().regex(nameReg),
     address: idSchema,
-    ttl: z.number().int().positive().optional()
+    ttl: z.number().int().positive().optional(),
+    slot: z.boolean().optional(),
 })
 
 const updateSchema = z.object({
     name: z.string().regex(nameReg),
     previous: idSchema,
     address: idSchema,
-    ttl: z.number().int().positive().optional()
+    ttl: z.number().int().positive().optional(),
+    slot: z.boolean().optional(),
 })
 
 export function namesHandler(client: NamesClient): ResponseFunc {
@@ -46,7 +48,7 @@ export function namesHandler(client: NamesClient): ResponseFunc {
                 method: 'PUT',
                 body: registerSchema,
                 handler: async function (ctx, next, register: z.TypeOf<typeof registerSchema>) {
-                    await client.register(register.name, register.address, register.ttl)
+                    await client.register(register.name, register.address, register.ttl, register.slot)
                     ctx.body = ''
                     ctx.status = 200
                 }
@@ -55,7 +57,7 @@ export function namesHandler(client: NamesClient): ResponseFunc {
                 method: 'POST',
                 body: updateSchema,
                 handler: async function (ctx, next, update: z.TypeOf<typeof updateSchema>) {
-                    ctx.body = client.update(update.name, update.previous, update.address, update.ttl)
+                    ctx.body = client.update(update.name, update.previous, update.address, update.ttl, update.slot)
                     ctx.status = 200
                 }
             }

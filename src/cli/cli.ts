@@ -12,12 +12,14 @@ import add from "./add"
 import workspace from "./workspace"
 import name from "./name"
 import put from "./put"
+import lookup from "./lookup"
 
 export function startCli() {
     yargs
         .command(add)
         .command(check)
         .command(init)
+        .command(lookup)
         .command(mount)
         .command(name)
         .command(pin)

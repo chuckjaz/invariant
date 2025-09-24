@@ -32,6 +32,7 @@ function get(kind: string, id: string, broker: BrokerClient): Promise<any> {
         case "distribute": return broker.distribute(id);
         case "files": return broker.files(id);
         case "find": return broker.find(id);
+        case "names": return broker.names(id);
         case "productions": return broker.productions(id);
         case "storage": return broker.storage(id)
         case "slots": return broker.slots(id);
