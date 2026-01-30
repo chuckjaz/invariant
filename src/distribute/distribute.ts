@@ -231,7 +231,7 @@ export class Distribute implements DistributeClient {
         storage.active = true
     }
 
-    private async   rebalanceBlocks() {
+    private async rebalanceBlocks() {
         for (const [_, block] of this.blockMap.entries()) {
             const nearest =  this.storageLayers.findNearestActive(block.id, this.n)
             if (!areEffectivelyEqual(block.stores, nearest)) {

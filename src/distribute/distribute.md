@@ -40,7 +40,7 @@ Requests a set of storage servers be added to the distributor. This is like a pi
 type DistributorPutRegisterStorageRequest = AsyncIterable<string>
 ```
 
-# `PUT /distirbutor/unregister/storage`
+# `PUT /distribute/unregister/storage`
 
 Request a set of storage servers be unpinned.
 
@@ -67,5 +67,7 @@ interface DistributorPostBlocksResponseItem {
 type DistributorPostBlocksResponse = AsyncIterable<DistributorPostBlocksResponseItem>
 ```
 
-# Distributor and file-tree
+# Distributor and files
+
+
 

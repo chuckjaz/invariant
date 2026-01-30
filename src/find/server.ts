@@ -43,11 +43,11 @@ export async function findServer(broker: BrokerClient, id?: string, _options?: F
                     return
                 }
 
-                // Collect find servers know about the
+                // Collect the find servers that know about the block
                 const now = options.now()
                 if (lastBrokerQuery + options.queryDelay < now) {
                     lastBrokerQuery = now
-                    const findServerIds = await broker.registered('find')
+                    const findServerIds = broker.registered('find')
                     for await (const findId of findServerIds) {
                         addFindServer(findId)
                     }
@@ -79,7 +79,7 @@ export async function findServer(broker: BrokerClient, id?: string, _options?: F
             for (const id of newIds) {
                 const closer = findServersCloserTo(id)
                 for (const findId of closer) {
-                    map.add({ findId, id})
+                    map.add({ findId, id })
                 }
             }
             await map.collect()
@@ -156,7 +156,7 @@ export async function findServer(broker: BrokerClient, id?: string, _options?: F
 
             // Get the find servers from our broker
             let find: FindClient | undefined = undefined
-            for await (const entry of await broker.registered('find')) {
+            for await (const entry of broker.registered('find')) {
                 if (entry == textId) continue
                 addFindServer(entry)
                 if (!find) {
@@ -167,10 +167,11 @@ export async function findServer(broker: BrokerClient, id?: string, _options?: F
 
             if (find) {
                 await find.notify(textId)
-                // Ask the first find server for the closes find servers to us.
+                // Ask the first find server for the closest find servers to us.
                 for await (const entry of await find.find(textId)) {
                     if (entry.kind == "CLOSER") {
                         addFindServer(entry.find)
+
                         // Tell the other find server about this server
                         const find = await broker.find(entry.find)
                         if (find) {
@@ -182,7 +183,7 @@ export async function findServer(broker: BrokerClient, id?: string, _options?: F
         }
 
         async function initializeStorageServerInfo(): Promise<void> {
-            for await (const entry of await broker.registered('storage')) {
+            for await (const entry of broker.registered('storage')) {
                 recordHas(brokerId, entry)
             }
         }

@@ -1,3 +1,4 @@
+import { delay } from "./delay"
 import { ParallelContext } from "./parallel_context"
 
 describe("common/parallel_context", () => {
@@ -24,8 +25,18 @@ describe("common/parallel_context", () => {
     it("can await 1000 values", async () => {
         let done = 0
         const context = new ParallelContext()
+        let result = []
+        let inflight = 0
         for (let i = 0; i < 1000; i++) {
-            context.add(async () => done++)
+            const j = i
+            context.add(async () => {
+                done++
+                inflight++
+                expect(inflight).toBeLessThanOrEqual(100)
+                await delay(j % 10 + 1)
+                inflight--
+                result.push(j)
+            })
         }
         await context.join()
         expect(done).toEqual(1000)
