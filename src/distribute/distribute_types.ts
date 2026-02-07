@@ -1,5 +1,6 @@
 export interface Block {
     refCount: number
+    tracked: boolean
     id: Buffer
     stores: Storage[]
 }

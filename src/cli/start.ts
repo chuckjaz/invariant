@@ -1,7 +1,7 @@
 import Koa from 'koa'
 import { Server as HttpServer} from 'node:http'
 import { CommandModule } from "yargs"
-import { loadConfiguration, Server, ServerConfiguration } from "../config/config"
+import { loadConfiguration, Server, ServerConfiguration, StorageConfiguration } from "../config/config"
 import { BrokerClient } from '../broker/broker_client'
 import { BrokerWebClient } from '../broker/web/broker_web_client'
 import { logger, logHandler, logHandlerOf } from '../common/web'
@@ -212,15 +212,20 @@ async function registerServer(
 
 async function startStorage(config: ServerConfiguration, broker?: BrokerClient) {
     console.log("Starting storage server")
-
+    const effectiveConfig: StorageConfiguration = config as StorageConfiguration
     const app = new Koa()
 
-    const client = new LocalStorage(config.directory, config.id)
-    app.use(logHandler(`storage-${shortId(config.id)}`))
+    let find: FindClient | undefined = undefined
+    if (effectiveConfig.publish && broker) {
+        find = await firstFinder(broker)
+    }
+
+    const client = new LocalStorage(effectiveConfig.directory, effectiveConfig.id, find ? [find] : undefined)
+    app.use(logHandler(`storage-${shortId(effectiveConfig.id)}`))
     app.use(storageHandlers(client, broker))
-    const httpServer = app.listen(config.port)
-    listening("Storage", config.id, httpServer, config.directory)
-    await registerServer(config, httpServer, 'storage', broker)
+    const httpServer = app.listen(effectiveConfig.port)
+    listening("Storage", effectiveConfig.id, httpServer, effectiveConfig.directory)
+    await registerServer(effectiveConfig, httpServer, 'storage', broker)
 
     // Let the finder know all the block we already have
     if (broker) {

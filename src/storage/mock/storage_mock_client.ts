@@ -3,7 +3,7 @@ import { Data, ManagedStorageClient, StorageClient, StorageBlock } from "../stor
 import { normalizeCode } from '../../common/codes';
 import { hashTransform } from '../../common/data';
 import { BrokerClient } from '../../broker/broker_client';
-import { Logger } from '../../common/web';
+import { HasListener } from '../../find/client';
 
 export interface MockStorageClient extends ManagedStorageClient {
     id: string
@@ -14,9 +14,11 @@ class MockStorageClientImpl implements MockStorageClient {
     idBytes = randomBytes(32)
     id = this.idBytes.toString('hex')
     broker?: BrokerClient
+    hasListeners?: HasListener[]
 
-    constructor(broker?: BrokerClient) {
+    constructor(broker?: BrokerClient, hasListeners?: HasListener[]) {
         this.broker = broker
+        this.hasListeners = hasListeners
     }
 
     async ping(): Promise<string> { return this.id }
@@ -43,7 +45,9 @@ class MockStorageClientImpl implements MockStorageClient {
         const buffers = await buffersOfData(hashTransform(data, hash))
         const id = hash.digest().toString('hex')
         const size = sizeOfBuffers(buffers)
+        const isNew = this.store.has(id)
         this.store.set(id, { buffers, size, lastAccess: Date.now() })
+        if (isNew)  this.notifyHasListeners([id])
         return id
     }
 
@@ -53,7 +57,9 @@ class MockStorageClientImpl implements MockStorageClient {
         const id = hash.digest().toString('hex')
         if (address != id) return false
         const size = sizeOfBuffers(buffers)
+        const isNew = this.store.has(id)
         this.store.set(id, { buffers, size, lastAccess: Date.now() })
+        if (isNew)  this.notifyHasListeners([id])
         return true
     }
 
@@ -94,10 +100,19 @@ class MockStorageClientImpl implements MockStorageClient {
             }
         }
     }
+
+    private async notifyHasListeners(blocks: string[]) {
+        const hasListeners = this.hasListeners
+        if (hasListeners) {
+            for (const listener of hasListeners) {
+                await listener.has(this.id, blocks)
+            }
+        }
+    }
 }
 
-export function mockStorage(broker?: BrokerClient): MockStorageClient {
-    return new MockStorageClientImpl(broker)
+export function mockStorage(broker?: BrokerClient, hasListeners?: HasListener[]): MockStorageClient {
+    return new MockStorageClientImpl(broker, hasListeners)
 }
 
 interface MockStorageBlock {

@@ -77,6 +77,7 @@ export interface SlotsConfiguration extends CommonServerConfiguration {
 
 export interface StorageConfiguration extends CommonServerConfiguration {
     server: "storage"
+    publish?: boolean
 }
 
 export interface NamesConfiguration extends CommonServerConfiguration {
@@ -106,6 +107,7 @@ interface ServerConfigurationJson {
     syncFrequency?: number
     serverIds?: string[]
     replication?: number
+    publish?: boolean
 }
 
 interface ToolConfigurationJson {
@@ -177,7 +179,8 @@ export async function loadConfiguration(): Promise<Configuration> {
                         id: server.id,
                         port: server.port,
                         directory,
-                        urls
+                        urls,
+                        publish: server.publish,
                     })
                     break
                 case "files":

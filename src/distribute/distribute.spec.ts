@@ -1,10 +1,14 @@
+import { BrokerClient } from "../broker/broker_client"
 import { mockBroker, MockBrokerClient } from "../broker/mock/mock_broker_client"
 import { arr } from "../common/arr"
-import { stringsToData } from "../common/data"
-import { FindClient } from "../find/client"
+import { dataFromBuffers, stringsToData } from "../common/data"
+import { error } from "../common/errors"
+import { FindClient, HasListener } from "../find/client"
 import { findServer } from "../find/server"
 import { mockStorage, MockStorageClient } from "../storage/mock"
+import { StorageClient } from "../storage/storage_client"
 import { Distribute } from "./distribute"
+import { randomBytes } from 'node:crypto'
 
 describe("distribute", () => {
     it("can create a distributor", () => {
@@ -32,6 +36,44 @@ describe("distribute", () => {
             expect(blockCount).toBeGreaterThanOrEqual(3)
         }
         await distributor.close()
+    })
+    it("can distribute when added to one storage", async () => {
+        const blockCount = 10000
+        const storeCount = 5
+        const broker = mockBroker()
+        const finder = await findServer(broker)
+        await broker.registerFind(finder)
+        const distributor = new Distribute(broker)
+        try {
+            const hasListeners: HasListener[] = [finder, distributor]
+            const storages: StorageClient[] = []
+            for (let i = 0; i < storeCount; i++) {
+                const storage = mockStorage(broker, hasListeners)
+                broker.registerStorage(storage)
+                storages.push(storage)
+            }
+
+            // Write the blocks to a single storage
+            const blocks: string[] = []
+            const firstStorage = storages[0]
+            for (let i = 0; i < blockCount; i++) {
+                await postRandomBlock(firstStorage)
+            }
+
+            // Verify the blocks have been distributed
+            for (const block of blocks) {
+                const blockCount = await count(storages, storage => storage.has(block))
+                expect(blockCount).toBeGreaterThanOrEqual(3)
+            }
+
+            // Verify the blocks can be found
+            for (const block of blocks) {
+                const containers = await findBlocks(block, broker, finder)
+                expect(containers.length).toBeGreaterThanOrEqual(3)
+            }
+        } finally {
+            await distributor.close()
+        }
     })
 })
 
@@ -80,4 +122,42 @@ async function count<T>(items: Iterable<T>, cb: (item: T) => Promise<boolean>): 
         if (await cb(item)) result++
     }
     return result
+}
+
+async function postRandomBlock(storage: StorageClient): Promise<string> {
+    const dataBytes = randomBytes(2048)
+    const data = dataFromBuffers([dataBytes])
+    const id = await storage.post(data)
+    if (!id) error("Could not write file");
+    return id
+}
+
+async function findBlocks(block: string, broker: BrokerClient, finder: FindClient): Promise<string[]> {
+    const results: string[] = []
+    const seen = new Set<string>()
+
+    async function doFind(finder: FindClient) {
+        for await (const result of await finder.find(block)) {
+            switch (result.kind) {
+            case "HAS":
+                results.push(result.container);
+                break;
+            case "CLOSER":
+                if (!seen.has(result.find)) {
+                    seen.add(result.find)
+                    const newFinder = await broker.find(result.find)
+                    if (newFinder) await doFind(newFinder)
+                }
+                break
+            }
+        }
+    }
+
+    const id = await finder.ping()
+    if (id) {
+        seen.add(id)
+        await doFind(finder)
+    }
+
+    return results
 }

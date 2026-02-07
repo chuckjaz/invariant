@@ -11,9 +11,12 @@ export interface FindResultCloser {
 export type FindResultItem = FindResultCloser | FindResultHas
 export type FindResult = AsyncIterable<FindResultItem>
 
-export interface FindClient {
+export interface HasListener {
+    has(container: string, ids: string[]): Promise<boolean>
+}
+
+export interface FindClient extends HasListener {
     ping(): Promise<string | undefined>
     find(id: string): Promise<FindResult>
-    has(container: string, ids: string[]): Promise<boolean>
     notify(find: string): Promise<boolean>
 }

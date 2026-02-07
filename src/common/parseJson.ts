@@ -83,9 +83,9 @@ export function dataToReadable(data: AsyncIterable<Buffer>): Readable {
 export async function dataToString(data: AsyncIterable<Buffer>): Promise<string> {
     let buffer = Buffer.of()
     for await (const value of data) {
-        buffer = Buffer.concat([buffer, value])
+        buffer = Buffer.concat([buffer as any, value])
     }
-    return new TextDecoder().decode(buffer)
+    return new TextDecoder().decode(buffer as any)
 }
 
 export async function *textStreamFromFileBackward(file: string): AsyncIterable<string> {
@@ -102,7 +102,7 @@ export async function *textStreamFromFileBackward(file: string): AsyncIterable<s
         try {
             while (current >= 0) {
                 if (channel.closed) break
-                const result = await fileHandle.read(buffer, 0, readSize, current)
+                const result = await fileHandle.read(buffer as any, 0, readSize, current)
                 if (result.bytesRead != readSize) throw new Error("Unexpected read result");
                 // Avoid splitting a utf-8 encoding by advancing to the first non-continuation byte
                 let offset = 0
@@ -110,13 +110,13 @@ export async function *textStreamFromFileBackward(file: string): AsyncIterable<s
                     offset++
                 }
                 let read = buffer.subarray(offset, readSize)
-                if (retained) read = Buffer.concat([retained, read]);
+                if (retained) read = Buffer.concat([retained as any, read]);
                 if (offset > 0) {
                     retained = buffer.subarray(0, offset)
                 } else {
                     retained = undefined
                 }
-                const text = new TextDecoder().decode(read)
+                const text = new TextDecoder().decode(read as any)
                 channel.send(text)
                 current -= naturalBlockSize
                 readSize = naturalBlockSize

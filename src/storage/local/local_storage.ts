@@ -8,16 +8,22 @@ import { pipeline } from 'node:stream/promises'
 import { hashTransform } from "../../common/data";
 import { normalizeCode } from "../../common/codes";
 import { Dirent } from "node:fs";
+import { HasListener } from "../../find/client";
+import { directoryExists } from "../../common/files";
 
 const hexBytes = /^[0-9a-fA-F]+$/
 
 export class LocalStorage implements ManagedStorageClient {
     id: string
     directory: string
+    hasListeners?: HasListener[]
+    busy = 0
+    quiets?: (() => void)[]
 
-    constructor(directory: string, id?: string) {
+    constructor(directory: string, id?: string, hasListeners?: HasListener[]) {
         this.id = id ?? randomBytes(32).toString('hex')
         this.directory = directory
+        this.hasListeners = hasListeners
     }
 
     async ping(): Promise<string> {
@@ -55,6 +61,7 @@ export class LocalStorage implements ManagedStorageClient {
 
     async *blocks(): AsyncIterable<StorageBlock> {
         const dirPath = path.join(this.directory, 'store')
+        if (!await directoryExists(dirPath)) return
         for await (const prefix1 of directoryNames(dirPath, isPrefixDir)) {
             const layer1 = path.join(dirPath, prefix1)
             for await (const prefix2 of directoryNames(layer1, isPrefixDir)) {
@@ -64,12 +71,29 @@ export class LocalStorage implements ManagedStorageClient {
                     const rawAddress = `${prefix1}${prefix2}${postfix}`
                     const address = normalizeCode(rawAddress)
                     if (address) {
-                        const fstat = await stat(file)
-                        yield { address, size: fstat.size, lastAccess: fstat.atime.getTime() }
+                        try {
+                            const fstat = await stat(file)
+                            yield { address, size: fstat.size, lastAccess: fstat.atime.getTime() }
+                        } catch (e) {
+                            // Ignore exceptions to just ignore the block
+                        }
                     }
                 }
             }
         }
+    }
+
+    whenQuiet(): Promise<void> {
+        let resolve: () => void = () => {}
+        const result = new Promise<void>(r => { resolve = r })
+        if (this.busy) {
+            const quiets = this.quiets ?? []
+            this.quiets = quiets
+            quiets.push(resolve)
+        } else {
+            resolve()
+        }
+        return result
     }
 
     private toAddressPath(hashCode: string): string {
@@ -117,6 +141,12 @@ export class LocalStorage implements ManagedStorageClient {
             } else {
                 await unlink(name)
             }
+
+            // If we have a find client, notify the finder but don't wait for
+            // the result which is a best effort notification.
+
+            this.notifyListenersOfBlocks(this.hasListeners, [hashCode])
+
             return hashCode
         }
         return false
@@ -126,6 +156,33 @@ export class LocalStorage implements ManagedStorageClient {
         const fileName = this.toAddressPath(address)
         if (!await fileExists(fileName)) return false
         return dataFromFile(fileName)
+    }
+
+    private async doBusy(block: () => Promise<void>): Promise<void> {
+        this.busy++
+        try {
+            await block()
+        } finally {
+            if (--this.busy == 0) this.quiet()
+        }
+    }
+
+    private async notifyListenersOfBlocks(hasListeners: HasListener[] | undefined, blocks: string[]) {
+        if (hasListeners) {
+            for (const listener of hasListeners) {
+                await listener.has(this.id, blocks)
+            }
+        }
+    }
+
+    private quiet() {
+        const quiets = this.quiets
+        this.quiets = undefined
+        if (quiets) {
+            for (const quiet of quiets) {
+                quiet()
+            }
+        }
     }
 }
 

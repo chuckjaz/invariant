@@ -540,7 +540,7 @@ function required<T>(value: T | undefined | false): T {
 function addressOf(buffers: Buffer[]): string {
     const hash = createHash('sha256')
     for (const buffer of buffers) {
-        hash.update(buffer)
+        hash.update(buffer as any)
     }
     return hash.digest().toString('hex')
 }

@@ -43,7 +43,7 @@ export class StorageWebClient extends PingableClient implements StorageClient {
             const request = new URL(`${storagePrefix}${id}`, this.url)
             const response = await log_fetch(request, this.hook(request, {
                 method: 'PUT',
-                body: data,
+                body: data as any,
                 duplex: 'half'
             }))
             return response.status == 200
@@ -55,7 +55,7 @@ export class StorageWebClient extends PingableClient implements StorageClient {
         const request = new URL(storagePrefix, this.url)
         const response = await log_fetch(request, this.hook(request, {
             method: 'POST',
-            body: data,
+            body: data as any,
             duplex: 'half'
         }))
         if (response.status == 200) {

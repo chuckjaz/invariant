@@ -1,4 +1,5 @@
 import { BrokerClient } from "../broker/broker_client";
+import { Channel } from "../common/channel";
 import { randomId } from "../common/id";
 import { ParallelContext } from "../common/parallel_context";
 import {
@@ -7,18 +8,18 @@ import {
     DistributorPutRegisterStorage,
     DistributorPutUnregisterStorage,
     DistributorPostBlocksRequest,
-    DistributorPostBlocksResponse
+    DistributorPostBlocksResponse,
 } from "../common/types";
 import { Logger } from "../common/web";
 import { WorkQueue } from "../common/work_queue";
 import { findStorage } from "../file-tree/file-tree";
-import { FindClient } from "../find/client";
+import { FindClient, HasListener } from "../find/client";
 import { StorageClient } from "../storage/storage_client";
 import { DistributeClient } from "./distribute_client";
 import { Block, Storage } from "./distribute_types";
 import { StorageLayers } from "./storage_layer";
 
-export class Distribute implements DistributeClient {
+export class Distribute implements DistributeClient, HasListener {
     broker: BrokerClient
     id: string
     storageLayers = new StorageLayers()
@@ -56,6 +57,7 @@ export class Distribute implements DistributeClient {
             if (!block) {
                 const newBlock: Block = {
                     refCount: 1,
+                    tracked: false,
                     id: Buffer.from(blockId, 'hex'),
                     stores: []
                 }
@@ -73,7 +75,7 @@ export class Distribute implements DistributeClient {
             const block = this.blockMap.get(blockId)
             if (block) {
                 const ref = --block.refCount
-                if (ref == 0) {
+                if (ref == 0 && !block.tracked) {
                     this.blockMap.delete(blockId)
                 }
             }
@@ -131,6 +133,33 @@ export class Distribute implements DistributeClient {
 
     wait(): Promise<void> {
         return new Promise<void>(resolve => this.tasks.push({ kind: DistributeTaskKind.Wait, resolve }))
+    }
+
+    async has(container: string, ids: string[]): Promise<boolean> {
+        const id = Buffer.from(container, 'hex')
+        const storage = this.storageLayers.find(id)
+        if (storage) {
+            // Only pay attention to has notification from storages we know.
+            for (const blockId of ids) {
+                // Track the block if it is not tracked already.
+                let block = this.blockMap.get(blockId)
+                if (!block) {
+                    const newBlock: Block = {
+                        refCount: 0,
+                        tracked: true,
+                        id: Buffer.from(blockId, 'hex'),
+                        stores: [storage]
+                    }
+                    this.blockMap.set(blockId, newBlock)
+                    this.requestRebalanceBlocks()
+                } else {
+                    if (block.stores.indexOf(storage) < 0) {
+                        block.stores.push(storage)
+                    }
+                }
+            }
+        }
+        return true
     }
 
     private async ensureFinder(): Promise<FindClient> {
@@ -348,10 +377,11 @@ enum DistributeTaskKind {
     RebalanceBlocks = "RebalanceBlocks",
     MoveBlock = "MoveBlock",
     NotifyFinder = "NotifyFinder",
+    ReadBlocks = "ReadBlocks",
     Wait = "Wait",
 }
 
-type DistributeTask = PingStorage | Stop | RebalanceBlocks | MoveBlock | NotifyFinder | Wait
+type DistributeTask = PingStorage | Stop | RebalanceBlocks | MoveBlock | NotifyFinder | ReadBlocks | Wait
 
 interface PingStorage {
     kind: DistributeTaskKind.PingStorage
@@ -375,6 +405,11 @@ interface MoveBlock {
 
 interface NotifyFinder {
     kind: DistributeTaskKind.NotifyFinder
+}
+
+interface ReadBlocks {
+    kind: DistributeTaskKind.ReadBlocks
+    storage: Storage
 }
 
 interface Wait {
