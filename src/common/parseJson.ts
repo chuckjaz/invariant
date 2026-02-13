@@ -171,7 +171,7 @@ export async function *jsonStream<T>(
 ): AsyncIterable<T> {
     let data: AsyncIterable<string>
     if ('host' in dataOrUrl) {
-        data = await textStreamFromWeb(dataOrUrl)
+        data = textStreamFromWeb(dataOrUrl)
     } else {
         data = dataOrUrl
     }

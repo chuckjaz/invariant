@@ -1,7 +1,7 @@
-import { BrokerClient } from "../../broker/broker_client";
-import { allOfStream, dataFromReadable, dataToStrings, jsonFromData } from "../../common/data";
-import { jsonStream } from "../../common/parseJson";
-import { Ctx, ResponseFunc, route, Route } from "../../common/web";
+import { codeConverter } from "../../common/codes";
+import { FindHasRequest } from "../../common/types";
+import { ResponseFunc, route, Route } from "../../common/web";
+import { findHasRequestSchema } from "../../find/web/find_handlers";
 import { DistributeClient } from "../distribute_client";
 
 export function distributeHandlers(client: DistributeClient): ResponseFunc {
@@ -14,25 +14,33 @@ export function distributeHandlers(client: DistributeClient): ResponseFunc {
             }
         },
         'distributor': {
-            'pin': {
+            'has': {
                 method: 'PUT',
-                handler: async function (ctx) {
-                    await client.pin(ctxToStrings(ctx))
+                body: findHasRequestSchema,
+                handler: async function (ctx, next, { container, ids }: FindHasRequest) {
+                    await client.has(container, ids)
+                    ctx.body = ''
                     ctx.status = 200
                 }
             },
-            'unpin': {
-                method: 'PUT',
-                handler: async function (ctx) {
-                    await client.unpin(ctxToStrings(ctx))
+            'needed': {
+                method: 'GET',
+                params: [
+                    codeConverter,
+                    codeConverter
+                ],
+                handler: async function (ctx, next, server, block) {
+                    const result = await client.has(server, block)
+                    ctx.body = result ? 'true' : 'false'
                     ctx.status = 200
                 }
             },
             'register': {
                 'storage': {
                     method: 'PUT',
-                    handler: async function (ctx) {
-                        await client.register(ctxToStrings(ctx))
+                    params: [codeConverter],
+                    handler: async function (ctx, next, storage) {
+                        await client.register(storage)
                         ctx.status = 200
                     }
                 }
@@ -40,19 +48,13 @@ export function distributeHandlers(client: DistributeClient): ResponseFunc {
             'unregister': {
                 'storage': {
                     method: 'PUT',
-                    handler: async function (ctx) {
-                        await client.unregister(ctxToStrings(ctx))
+                    params: [codeConverter],
+                    handler: async function (ctx, next, storage) {
+                        await client.unregister(storage)
                         ctx.status = 200
                     }
                 }
             },
-            'blocks': {
-                method: 'POST',
-                handler: async function (ctx) {
-                    ctx.body = await allOfStream(client.blocks(ctxToStrings(ctx)))
-                    ctx.status = 200
-                }
-            }
         }
     }
     return async function (ctx, next) {
@@ -62,8 +64,4 @@ export function distributeHandlers(client: DistributeClient): ResponseFunc {
             console.error(e)
         }
     }
-}
-
-function ctxToStrings(ctx: Ctx): AsyncIterable<string> {
-    return jsonStream<string>(dataToStrings(dataFromReadable(ctx.req)))
 }

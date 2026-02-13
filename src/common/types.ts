@@ -147,20 +147,3 @@ export interface Block {
 }
 
 export type BlockTree = Block[]
-
-export type DistributorPutPinRequest = AsyncIterable<string>
-
-export type DistributorPutUnpinRequest = AsyncIterable<string>
-
-export type DistributorPutRegisterStorage = AsyncIterable<string>
-
-export type DistributorPutUnregisterStorage = AsyncIterable<string>
-
-export type DistributorPostBlocksRequest = AsyncIterable<string>
-
-export interface DistributorPostBlocksResponseItem {
-    block: string
-    storages: string[]
-}
-
-export type DistributorPostBlocksResponse = AsyncIterable<DistributorPostBlocksResponseItem>

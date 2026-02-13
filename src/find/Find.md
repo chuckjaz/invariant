@@ -18,7 +18,7 @@ Determine the `:id` of the server.
 
 Find a server that knows about `:id`.
 
-Find returns a plain text response with the prefix HAS or CLOSER a space `:id` follwed by a line-feed. Plain text is used instead of JSON to allow response to be partially read. That is, the client can stop reading and close the conntection if the information has the information it needs.
+Find returns a plain text response with the prefix HAS or CLOSER a space `:id` followed by a line-feed. Plain text is used instead of JSON to allow response to be partially read. That is, the client can stop reading and close the conntection if the information has the information it needs.
 
 ### HAS
 

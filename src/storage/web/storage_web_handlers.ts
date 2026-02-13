@@ -1,16 +1,25 @@
-import { StorageClient } from '../storage_client';
-import { dataFromReadable, jsonFromData } from '../../common/data';
+import { ManagedStorageClient, StorageClient } from '../storage_client';
+import { allOfStream, dataFromReadable, jsonFromData } from '../../common/data';
 import { z } from 'zod'
 import { idSchema } from '../../common/schema';
 import { BrokerClient } from '../../broker/broker_client';
-import { dataToReadable } from '../../common/parseJson';
+import { dataToReadable, jsonStreamToText, textToReadable } from '../../common/parseJson';
 import { ResponseFunc, route, Route } from '../../common/web';
     import { codeConverter } from '../../common/codes';
+import add from '../../cli/add';
 
 const fetchSchema = z.object({
     address: idSchema,
     container: idSchema
 })
+
+function countConverter(value: string | string[] | undefined): number | undefined {
+    if (typeof value == 'string') {
+        const result = parseInt(value)
+        if (Number.isNaN(result)) return undefined
+        return result
+    }
+}
 
 export function storageHandlers(client: StorageClient, broker?: BrokerClient): ResponseFunc {
     const routes: Route = {
@@ -50,6 +59,50 @@ export function storageHandlers(client: StorageClient, broker?: BrokerClient): R
                                     }
                                 }
                             }
+                        }
+                    }
+                ],
+                'forget': [
+                    {
+                        method: 'HEAD',
+                        handler: async function(ctx, next) {
+                            if ((client as any).forget) {
+                                ctx.status = 200
+                                ctx.body = ''
+                            }
+                        }
+                    },
+                    {
+                        method: 'PUT',
+                        params: [codeConverter],
+                        handler: async function (ctx, next, address) {
+                            if (await (client as ManagedStorageClient).forget(address)) {
+                                ctx.status = 200
+                                ctx.body = ''
+                            }
+                        }
+                    }
+                ],
+                'blocks': [
+                    {
+                        method: 'HEAD',
+                        handler: async function (ctx, next) {
+                            if ((client as any).blocks) {
+                                ctx.status = 200
+                                ctx.body = ''
+                            }
+                        }
+                    },
+                    {
+                        method: 'GET',
+                        query: {
+                            'after': codeConverter,
+                            'count': countConverter
+                        },
+                        handler: async function (ctx, next, query: { after?: string, count?: number}) {
+                            const result = (client as ManagedStorageClient).blocks(query.count, query.after)
+                            ctx.status = 200
+                            ctx.body = textToReadable(jsonStreamToText(result))
                         }
                     }
                 ]

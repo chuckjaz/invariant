@@ -1,10 +1,8 @@
-import { DistributorPostBlocksRequest, DistributorPostBlocksResponse, DistributorPutPinRequest, DistributorPutRegisterStorage, DistributorPutUnpinRequest, DistributorPutUnregisterStorage } from "../common/types";
+import { HasListener } from "../find/client";
 
-export interface DistributeClient {
+export interface DistributeClient extends HasListener {
     ping(): Promise<string | undefined>
-    pin(request: DistributorPutPinRequest): Promise<void>
-    unpin(request: DistributorPutUnpinRequest): Promise<void>
-    register(request: DistributorPutRegisterStorage): Promise<void>
-    unregister(request: DistributorPutUnregisterStorage): Promise<void>
-    blocks(request: DistributorPostBlocksRequest): DistributorPostBlocksResponse
+    needed(storage: string, id: string): Promise<boolean>
+    register(server: string): Promise<void>
+    unregister(server: string): Promise<void>
 }

@@ -6,7 +6,6 @@ import start from './start'
 import task from './task'
 import upload from './upload'
 import mount from "./mount"
-import pin from "./pin"
 import init from "./init"
 import add from "./add"
 import workspace from "./workspace"
@@ -22,7 +21,6 @@ export function startCli() {
         .command(lookup)
         .command(mount)
         .command(name)
-        .command(pin)
         .command(publish)
         .command(put)
         .command(start)

@@ -1,5 +1,5 @@
 import { arr } from "../common/arr"
-import { Storage } from "./distribute_types"
+import { Storage, StorageState } from "./distribute_types"
 import { StorageLayers } from "./storage_layer"
 import { randomBytes } from "node:crypto"
 
@@ -48,9 +48,8 @@ describe("distribute/storage_layer", () => {
 function newStorage(): Storage {
     const id = randomBytes(32)
     return {
-        refCount: 1,
         id,
         blocks: [],
-        active: true
+        state: StorageState.Active
     }
 }

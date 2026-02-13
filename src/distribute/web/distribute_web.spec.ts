@@ -31,25 +31,11 @@ describe('distribute/web', () => {
             expect(pinged).toEqual(id)
         })
     })
-    it("can pin blocks", async () => {
-        await distributeAndStorages(async (client, { distribute, blocks, logger }) => {
-            await client.pin(take(10, stringStream(...blocks)))
-            await distribute.wait()
-            const pinning = logger.logs.map(l => (l.message.indexOf('PINNING') >= 0 ? 1 : 0) as number).reduce((p, c) => p + c)
-            expect(pinning).toEqual(10)
-        })
-    })
-    it("can unpin blocks", async () => {
-        await distributeAndStorages(async (client, { distribute, blocks, logger }) => {
-            await client.unpin(take(10, stringStream(...blocks)))
-            await distribute.wait()
-            const pinning = logger.logs.map(l => (l.message.indexOf('UNPINNING') >= 0 ? 1 : 0) as number).reduce((p, c) => p + c)
-            expect(pinning).toEqual(10)
-        })
-    })
     it("can register storage servers", async () => {
         await distributeAndStorages(async (client, { distribute, storageIds, logger }) => {
-            await client.register(stringStream(...storageIds))
+            for (const storage of storageIds) {
+                await client.register(storage)
+            }
             await distribute.wait()
             const registered = logger.logs.map(l => (l.message.indexOf('REGISTERING') >= 0 ? 1 : 0) as number).reduce((p, c) => p + c)
             expect(registered).toEqual(storageIds.length)
@@ -57,24 +43,62 @@ describe('distribute/web', () => {
     })
     it("can unregister storage servers", async () => {
         await distributeAndStorages(async (client, { distribute, storageIds, logger }) => {
-            await client.unregister(stringStream(...storageIds))
+            for (const storageId of storageIds) {
+                await client.unregister(storageId)
+            }
             await distribute.wait()
             const registered = logger.logs.map(l => (l.message.indexOf('UNREGISTERING') >= 0 ? 1 : 0) as number).reduce((p, c) => p + c)
             expect(registered).toEqual(storageIds.length)
         })
     })
     it("can get blocks", async () => {
-        await distributeAndStorages(async (client, { distribute, storageIds, blocks}) => {
-            await client.register(stringStream(...storageIds))
-            await client.pin(stringStream(...blocks))
+        await distributeAndStorages(async (client, { distribute, storageIds, blocks }) => {
+            for (const storageId of storageIds) {
+                await client.register(storageId)
+            }
             await distribute.wait()
             let count = 0
-            for await (let block of client.blocks(stringStream(...blocks))) {
-                expect(block.storages.length).toBeGreaterThanOrEqual(3)
-                count++
+            for (const storage of storageIds) {
+                for (const block of blocks) {
+                    if (await client.needed(storage, block)) count++;
+                }
             }
             expect(count).toBeGreaterThan(1)
         })
+    })
+    it("can redistribute blocks on startup", async () => {
+        await distributeAndStorages(async (client, { broker, distribute, storages, storageIds }) => {
+            // Create a bunch of random blocks to the first storage
+            const storage = storages[0]
+            if (!storage) error("Couldn't find storage");
+            const blocks: string[] = []
+            for (let i = 0; i < 1000; i++) {
+                const data = randomBytes(1000)
+                const block = await storage.post(dataFromBuffers([data]))
+                if (!block) error(`Couldn't upload block: ${block}`);
+                blocks.push(block)
+            }
+
+            // Register the storages to the distribute
+            for (const storage of storageIds) {
+                await distribute.register(storage)
+            }
+
+            // Wait for the distributor to complete
+            await distribute.wait()
+
+            // Check the storages for for the blocks
+            for (const block of blocks) {
+                let count = 0
+                for (const storage of storages) {
+                    if (await storage.has(block)) {
+                        count++
+                    }
+                }
+                expect(count).toBeGreaterThan(3)
+            }
+
+        }, 10, 0)
     })
 })
 
@@ -88,20 +112,22 @@ async function distributeAndStorages(
         finder: FindClient,
         id: string,
         logger: MockLogger
-    }) => Promise<void>
+    }) => Promise<void>,
+    serverCount: number = 10,
+    blockPerServerCount: number = 10,
 ) {
     const broker = mockBroker()
     const storages: StorageClient[] = []
     const storageIds: string[] = []
     const blocks: string[] = []
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < serverCount; i++) {
         const storage = mockStorage(broker)
         const storageId = await storage.ping()
         if (!storageId) error("Ping failed")
             storageIds.push(storageId)
         broker.registerStorage(storage)
         storages.push(storage)
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < blockPerServerCount; i++) {
             const data = randomBytes(1000)
             const block = await storage.post(dataFromBuffers([data]))
             if (!block) {
@@ -127,7 +153,7 @@ async function distributeAndStorages(
         const url = new URL(`http://localhost`)
         url.port = address.port.toString()
         const client = new DistributeWebClient(url)
-        await block(client, {distribute, broker, storages, storageIds, blocks, finder, id, logger })
+        await block(client, { distribute, broker, storages, storageIds, blocks, finder, id, logger })
     } finally {
         server.close()
         await distribute.close()

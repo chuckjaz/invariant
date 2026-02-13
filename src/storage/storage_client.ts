@@ -11,7 +11,7 @@ export interface StorageClient {
 
 export interface ManagedStorageClient extends StorageClient {
     forget(address: string): Promise<boolean>
-    blocks(): AsyncIterable<StorageBlock>
+    blocks(count?: number, after?: string): AsyncIterable<StorageBlock>
 }
 
 export interface StorageBlock {

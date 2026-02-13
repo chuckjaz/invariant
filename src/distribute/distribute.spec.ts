@@ -20,7 +20,9 @@ describe("distribute", () => {
     it("can register storages", async () => {
         const [broker, storages] = await storagesAndBroker(30)
         const distributor = new Distribute(broker)
-        await distributor.register(str(storages.map(s => s.id)))
+        for (const storage of storages) {
+            await distributor.register(storage.id)
+        }
         distributor.close()
     })
     it("can distribute", async () => {
@@ -28,7 +30,6 @@ describe("distribute", () => {
         const storage = mockStorage()
         await broker.registerStorage(storage)
         const blocks = await createBlocks(storage, finder, 1000)
-        await distributor.pin(str(blocks))
         await distributor.wait()
         // Verify that the storages have the blocks
         for (const block of blocks) {
@@ -80,7 +81,9 @@ describe("distribute", () => {
 async function mockDistributor(size: number): Promise<[Distribute, MockBrokerClient, MockStorageClient[], FindClient]> {
     const [broker, storages, finder] = await storagesAndBroker(size)
     const distributor = new Distribute(broker)
-    await distributor.register(str(storages.map(s => s.id)))
+    for (const storage of storages) {
+        await distributor.register(storage.id)
+    }
     return [distributor, broker, storages, finder]
 }
 

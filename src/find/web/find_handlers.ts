@@ -6,7 +6,7 @@ import { idSchema } from "../../common/schema";
 import { FindHasRequest, FindNotifyRequest } from "../../common/types";
 import { codeConverter } from "../../common/codes";
 
-const findHasRequestSchema = z.object({
+export const findHasRequestSchema = z.object({
     container: idSchema,
     ids: z.array(idSchema)
 })

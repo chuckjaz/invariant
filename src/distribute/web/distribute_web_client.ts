@@ -1,5 +1,6 @@
+import { invalid } from "../../common/errors";
+import { log_fetch } from "../../common/log_fetch";
 import { PingableClient } from "../../common/pingable_client";
-import { DistributorPutPinRequest, DistributorPutUnpinRequest, DistributorPutRegisterStorage, DistributorPutUnregisterStorage, DistributorPostBlocksRequest, DistributorPostBlocksResponse, DistributorPostBlocksResponseItem } from "../../common/types";
 import { DistributeClient } from "../distribute_client";
 
 export class DistributeWebClient extends PingableClient implements DistributeClient {
@@ -7,23 +8,42 @@ export class DistributeWebClient extends PingableClient implements DistributeCli
         super(url, id)
     }
 
-    async pin(request: DistributorPutPinRequest): Promise<void> {
-        await this.putJsonStream(request, '/distributor/pin')
+    has(container: string, ids: string[]): Promise<boolean> {
+        return this.putJson({ container, ids }, `/distributor/has`)
     }
 
-    async unpin(request: DistributorPutUnpinRequest): Promise<void> {
-        await this.putJsonStream(request, '/distributor/unpin')
+    async needed(storage: string, id: string): Promise<boolean> {
+        const result = await this.get(`needed/${storage}/${id}`)
+        return result.toLowerCase() != 'false'
     }
 
-    async register(request: DistributorPutRegisterStorage): Promise<void> {
-        await this.putJsonStream(request, '/distributor/register/storage')
+    register(server: string): Promise<void> {
+        return this.put(`register/storage/${server}`)
     }
 
-    async unregister(request: DistributorPutUnregisterStorage): Promise<void> {
-        await this.putJsonStream(request, '/distributor/unregister/storage')
+    unregister(server:string): Promise<void> {
+        return this.put(`unregister/storage/${server}`)
     }
 
-    async *blocks(request: DistributorPostBlocksRequest): DistributorPostBlocksResponse {
-        yield *this.postJsonStreams<string, DistributorPostBlocksResponseItem>(request, '/distributor/blocks')
+    private async get(tail: string): Promise<string> {
+        const url = new URL(`/distributor/${tail}`, this.url)
+        const result = await log_fetch(url)
+        if (result.ok) {
+            return await result.text()
+        }
+        if (result.status == 404) invalid('Unknown request', 404);
+        invalid("Invalid response", result.status)
+    }
+
+    private async put(tail: string): Promise<void> {
+        const request: RequestInit = {
+            method: 'PUT',
+            duplex: "half",
+        }
+        const url = new URL(`/distributor/${tail}`, this.url)
+        const result = await log_fetch(url, request)
+        if (result.ok) return
+        if (result.status == 404) invalid('Unknown request', 404);
+        invalid("Invalid response", result.status)
     }
 }

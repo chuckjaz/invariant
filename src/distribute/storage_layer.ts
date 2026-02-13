@@ -1,4 +1,4 @@
-import { isStorage, isStorageLayer, Storage, StorageLayer, StorageLayerEntry } from "./distribute_types";
+import { isStorage, isStorageLayer, Storage, StorageLayer, StorageLayerEntry, StorageState } from "./distribute_types";
 
 export class StorageLayers {
     root: StorageLayer = { level: 0, entries: [] }
@@ -53,7 +53,7 @@ export class StorageLayers {
 
             function emitEntry(entry: Storage | StorageLayer) {
                 if (entry) {
-                    if (isStorage(entry) && entry.active) {
+                    if (isStorage(entry) && entry.state == StorageState.Active) {
                         result.push(entry)
                         found++
                     } else if (isStorageLayer(entry)) {

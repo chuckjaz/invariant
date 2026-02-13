@@ -1,22 +1,15 @@
 import { BrokerClient } from "../broker/broker_client";
-import { Channel } from "../common/channel";
+import { normalizeCode } from "../common/codes";
+import { invalid } from "../common/errors";
 import { randomId } from "../common/id";
 import { ParallelContext } from "../common/parallel_context";
-import {
-    DistributorPutPinRequest,
-    DistributorPutUnpinRequest,
-    DistributorPutRegisterStorage,
-    DistributorPutUnregisterStorage,
-    DistributorPostBlocksRequest,
-    DistributorPostBlocksResponse,
-} from "../common/types";
 import { Logger } from "../common/web";
 import { WorkQueue } from "../common/work_queue";
 import { findStorage } from "../file-tree/file-tree";
 import { FindClient, HasListener } from "../find/client";
 import { StorageClient } from "../storage/storage_client";
 import { DistributeClient } from "./distribute_client";
-import { Block, Storage } from "./distribute_types";
+import { Block, Storage, StorageState } from "./distribute_types";
 import { StorageLayers } from "./storage_layer";
 
 export class Distribute implements DistributeClient, HasListener {
@@ -50,116 +43,80 @@ export class Distribute implements DistributeClient, HasListener {
         return this.workerPromise
     }
 
-    async pin(request: DistributorPutPinRequest): Promise<void> {
-        for await (const blockId of request) {
-            this.log(`PINNING: ${blockId}`)
-            const block = this.blockMap.get(blockId)
-            if (!block) {
-                const newBlock: Block = {
-                    refCount: 1,
-                    tracked: false,
-                    id: Buffer.from(blockId, 'hex'),
-                    stores: []
-                }
-                this.blockMap.set(blockId, newBlock)
-                this.requestRebalanceBlocks()
-            } else {
-                block.refCount++
-            }
-        }
-    }
-
-    async unpin(request: DistributorPutUnpinRequest): Promise<void> {
-        for await (const blockId of request) {
-            this.log(`UNPINNING: ${blockId}`)
-            const block = this.blockMap.get(blockId)
-            if (block) {
-                const ref = --block.refCount
-                if (ref == 0 && !block.tracked) {
-                    this.blockMap.delete(blockId)
-                }
-            }
-        }
-    }
-
-    async register(request: DistributorPutRegisterStorage): Promise<void> {
-        for await (const storageId of request) {
-            this.log(`REGISTERING: ${storageId}`)
-            const id = Buffer.from(storageId, 'hex')
-            const storage = this.storageLayers.find(id)
-            if (storage) {
-                storage.refCount++
-                continue
-            }
+    async register(storageId: string): Promise<void> {
+        this.log(`REGISTERING: ${storageId}`)
+        const id = Buffer.from(storageId, 'hex')
+        const storage = this.storageLayers.find(id)
+        if (!storage) {
             const newStorage: Storage = {
-                refCount: 1,
+                state: StorageState.Registering,
                 id,
                 blocks: [],
-                active: false
             }
             this.storageLayers.add(newStorage)
             this.requestPingStorage(newStorage)
         }
     }
 
-    async unregister(request: DistributorPutUnregisterStorage): Promise<void> {
-        for await (const storageId of request) {
-            this.log(`UNREGISTERING: ${storageId}`)
-            const id = Buffer.from(storageId, 'hex')
-            const storage = this.storageLayers.find(id)
-            if (storage) {
-                const ref = --storage.refCount
-                if (ref <= 0) {
-                    this.storageLayers.remove(id)
-                    this.requestRebalanceBlocks()
-                }
-            }
+    async unregister(storageId: string): Promise<void> {
+        this.log(`UNREGISTERING: ${storageId}`)
+        const id = Buffer.from(storageId, 'hex')
+        const storage = this.storageLayers.find(id)
+        if (storage) {
+            this.storageLayers.remove(id)
+            this.requestRebalanceBlocks()
         }
-    }
-
-    async *blocks(request: DistributorPostBlocksRequest): DistributorPostBlocksResponse {
-        this.log('BLOCKS request')
-        for await (const blockId of request) {
-            const block = this.blockMap.get(blockId)
-            if (block) {
-                const storages = block.stores.map(s => s.id.toString('hex'))
-                yield {
-                    block: blockId,
-                    storages
-                }
-            }
-        }
-    }
-
-    wait(): Promise<void> {
-        return new Promise<void>(resolve => this.tasks.push({ kind: DistributeTaskKind.Wait, resolve }))
     }
 
     async has(container: string, ids: string[]): Promise<boolean> {
         const id = Buffer.from(container, 'hex')
         const storage = this.storageLayers.find(id)
+        let effectiveStorage: Storage | undefined = undefined
         if (storage) {
-            // Only pay attention to has notification from storages we know.
-            for (const blockId of ids) {
-                // Track the block if it is not tracked already.
-                let block = this.blockMap.get(blockId)
-                if (!block) {
-                    const newBlock: Block = {
-                        refCount: 0,
-                        tracked: true,
-                        id: Buffer.from(blockId, 'hex'),
-                        stores: [storage]
-                    }
-                    this.blockMap.set(blockId, newBlock)
-                    this.requestRebalanceBlocks()
-                } else {
-                    if (block.stores.indexOf(storage) < 0) {
-                        block.stores.push(storage)
-                    }
+            effectiveStorage = storage
+        } else {
+            effectiveStorage = {
+                state: StorageState.Provisional,
+                id: Buffer.from(container),
+                blocks: [],
+            }
+        }
+        // Only pay attention to has notification from storages we know.
+        for (const blockId of ids) {
+            // Track the block if it is not tracked already.
+            let block = this.blockMap.get(blockId)
+            if (!block) {
+                const newBlock: Block = {
+                    id: Buffer.from(blockId, 'hex'),
+                    stores: [effectiveStorage]
+                }
+                this.blockMap.set(blockId, newBlock)
+                this.requestRebalanceBlocks()
+            } else {
+                if (block.stores.indexOf(effectiveStorage) < 0) {
+                    block.stores.push(effectiveStorage)
                 }
             }
         }
         return true
+    }
+
+    async needed(storageId: string, blockId: string): Promise<boolean> {
+        const id = Buffer.from(storageId, 'hex')
+        const storage = this.storageLayers.find(id)
+        if (!storage) invalid("Unknown storage", 404);
+        const block = this.blockMap.get(normalizeCode(blockId) ?? "")
+        if (!block) invalid("Unknown block", 404);
+        const nearest =  this.storageLayers.findNearestActive(block.id, this.n)
+        if (nearest.length < this.n) return true
+        for (const s of nearest) {
+            if (s === storage) return true
+        }
+        return false
+    }
+
+    wait(): Promise<void> {
+        return new Promise<void>(resolve => this.tasks.push({ kind: DistributeTaskKind.Wait, resolve }))
     }
 
     private async ensureFinder(): Promise<FindClient> {
@@ -185,6 +142,10 @@ export class Distribute implements DistributeClient, HasListener {
 
     private requestPingStorage(storage: Storage) {
         this.tasks.push({ kind: DistributeTaskKind.PingStorage, storage })
+    }
+
+    private requestReadBlocks(storage: Storage) {
+        this.tasks.push({ kind: DistributeTaskKind.ReadBlocks, storage })
     }
 
     private rebalanceRequested = false
@@ -224,6 +185,10 @@ export class Distribute implements DistributeClient, HasListener {
                     pending.push(this.parallel.run(() => this.pingStorage(task.storage)))
                     break
                 }
+                case DistributeTaskKind.ReadBlocks: {
+                    // pending.push(this.parallel.run(() => this.readBlocks(task.storage)))
+                    break
+                }
                 case DistributeTaskKind.RebalanceBlocks: {
                     this.rebalanceRequested = false
                     await this.rebalanceBlocks()
@@ -248,16 +213,22 @@ export class Distribute implements DistributeClient, HasListener {
     }
 
     private async pingStorage(storage: Storage) {
+        if (storage.state == StorageState.Provisional) return
         const idText = storage.id.toString('hex')
         const storageClient = await this.broker.storage(idText)
         if (!storageClient || !(await storageClient.ping())) {
-            if (storage.active) this.requestRebalanceBlocks();
-            storage.active = false
+            if (storage.state == StorageState.Active) {
+                this.requestRebalanceBlocks();
+                return
+            }
+            storage.state = StorageState.Inactive
             this.log(`STORAGE: ID ${idText} is inactive`)
             return
         }
-        if (!storage.active) this.requestRebalanceBlocks();
-        storage.active = true
+        if (storage.state != StorageState.Active) {
+            storage.state = StorageState.Active
+            this.requestRebalanceBlocks();
+        }
     }
 
     private async rebalanceBlocks() {
@@ -276,7 +247,7 @@ export class Distribute implements DistributeClient, HasListener {
         const id = task.block.id.toString('hex')
         const destPromise = this.parallel.map(task.to, async storage => {
             const storageId = storage.id.toString('hex')
-            if (storage.active) {
+            if (storage.state == StorageState.Active) {
                 const storageClient = await this.broker.storage(storageId)
                 if (!storageClient) {
                     this.log(`Couldn't find storage ${storageId}`)

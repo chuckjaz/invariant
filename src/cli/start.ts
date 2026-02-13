@@ -285,7 +285,9 @@ async function startDistribute(config: ServerConfiguration, broker?: BrokerClien
     listening("Distribute", config.id, httpServer)
     await registerServer(config, httpServer, 'distribute', broker)
     if (config.serverIds) {
-        await client.register(sendAll(config.serverIds))
+        for (const server of config.serverIds) {
+            await client.register(server)
+        }
     }
 }
 
