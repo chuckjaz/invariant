@@ -1,5 +1,5 @@
 import { ManagedStorageClient, StorageClient } from '../storage_client';
-import { allOfStream, dataFromReadable, jsonFromData } from '../../common/data';
+import { dataFromReadable } from '../../common/data';
 import { z } from 'zod'
 import { idSchema } from '../../common/schema';
 import { BrokerClient } from '../../broker/broker_client';
@@ -47,6 +47,11 @@ export function storageHandlers(client: StorageClient, broker?: BrokerClient): R
                         body: fetchSchema,
                         handler: async function (ctx, next, request: { address: string, container: string}) {
                             if (broker) {
+                                if (await client.has(request.address)) {
+                                    ctx.status = 200
+                                    ctx.body = ''
+                                    return
+                                }
                                 const storage = await broker.storage(request.container)
                                 if (storage) {
                                     const data = await storage.get(request.address)

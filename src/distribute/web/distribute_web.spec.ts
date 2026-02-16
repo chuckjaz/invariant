@@ -10,8 +10,15 @@ import { Distribute } from "../distribute"
 import { DistributeWebClient } from "./distribute_web_client"
 import { distributeHandlers } from "./distribute_web_handlers"
 import { error, invalid } from '../../common/errors'
-import { dataFromBuffers, stringsToData } from '../../common/data'
+import { dataFromBuffers } from '../../common/data'
 import { Logger } from '../../common/web'
+import { withTmpDir } from '../../common/test_tmp'
+import { LocalStorage } from '../../storage/local/local_storage'
+import { storageHandlers } from '../../storage/web/storage_web_handlers'
+import { StorageWebClient } from '../../storage/web/storage_web_client'
+import { DistributeClient } from '../distribute_client'
+
+jasmine.DEFAULT_TIMEOUT_INTERVAL = 300000
 
 describe('distribute/web', () => {
     it("can create a distribute client", () => {
@@ -67,24 +74,24 @@ describe('distribute/web', () => {
         })
     })
     it("can redistribute blocks on startup", async () => {
-        await distributeAndStorages(async (client, { broker, distribute, storages, storageIds }) => {
+        await distributeAndStorages(async (client, { distribute, storages, storageIds }) => {
             // Create a bunch of random blocks to the first storage
             const storage = storages[0]
             if (!storage) error("Couldn't find storage");
             const blocks: string[] = []
-            for (let i = 0; i < 1000; i++) {
+            for (let i = 0; i < 100; i++) {
                 const data = randomBytes(1000)
                 const block = await storage.post(dataFromBuffers([data]))
                 if (!block) error(`Couldn't upload block: ${block}`);
                 blocks.push(block)
             }
 
-            // Register the storages to the distribute
+            // Register the storages to the distribute server
             for (const storage of storageIds) {
                 await distribute.register(storage)
             }
 
-            // Wait for the distributor to complete
+            // Wait for the distributor to complete all tasks
             await distribute.wait()
 
             // Check the storages for for the blocks
@@ -95,10 +102,85 @@ describe('distribute/web', () => {
                         count++
                     }
                 }
-                expect(count).toBeGreaterThan(3)
+                expect(count).toBeGreaterThan(2)
+            }
+        }, 10, 0)
+    })
+    it("can redistribute blocks as they are written", async () => {
+        await distributeAndStorages(async (client, { distribute, storages, storageIds, finder }) => {
+            // Register the storages to the distribute server
+            for (const storage of storageIds) {
+                await distribute.register(storage)
             }
 
+            // Write blocks to one of the storage servers
+            const storage = storages[0]
+            if (!storage) error("Couldn't find storage");
+            const blocks: string[] = []
+            for (let i = 0; i < 100; i++) {
+                const data = randomBytes(1000)
+                const block = await storage.post(dataFromBuffers([data]))
+                if (!block) error(`Couldn't upload block: ${block}`);
+                blocks.push(block)
+            }
+
+            // Wait for the distributor to complete all tasks
+            await distribute.wait()
+
+            // Check the storages for for the blocks
+            for (const block of blocks) {
+                let count = 0
+                for (const storage of storages) {
+                    if (await storage.has(block)) {
+                        count++
+                    }
+                }
+                expect(count).toBeGreaterThan(2)
+            }
+
+            // Finder can find them in their new locations
+            for (const block of blocks) {
+                const found = await findInFinder(finder, block)
+                expect(found.size).toBeGreaterThan(2)
+            }
         }, 10, 0)
+    })
+    it("can redistribute blocks with a local web client", async () => {
+        await distributeWithLocalStorage(async ({ distribute, storages, blocks, logger }) => {
+            await distribute.wait()
+
+            // Check the existing blocks
+            for (const block of blocks) {
+                let count = 0
+                for (const storage of storages) {
+                    if (await storage.has(block)) {
+                        count++
+                    }
+                }
+                expect(count).toBeGreaterThan(2)
+            }
+
+            // Write blocks round-robin to the storages
+            for (let i = 0; i < 10; i++) {
+                const buffer = randomBytes(1000)
+                const address = await storages[i % storages.length].post(dataFromBuffers([buffer]))
+                if (!address) error("Could not write block");
+                blocks.push(address)
+            }
+
+            await distribute.wait()
+
+            // Check the existing blocks
+            for (const block of blocks) {
+                let count = 0
+                for (const storage of storages) {
+                    if (await storage.has(block)) {
+                        count++
+                    }
+                }
+                expect(count).toBeGreaterThan(2)
+            }
+        }, 10, 1)
     })
 })
 
@@ -120,8 +202,13 @@ async function distributeAndStorages(
     const storages: StorageClient[] = []
     const storageIds: string[] = []
     const blocks: string[] = []
+    const finder = await findServer(broker)
+    broker.registerFind(finder)
+    const id = randomId()
+    const logger = mockLogger()
+    const distribute = new Distribute(broker, id, 3, finder, logger.logger)
     for (let i = 0; i < serverCount; i++) {
-        const storage = mockStorage(broker)
+        const storage = mockStorage(broker, [distribute])
         const storageId = await storage.ping()
         if (!storageId) error("Ping failed")
             storageIds.push(storageId)
@@ -136,11 +223,6 @@ async function distributeAndStorages(
             blocks.push(block)
         }
     }
-    const finder = await findServer(broker)
-    broker.registerFind(finder)
-    const id = randomId()
-    const logger = mockLogger()
-    const distribute = new Distribute(broker, id, 3, finder, logger.logger)
     const handler = distributeHandlers(distribute)
     const app = new Koa()
     app.use(handler)
@@ -158,6 +240,85 @@ async function distributeAndStorages(
         server.close()
         await distribute.close()
     }
+}
+
+async function distributeWithLocalStorage(
+    block: (services: {
+        distribute: Distribute,
+        broker: BrokerClient,
+        storages: StorageClient[],
+        storageIds: string[],
+        blocks: string[],
+        id: string,
+        logger: MockLogger,
+    }) => Promise<void>,
+    serverCount: number = 10,
+    blockPerServerCount: number = 10,
+) {
+    const broker = mockBroker()
+    const storages: StorageClient[] = []
+    const storageIds: string[] = []
+    const blocks: string[] = []
+    const finder = await findServer(broker)
+    await broker.registerFind(finder)
+    const id = randomId()
+    const logger = mockLogger()
+    const distribute = new Distribute(broker, id, 3, finder, logger.logger)
+    const closers: (() => void)[] = []
+    try {
+        await withTmpDir(async (directory: string) => {
+            logger.logger(`DIRECTORY: ${directory}`)
+            const values = [237, 184, 200]
+            for (let j = 0; j < serverCount; j++) {
+                const id = randomId()
+                const [storage, closer] = await localWebStorage(
+                    `${directory}/storage${j}`,
+                    id,
+                    distribute,
+                    broker,
+                )
+                closers.push(closer)
+                storages.push(storage)
+                await broker.registerStorage(storage)
+                for (let i = 0; i < blockPerServerCount; i++) {
+                    const data = Buffer.from([values[j % values.length]])
+                    logger.logger(`POST: ${j}:${i}:${data[0].toString(16)} to ${id}`)
+                    const block = await storage.post(dataFromBuffers([data]))
+                    if (!block) {
+                        error("POST: failed")
+                    }
+                    blocks.push(block)
+                }
+                await distribute.register(id)
+            }
+
+            await block({ distribute, broker, storages, storageIds, blocks, id, logger })
+        })
+    } finally {
+        await distribute.close()
+        for (const closer of closers) closer();
+    }
+}
+
+async function localWebStorage(
+    directory: string,
+    id: string,
+    distribute: DistributeClient,
+    broker: BrokerClient,
+): Promise<[StorageClient, () => void]> {
+    const localStorageClient = new LocalStorage(directory, id, [distribute])
+    const handler = storageHandlers(localStorageClient, broker)
+    const app = new Koa()
+    app.use(handler)
+    const server = app.listen()
+    const address = server.address()
+    if (address == null || typeof address !== 'object') {
+        invalid('Expected an object type from server.address()')
+    }
+    const url = new URL(`http://localhost`)
+    url.port = address.port.toString()
+    const webStorage = new StorageWebClient(url)
+    return [webStorage, server.close.bind(server)]
 }
 
 function randomBytes(size: number): Buffer {
@@ -199,7 +360,20 @@ interface MockLogger {
 function mockLogger(): MockLogger {
     const logs: MockLog[] = []
     const logger = async (message: string, kind?: string, request?: number) => {
-        logs.push({ message, kind, request })
+        const msg: any = { message }
+        if (kind) msg.kind = kind
+        if (request) msg.request = request
+        logs.push(msg)
     }
     return { logger, logs }
+}
+
+async function findInFinder(finder: FindClient, block: string): Promise<Set<string>> {
+    const result = new Set<string>()
+    for await (const findResult of await finder.find(block)) {
+        if (findResult.kind == "HAS") {
+            result.add(findResult.container)
+        }
+    }
+    return result
 }

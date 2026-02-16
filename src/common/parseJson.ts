@@ -30,6 +30,22 @@ export async function *dataFromFile(file: string | fss.ReadStream): AsyncIterabl
     const channel = new Channel<Buffer>()
     stream.on('data', data => {
         if (typeof data == 'string') {
+            data = Buffer.from(data, 'binary')
+        }
+        channel.send(data as Buffer)
+    })
+    stream.on('close', () => channel.close())
+    stream.on('end', () => channel.close())
+    stream.on('error', e => channel.fail(e))
+    stream.resume()
+    yield *channel.all()
+}
+
+export async function *dataFromReadable(stream: Readable) {
+    stream.pause()
+    const channel = new Channel<Buffer>()
+    stream.on('data', data => {
+        if (typeof data == 'string') {
             const encoded = new TextEncoder().encode(data)
             data = Buffer.from(encoded)
         }
@@ -63,7 +79,7 @@ export function textToReadable(stream: AsyncIterable<string>): Readable {
 }
 
 export function dataToReadable(data: AsyncIterable<Buffer>): Readable {
-    const readable = new Readable()
+    const readable = new Readable({ objectMode: false })
     readable._read = () => {}
     async function readAll() {
         try {

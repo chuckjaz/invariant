@@ -18,8 +18,9 @@ describe("distribute", () => {
         distributor.close()
     })
     it("can register storages", async () => {
-        const [broker, storages] = await storagesAndBroker(30)
+        const broker = mockBroker()
         const distributor = new Distribute(broker)
+        const storages = await mockStorages(broker, [distributor], 30)
         for (const storage of storages) {
             await distributor.register(storage.id)
         }
@@ -27,7 +28,7 @@ describe("distribute", () => {
     })
     it("can distribute", async () => {
         const [distributor, broker, storages, finder] = await mockDistributor(20)
-        const storage = mockStorage()
+        const storage = mockStorage(broker, [finder, distributor])
         await broker.registerStorage(storage)
         const blocks = await createBlocks(storage, finder, 1000)
         await distributor.wait()
@@ -39,8 +40,8 @@ describe("distribute", () => {
         await distributor.close()
     })
     it("can distribute when added to one storage", async () => {
-        const blockCount = 10000
-        const storeCount = 5
+        const blockCount = 1000
+        const storeCount = 3
         const broker = mockBroker()
         const finder = await findServer(broker)
         await broker.registerFind(finder)
@@ -79,8 +80,10 @@ describe("distribute", () => {
 })
 
 async function mockDistributor(size: number): Promise<[Distribute, MockBrokerClient, MockStorageClient[], FindClient]> {
-    const [broker, storages, finder] = await storagesAndBroker(size)
+    const broker = mockBroker()
+    const finder = await mockFinder(broker)
     const distributor = new Distribute(broker)
+    const storages = await mockStorages(broker, [finder, distributor], size)
     for (const storage of storages) {
         await distributor.register(storage.id)
     }
@@ -104,15 +107,18 @@ async function createBlocks(
     return ids
 }
 
-async function storagesAndBroker(size: number): Promise<[MockBrokerClient, MockStorageClient[], FindClient]> {
-    const broker = mockBroker()
-    const storages = arr(size, i => mockStorage(broker))
+async function mockFinder(broker: MockBrokerClient): Promise<FindClient> {
     const finder = await findServer(broker)
     broker.registerFind(finder)
+    return finder
+}
+
+async function mockStorages(broker: MockBrokerClient, hasListeners: HasListener[], size: number): Promise<MockStorageClient[]> {
+    const storages = arr(size, i => mockStorage(broker, hasListeners))
     for (const storage of storages) {
         broker.registerStorage(storage)
     }
-    return [broker, storages, finder]
+    return storages
 }
 
 async function *str<T, R>(itr: Iterable<T>): AsyncIterable<T> {

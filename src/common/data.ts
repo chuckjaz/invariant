@@ -12,7 +12,7 @@ import { invalid } from './errors'
 
 export async function *hashTransform(stream: Data, hash: Hash): Data {
     for await (const buffer of stream) {
-        hash.update(buffer)
+        hash.update(buffer as any)
         yield buffer
     }
 }

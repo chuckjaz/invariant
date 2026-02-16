@@ -7,7 +7,7 @@ import { Logger } from "../common/web";
 import { WorkQueue } from "../common/work_queue";
 import { findStorage } from "../file-tree/file-tree";
 import { FindClient, HasListener } from "../find/client";
-import { StorageClient } from "../storage/storage_client";
+import { ManagedStorageClient, StorageClient } from "../storage/storage_client";
 import { DistributeClient } from "./distribute_client";
 import { Block, Storage, StorageState } from "./distribute_types";
 import { StorageLayers } from "./storage_layer";
@@ -81,23 +81,11 @@ export class Distribute implements DistributeClient, HasListener {
                 blocks: [],
             }
         }
-        // Only pay attention to has notification from storages we know.
+
         for (const blockId of ids) {
-            // Track the block if it is not tracked already.
-            let block = this.blockMap.get(blockId)
-            if (!block) {
-                const newBlock: Block = {
-                    id: Buffer.from(blockId, 'hex'),
-                    stores: [effectiveStorage]
-                }
-                this.blockMap.set(blockId, newBlock)
-                this.requestRebalanceBlocks()
-            } else {
-                if (block.stores.indexOf(effectiveStorage) < 0) {
-                    block.stores.push(effectiveStorage)
-                }
-            }
+            this.trackBlock(blockId, effectiveStorage)
         }
+
         return true
     }
 
@@ -174,7 +162,7 @@ export class Distribute implements DistributeClient, HasListener {
     }
 
     private async taskWorker() {
-        const pending: Promise<any>[] = []
+        let pending: Promise<any>[] = []
         loop: while (true) {
             const task = await this.tasks.pop()
             switch (task.kind) {
@@ -182,11 +170,11 @@ export class Distribute implements DistributeClient, HasListener {
                     break loop
                 }
                 case DistributeTaskKind.PingStorage: {
-                    pending.push(this.parallel.run(() => this.pingStorage(task.storage)))
+                    pending.push(this.pingStorage(task.storage))
                     break
                 }
                 case DistributeTaskKind.ReadBlocks: {
-                    // pending.push(this.parallel.run(() => this.readBlocks(task.storage)))
+                    pending.push(this.readBlocks(task.storage))
                     break
                 }
                 case DistributeTaskKind.RebalanceBlocks: {
@@ -195,18 +183,30 @@ export class Distribute implements DistributeClient, HasListener {
                     break
                 }
                 case DistributeTaskKind.MoveBlock: {
-                    pending.push(this.parallel.run(() => this.moveBlock(task)))
+                    pending.push(this.moveBlock(task))
                     break
                 }
                 case DistributeTaskKind.NotifyFinder: {
                     const notifications = this.pendingFinderNotifications
                     this.pendingFinderNotifications = new Map()
-                    pending.push(this.parallel.run(() => this.notifyFinder(notifications)))
+                    pending.push(this.notifyFinder(notifications))
                     break
                 }
                 case DistributeTaskKind.Wait: {
-                    await Promise.all(pending)
-                    task.resolve()
+                    const tasks = this.tasks
+                    async function wait(resolver: () => void) {
+                        while (pending.length > 0) {
+                            // Wait for the current pending calls to complete
+                            const waiting = pending
+                            pending = []
+                            await Promise.all(waiting)
+
+                            // Wait for all the tasks to complete which may schedule more calls
+                            await tasks.waitEmpty()
+                        }
+                        resolver()
+                    }
+                    wait(task.resolve)
                 }
             }
         }
@@ -215,6 +215,7 @@ export class Distribute implements DistributeClient, HasListener {
     private async pingStorage(storage: Storage) {
         if (storage.state == StorageState.Provisional) return
         const idText = storage.id.toString('hex')
+        this.log(`PING: ${idText}`)
         const storageClient = await this.broker.storage(idText)
         if (!storageClient || !(await storageClient.ping())) {
             if (storage.state == StorageState.Active) {
@@ -222,16 +223,35 @@ export class Distribute implements DistributeClient, HasListener {
                 return
             }
             storage.state = StorageState.Inactive
-            this.log(`STORAGE: ID ${idText} is inactive`)
+            this.log(`INACTIVE: ${idText}`)
             return
         }
         if (storage.state != StorageState.Active) {
+            this.log(`ACTIVATE: ${idText}`)
+
+            const registering = storage.state == StorageState.Registering
             storage.state = StorageState.Active
             this.requestRebalanceBlocks();
+            if (registering) this.requestReadBlocks(storage)
         }
     }
 
+    private async readBlocks(storage: Storage) {
+        if (storage.state == StorageState.Provisional) return
+        const idText = storage.id.toString('hex')
+        this.log(`READ BLOCKS: ${idText}`)
+        const storageClient = await this.broker.storage(idText)
+        if (!storageClient) return
+        const managed = storageClient as ManagedStorageClient
+        for await (const block of managed.blocks()) {
+            this.log(`TRACKING: ${block}`)
+            this.trackBlock(block.address, storage)
+        }
+        this.log(`DONE BLOCKS: ${idText}`)
+    }
+
     private async rebalanceBlocks() {
+        this.log('REBALANCE START')
         for (const [_, block] of this.blockMap.entries()) {
             const nearest =  this.storageLayers.findNearestActive(block.id, this.n)
             if (!areEffectivelyEqual(block.stores, nearest)) {
@@ -240,6 +260,7 @@ export class Distribute implements DistributeClient, HasListener {
                 block.stores = nearest
             }
         }
+        this.log('REBALANCE DONE')
     }
 
     private async moveBlock(task: MoveBlock) {
@@ -307,7 +328,9 @@ export class Distribute implements DistributeClient, HasListener {
             const sourceStorage = source[sourceIndex++]; sourceIndex = sourceIndex % source.length
             promises.push(this.parallel.run(async () => {
                 const destinationClient = destinationStorage[1]
+                this.log(`MOVE: FETCH ${id}`)
                 if (!await destinationClient.fetch(id, sourceStorage[0])) {
+                    this.log('MOVE: FETCH FAILED, trying get/put')
                     const sourceClient = sourceStorage[1]
                     const data = await sourceClient.get(id)
                     if (!data) {
@@ -322,6 +345,27 @@ export class Distribute implements DistributeClient, HasListener {
             }))
         }
         await Promise.all(promises)
+    }
+
+    private trackBlock(blockId: string, storage: Storage) {
+        // Track the block if it is not tracked already.
+        let block = this.blockMap.get(blockId)
+        const storageId = storage.id.toString('hex')
+        if (!block) {
+            this.log(`TRACK: NEW ${blockId} -> ${storageId}}`)
+            const newBlock: Block = {
+                id: Buffer.from(blockId, 'hex'),
+                stores: [storage]
+            }
+            this.blockMap.set(blockId, newBlock)
+            this.requestRebalanceBlocks()
+            this.requestNotifyFinder(storageId, blockId)
+        } else {
+            if (block.stores.indexOf(storage) < 0) {
+                block.stores.push(storage)
+                this.requestNotifyFinder(storageId, blockId)
+            }
+        }
     }
 
     private async notifyFinder(notifications: Map<string, string[]>) {

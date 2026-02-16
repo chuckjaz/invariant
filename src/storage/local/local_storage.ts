@@ -24,6 +24,9 @@ export class LocalStorage implements ManagedStorageClient {
         this.id = id ?? randomBytes(32).toString('hex')
         this.directory = directory
         this.hasListeners = hasListeners
+        if (hasListeners && hasListeners.length > 0) {
+            this.initialHasNotifications()
+        }
     }
 
     async ping(): Promise<string> {
@@ -131,7 +134,7 @@ export class LocalStorage implements ManagedStorageClient {
         const name = await this.tmpName()
         const hashStream = hashTransform(data, hasher)
         const readable = dataToReadable(hashStream)
-        await pipeline([readable, createWriteStream(name, { })])
+        await pipeline([readable, createWriteStream(name)])
         const result = hasher.digest()
         const hashCode = result.toString('hex')
         if (!expected || expected == hashCode) {
@@ -165,6 +168,23 @@ export class LocalStorage implements ManagedStorageClient {
         } finally {
             if (--this.busy == 0) this.quiet()
         }
+    }
+
+    private async initialHasNotifications() {
+        await this.doBusy(async () => {
+            let ids: string[] = []
+            for await (const block of this.blocks()) {
+                ids.push(block.address)
+                if (ids.length >= 1000) {
+                    const blocks = ids
+                    ids = []
+                    await this.notifyListenersOfBlocks(this.hasListeners, blocks)
+                }
+            }
+            if (ids.length > 0) {
+                await this.notifyListenersOfBlocks(this.hasListeners, ids)
+            }
+        })
     }
 
     private async notifyListenersOfBlocks(hasListeners: HasListener[] | undefined, blocks: string[]) {

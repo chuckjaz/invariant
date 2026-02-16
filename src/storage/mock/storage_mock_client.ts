@@ -45,9 +45,9 @@ class MockStorageClientImpl implements MockStorageClient {
         const buffers = await buffersOfData(hashTransform(data, hash))
         const id = hash.digest().toString('hex')
         const size = sizeOfBuffers(buffers)
-        const isNew = this.store.has(id)
+        const isNew = !this.store.has(id)
         this.store.set(id, { buffers, size, lastAccess: Date.now() })
-        if (isNew)  this.notifyHasListeners([id])
+        if (isNew) this.notifyHasListeners([id])
         return id
     }
 
@@ -57,9 +57,9 @@ class MockStorageClientImpl implements MockStorageClient {
         const id = hash.digest().toString('hex')
         if (address != id) return false
         const size = sizeOfBuffers(buffers)
-        const isNew = this.store.has(id)
+        const isNew = !this.store.has(id)
         this.store.set(id, { buffers, size, lastAccess: Date.now() })
-        if (isNew)  this.notifyHasListeners([id])
+        if (isNew) this.notifyHasListeners([id])
         return true
     }
 

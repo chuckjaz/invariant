@@ -1,12 +1,13 @@
-import { jsonBackwardStream, jsonStream, jsonStreamToText, safeParseJson, textStreamFromFile, textStreamFromFileBackward, textStreamFromWeb } from "./parseJson"
+import { dataFromReadable, dataToReadable, jsonBackwardStream, jsonStream, jsonStreamToText, safeParseJson, textStreamFromFile, textStreamFromFileBackward, textStreamFromWeb } from "./parseJson"
 import { ReadableStreamDefaultReader } from "node:stream/web"
 import { withTempFile } from "./test_tmp"
+import { dataFromBuffers, readAllData } from "./data"
 
 describe("common/parseJson", () => {
     function stringToReader(text: string, len: number): ReadableStreamDefaultReader {
         const data: ArrayBufferLike[] = []
         for (let i = 0, l = text.length; i < l; i += len) {
-            data.push(new TextEncoder().encode( text.slice(i, i + len)))
+            data.push(new TextEncoder().encode( text.slice(i, i + len)).buffer)
         }
         const dataLen = data.length
         let index = 0
@@ -180,6 +181,16 @@ describe("common/parseJson", () => {
                 let n = i++
                 expect(item).toEqual(`{"a":${n},"b":${n*2}}`)
             }
+        })
+    })
+    describe("dataToReadable", () => {
+        it("can transform a buffer to a readable", async () => {
+            const buffer = Buffer.from([237])
+            const data = dataFromBuffers([buffer])
+            const readable = dataToReadable(data)
+            const result = dataFromReadable(readable)
+            const resultBuffer = await readAllData(result)
+            expect(resultBuffer).toEqual(buffer)
         })
     })
 })
